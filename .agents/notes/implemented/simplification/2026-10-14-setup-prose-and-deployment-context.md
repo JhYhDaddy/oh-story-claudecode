@@ -1,192 +1,191 @@
-# Agent Note: story-setup 逐文精修与部署语境核对
+# Agent Note: story-setup 문서별 정밀 교정과 배포 맥락 확인
 
 Status: implemented
 Date: 2026-10-14
-Related: [按宿主拆分部署](../../implemented/architecture/2026-09-26-setup-by-host.md)、[对标按查询类型加载](../../implemented/architecture/2026-09-26-explorer-by-query-type.md)、[部署复制身份检查](../../implemented/bug-fix/2026-08-22-deployment-manifest-self-copy-guard.md)
+Related: [호스트별 배포 분리](../../implemented/architecture/2026-09-26-setup-by-host.md)、[조회 유형별 비교 자료 로드](../../implemented/architecture/2026-09-26-explorer-by-query-type.md)、[배포 복사 대상 식별 검사](../../implemented/bug-fix/2026-08-22-deployment-manifest-self-copy-guard.md)
 
 ## Problem
 
-story-setup 同时维护部署流程、Claude agent 真源、宿主适配产物与共享写作资料副本。文字中的重复和指代会掩盖这些归属：OpenCode 部署仍称有三个只读 agent，但 chapter-extractor 已有受限写入能力；Antigravity 产物统一名为 agent.md，验证却要求 name 与文件名一致。引用资料的复制说明也未处处写明包含子目录。
+story-setup은 배포 절차, Claude 에이전트의 정식 원본, 호스트별 변환 결과, 공유 집필 자료의 복사본을 함께 관리한다. 반복 표현과 불명확한 지시어가 각 자료의 소유 관계를 가렸다. OpenCode 배포 안내는 읽기 전용 에이전트가 3개라고 했지만 chapter-extractor에는 이미 제한된 쓰기 권한이 있었다. Antigravity 생성물은 모두 agent.md라는 이름인데 검증은 name과 파일명이 같아야 한다고 했다. 참고 자료 복사 안내에도 하위 디렉터리를 포함한다는 설명이 일부 빠져 있었다.
 
 ## Decision
 
-对全部 132 份 Markdown/template 与 7 份 TOML 逐文执行五步精修。只在 story-setup 真源直接改文；共享副本复用 canonical 的五步证据，并核对部署路径、profile 和调用语境，按唯一源更新；宿主生成件由现有生成器重建后核对。按实际模板、生成器和 helper 补齐事实，保留原有专业术语、引文、命令、字段、编号、schema、门禁与作者报告协议，不增预算、框架或确认步骤。
+Markdown·템플릿 132개와 TOML 7개 모두에 문서별 5단계 정밀 교정을 적용했다. story-setup 정식 원본만 직접 수정했다. 공유 복사본은 정식 원본의 5단계 검토 증거를 재사용하고 배포 경로·프로필·호출 맥락을 확인한 뒤 유일 원본에 따라 갱신했다. 호스트별 생성물은 기존 생성기로 다시 만든 뒤 확인했다. 실제 템플릿·생성기·도우미에 맞춰 사실을 보완했으며 전문 용어·인용·명령·필드·번호·스키마·진행 검사·작가 보고 규약은 유지했다. 예산·프레임워크·확인 단계를 추가하지 않았다.
 
 ## Alternatives considered
 
-- 逐份手改部署副本：最强理由是能在当前文件内立即修正措辞；不采用，因为副本会偏离 canonical，生成器和共享检查也会覆盖这些手改。
-- 只精修部署入口：最强理由是范围小、验证快；不采用，因为 agent 模板与参考资料同样直接影响执行，入口清楚不能消除它们内部的歧义。
+- 배포 복사본을 각각 직접 수정: 해당 파일에서 바로 표현을 고칠 수 있다는 장점이 가장 크다. 하지만 정식 원본과 달라지고 생성기·공유 검사가 수정을 덮어쓰므로 채택하지 않았다.
+- 배포 진입 문서만 교정: 범위가 작고 검증이 빠르다는 장점이 가장 크다. 하지만 에이전트 템플릿과 참고 자료도 실행에 직접 영향을 주므로 진입 문서만 명확하게 해서는 내부의 모호함을 없앨 수 없어 채택하지 않았다.
 
 ## Consequences
 
-部署说明与实际产物更容易对应，源、共享和生成关系保持可追溯。代价是需要逐文件记录证据，并在改模板后重跑生成器和相关适配检查；现有宿主能力及其限制不变。
+배포 안내와 실제 산출물의 대응 관계가 명확해지고 원본·공유·생성 관계를 추적할 수 있다. 대신 파일마다 검토 증거를 기록하고 템플릿 변경 뒤 생성기와 관련 어댑터 검사를 다시 실행해야 한다. 기존 호스트 기능과 제한은 그대로다.
 
+## 통합 수정 사항
 
-## Integrated corrections
+- 관리 파일은 매니페스트에 따라 갱신하고 사용자 설정은 관리 블록 단위로 병합한다. 배포 표식에는 성공한 대상만 기록하며 모든 대상에서 중단되면 이전 표식을 유지한다.
+- OpenCode의 읽기 전용 에이전트 설명, Antigravity의 상위 디렉터리 이름 검사, ZCode의 관리 훅 이전, Reasonix 설치 원본 경로와 자리표시자 기본값을 바로잡았다.
+- 프로필 목록은 표 안의 색인에서 지정한 장르 카드도 읽을 수 있도록 한다. 감정 기법의 단편 절 예시는 보존하고 long-write 정식 원본과 setup 파생본에 적용 범위를 명시했다.
+- 일관성 검사는 작가가 아는 진실과 독자가 현재 아는 내용을 구분한다. 추출기의 수정·자체 검사는 입력 모드에 따라 자료 범위를 제한한다. 이전 산출물의 요약을 보완할 때는 현재 배치의 source_files를 사용하고 원문에서 드러나는 순서대로 항목을 처리한다.
+- 집필자는 호출자가 준 제목을 그대로 사용한다. 설계자의 범위는 둘 중 하나를 고르도록 명시했다. 조회자는 검색된 구간과 현재 위치를 확인하며 JSON 이스케이프는 원문을 유지한다. 조사자는 8000자 미리 보기를 전문으로 취급하지 않고 실제 도구 권한에 따라 조회한다.
+- 비교 자료 검색은 주요 산출물 중 하나라도 없는 경우, 문체 표본의 가용성, 장 길이 비교를 구분한다. 업그레이드 안내는 과거 버전의 사실과 현재 작업을 구분한다.
+- 규칙 4개에서 대화의 기능 판단 방향과 예시 범위를 바로잡았다. 인용·명령·기계 필드·도구 권한·단계 번호는 유지했다.
 
-- 受管文件按清单更新，用户配置按管理块合并；部署标记只记录成功目标，全部目标停止时保留旧标记。
-- 修正 OpenCode 只读代理描述、Antigravity 父目录名称校验、ZCode 受管 hooks 迁移、Reasonix 安装源路径与占位符默认值。
-- Profile 清单允许读取表内索引点名的题材卡；情绪方法中的短篇小节示例保留，并在 long-write 真源和 setup 派生件中明确适用范围。
-- 一致性检查区分作者真相与读者当前认知；extractor 返修和自检按输入模式限制取料，旧成果补摘要使用本批 source_files，逐点按文本披露顺序。
-- 写手使用调用方逐字标题；架构师的作用域明确二选一；查询员核实命中段与当前位置，JSON 转义保持原文；研究员不把8000字符预览冒充全文，按实际工具权限查询。
-- 对标召回区分任一主产物缺失、文风样本可用性和章节长度比较；升级指南区分历史版本事实与当前操作。
-- 四份规则修正对话功能判断方向和示例范围；引文、命令、机器字段、工具权限与阶段编号保留。
+## 검증
 
-## Verification
+139/139개 문서에 언어·군더더기 제거·모호함 해소·사실 대조·논리의 5단계를 순서대로 적용했다. 원본 62개, 공유본 62개, 생성물 15개다. 공유 자료는 정식 원본의 증거를 재사용하며 배포 맥락을 확인했다. 짧은 명령 래퍼 26개는 규약이 이미 명확해 그대로 두었다.
 
-139/139 份文档逐份依序完成语言、去赘述、消歧义、真值回查、逻辑五步：62 source、62 shared、15 generated。共享资料复用真源证据并核对部署语境；26份简短命令包装的协议已清楚，保留原样。
+OpenCode·Codex 생성물을 다시 만들어 제출했고 Antigravity는 임시 프로젝트에 생성해 검증했다. 정적 검사·번호·현재 계약·문서 예산·공유 파일·작가 보고·기록 문서·Python 호출·reference-gates 검사를 통과했다. Claude/Codex/OpenCode/Antigravity/ZCode/OpenClaw/Reasonix 7개 호스트의 어댑터, 전체 배포 회귀, 고정 버전 ClawHub 오프라인 검증도 통과했다. 새로운 실제 모델 창작이나 기본 GUI 집필 테스트는 실행하지 않았다.
 
-OpenCode、Codex 生成结果已重建并提交；Antigravity 生成到临时项目验证。静态检查、编号、现行契约、文档预算、共享文件、作者报告、笔记、Python调用与reference-gates均通过；Claude/Codex/OpenCode/Antigravity/ZCode/OpenClaw/Reasonix七宿主适配、完整部署回归和固定版本 ClawHub 离线验证通过。未运行新的真实模型创作或原生 GUI 写作测试。
+## 파일별 범위
 
-## File coverage
-
-| 文件 | 来源类型 | 五步 | 结果 |
+| 파일 | 원본 유형 | 5단계 | 결과 |
 |---|---|---|---|
-| `skills/story-setup/SKILL.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/UPGRADING.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/agent-quality.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/agent-reference-profiles.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/anti-ai-writing.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/banned-words.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/benchmark-style-load.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/character-basics.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/character-design-methods.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/character-relations.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/deslop-gates.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/dialogue-mastery.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/emotion-on-page.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/emotional-arc-design.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/format-and-structure.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/东方仙侠.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/传统玄幻.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/历史古代.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/历史脑洞.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/双男主.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/古言脑洞.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/古风世情.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/女频悬疑.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/女频种田.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/宫斗宅斗.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/年代.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/快穿.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/悬疑灵异.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/悬疑脑洞.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/战神赘婿.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/抗战谍战.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/星光璀璨.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/民国言情.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/游戏体育.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/玄幻脑洞.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/玄幻言情.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/现言脑洞.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/科幻末世.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/职场婚恋.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/西方奇幻.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/豪门总裁.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/都市修真.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/都市日常.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/都市种田.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/都市脑洞.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/都市高武.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards/青春甜宠.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-prose-cards.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/genre-readers.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-chapter-hooks.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-emotional-methods.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-genre-catalog.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-genre-mechanics.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-quality.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-reversal.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/long-suspense.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/opening-design.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/outline-conflict.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/outline-methods.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/outline-rhythm.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/plot-core-methods.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/short-chapter-hooks.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/short-emotional-methods.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/short-genre-formulas.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/short-paragraph-hooks.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/short-quality.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/short-reversal.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/style-combat-face.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/style-genre-modules.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/style-resolution.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/agent-references/writing-craft.md` | shared | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/antigravity/rules/oh-story.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/AGENTS.md.tmpl` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/chapter-extractor.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/character-designer.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/consistency-checker.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/narrative-writer.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/story-architect.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/story-explorer.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/codex/agents/story-researcher.toml` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-antigravity.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-claude-code.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-codex.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-generic.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-openclaw.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-opencode.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-reasonix.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/deploy-zcode.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/diagnostics.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/generic/AGENTS.md.tmpl` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/openclaw/AGENTS.md.tmpl` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/AGENTS.md.tmpl` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/chapter-extractor.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/character-designer.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/consistency-checker.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/narrative-writer.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/story-architect.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/story-explorer.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/agents/story-researcher.md` | generated | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/opencode/commands/browser-cdp.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-cover.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-deslop.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-import.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-long-analyze.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-long-scan.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-long-write.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-review.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-setup.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-short-analyze.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-short-scan.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story-short-write.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/opencode/commands/story.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/reasonix/AGENTS.md.tmpl` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/CLAUDE.md.tmpl` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/chapter-extractor.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/character-designer.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/consistency-checker.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/narrative-writer.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/story-architect.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/story-explorer.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/agents/story-researcher.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/rules/story-consistency.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/rules/story-format.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/rules/story-narrative.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/templates/rules/story-outline.md` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/zcode/AGENTS.md.tmpl` | source | 1→5 完成 | 精修稿 |
-| `skills/story-setup/references/zcode/commands/browser-cdp.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-cover.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-deslop.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-import.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-long-analyze.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-long-scan.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-long-write.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-review.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-setup.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-short-analyze.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-short-scan.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story-short-write.md` | source | 1→5 完成 | 协议清楚，保留 |
-| `skills/story-setup/references/zcode/commands/story.md` | source | 1→5 完成 | 协议清楚，保留 |
+| `skills/story-setup/SKILL.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/UPGRADING.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/agent-quality.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/agent-reference-profiles.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/anti-ai-writing.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/banned-words.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/benchmark-style-load.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/character-basics.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/character-design-methods.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/character-relations.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/deslop-gates.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/dialogue-mastery.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/emotion-on-page.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/emotional-arc-design.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/format-and-structure.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/东方仙侠.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/传统玄幻.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/历史古代.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/历史脑洞.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/双男主.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/古言脑洞.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/古风世情.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/女频悬疑.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/女频种田.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/宫斗宅斗.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/年代.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/快穿.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/悬疑灵异.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/悬疑脑洞.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/战神赘婿.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/抗战谍战.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/星光璀璨.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/民国言情.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/游戏体育.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/玄幻脑洞.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/玄幻言情.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/现言脑洞.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/科幻末世.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/职场婚恋.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/西方奇幻.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/豪门总裁.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/都市修真.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/都市日常.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/都市种田.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/都市脑洞.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/都市高武.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards/青春甜宠.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-prose-cards.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/genre-readers.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-chapter-hooks.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-emotional-methods.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-genre-catalog.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-genre-mechanics.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-quality.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-reversal.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/long-suspense.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/opening-design.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/outline-conflict.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/outline-methods.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/outline-rhythm.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/plot-core-methods.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/short-chapter-hooks.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/short-emotional-methods.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/short-genre-formulas.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/short-paragraph-hooks.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/short-quality.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/short-reversal.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/style-combat-face.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/style-genre-modules.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/style-resolution.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/agent-references/writing-craft.md` | 공유본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/antigravity/rules/oh-story.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/AGENTS.md.tmpl` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/chapter-extractor.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/character-designer.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/consistency-checker.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/narrative-writer.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/story-architect.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/story-explorer.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/codex/agents/story-researcher.toml` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-antigravity.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-claude-code.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-codex.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-generic.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-openclaw.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-opencode.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-reasonix.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/deploy-zcode.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/diagnostics.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/generic/AGENTS.md.tmpl` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/openclaw/AGENTS.md.tmpl` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/AGENTS.md.tmpl` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/chapter-extractor.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/character-designer.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/consistency-checker.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/narrative-writer.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/story-architect.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/story-explorer.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/agents/story-researcher.md` | 생성물 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/opencode/commands/browser-cdp.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-cover.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-deslop.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-import.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-long-analyze.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-long-scan.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-long-write.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-review.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-setup.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-short-analyze.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-short-scan.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story-short-write.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/opencode/commands/story.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/reasonix/AGENTS.md.tmpl` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/CLAUDE.md.tmpl` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/chapter-extractor.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/character-designer.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/consistency-checker.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/narrative-writer.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/story-architect.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/story-explorer.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/agents/story-researcher.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/rules/story-consistency.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/rules/story-format.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/rules/story-narrative.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/templates/rules/story-outline.md` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/zcode/AGENTS.md.tmpl` | 원본 | 1→5 완료 | 교정본 |
+| `skills/story-setup/references/zcode/commands/browser-cdp.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-cover.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-deslop.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-import.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-long-analyze.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-long-scan.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-long-write.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-review.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-setup.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-short-analyze.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-short-scan.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story-short-write.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
+| `skills/story-setup/references/zcode/commands/story.md` | 원본 | 1→5 완료 | 규약 명확, 유지 |
 
-## Repository coverage
+## 저장소 전체 범위
 
-本轮13个skill合计367份文档：353 Markdown、7模板、7 TOML。341份有实际改动，26份命令包装完成五步后保留；没有未覆盖路径。各skill单独提交堆叠PR，按表中顺序合并。共享源只维护一处，副本与生成件均已核对。各PR笔记保留逐文件覆盖表。
+이번 13개 스킬은 총 367개 문서로, Markdown 353개·템플릿 7개·TOML 7개다. 341개를 실제 수정했고 명령 래퍼 26개는 5단계 검토 뒤 그대로 두었다. 누락한 경로는 없다. 스킬별로 연결된 PR을 따로 제출하여 아래 표의 순서대로 병합했다. 공유 원본은 한곳에서만 유지하며 복사본과 생성물도 모두 확인했다. 각 PR의 기록에는 파일별 범위 표를 남겼다.
 
-| Skill | 文档数 | PR |
+| 스킬 | 문서 수 | PR |
 |---|---:|---|
 | `story-short-write` | 37 | [#472](https://github.com/zenstory-ai/oh-story-claudecode/pull/472) |
 | `story-short-analyze` | 23 | [#473](https://github.com/zenstory-ai/oh-story-claudecode/pull/473) |
@@ -200,4 +199,4 @@ OpenCode、Codex 生成结果已重建并提交；Antigravity 生成到临时项
 | `story-long-write` | 87 | [#481](https://github.com/zenstory-ai/oh-story-claudecode/pull/481) |
 | `story-deslop` | 8 | [#482](https://github.com/zenstory-ai/oh-story-claudecode/pull/482) |
 | `story-review` | 20 | [#483](https://github.com/zenstory-ai/oh-story-claudecode/pull/483) |
-| `story-setup` | 139 | 本PR |
+| `story-setup` | 139 | 이 PR |

@@ -1,51 +1,51 @@
-# Agent Note: 长短篇拆文资料按作者时刻与读者重组，以脚本为准
+# Agent Note: 장·단편 분석 자료를 작가 시점과 읽는 주체별로 재구성하고 스크립트와 정렬
 
 Status: implemented
 Date: 2026-10-17
-Related: [拆文按阶段时刻加载](2026-09-26-analyze-stages-by-moment.md)、[写作 references 按时刻重组](2026-10-17-write-references-by-moment.md)、[长篇拆文契约精修](../bug-fix/2026-10-15-polish-long-analyze-contracts.md)、[短篇拆文逐份精修](../simplification/2026-10-14-polish-story-short-analyze.md)、[交接契约测试](../testing/2026-10-17-handoff-contract-fixtures.md)
+Related: [분석 단계별 로드](2026-09-26-analyze-stages-by-moment.md), [집필 references 재구성](2026-10-17-write-references-by-moment.md), [장편 분석 계약 교정](../bug-fix/2026-10-15-polish-long-analyze-contracts.md), [단편 분석 교정](../simplification/2026-10-14-polish-story-short-analyze.md), [인계 계약 테스트](../testing/2026-10-17-handoff-contract-fixtures.md)
 
 ## Problem
 
-写作端按时刻重组之后，拆文两个 skill 的审计查出同一类结构问题：
+집필 측 재구성 뒤 두 분석 스킬 감사에서도 같은 구조 문제가 나왔다.
 
-- 文档写的流程与脚本行为不一致。`manage_analysis_run.py` 在 enhance 下照样为缺章算出 `RAW` 批次，pipeline-ops 却写「原文读取数必须为 0」；`chunk_range` 只认 3 章与 2.5 万字两个上限，stage2-extraction 与 chapter-extractor 模板却让模型按长章、卷界自选分块；文风协议要求填句长百分比并标 `confidence: high`，仓库里没有任何统计脚本；`--compact` 会删掉文档让人去看的逐章 `missing_*` 键。
-- 时刻表漏了作者真实会走到的入口。写作端把作者送去「补拆 Stage 3+」「缺文风」，长篇拆文的时刻表没有补缺 / 增强这一行；灵感库时刻没有登记加载路径。
-- 孤儿与迁移残留。deconstruction-notes 只剩桥段词表有用；style-profile-protocol 与 generator 各写半套，其中「下游怎么用」指向全仓已不存在的 Gate D；semantic-acceptance-fixtures 只被 final-checks 引用，没有任何测试使用。短篇拆文从长篇写作搬来的人物、读者、技法五份文件约 33K 字，真正被短篇各阶段用到的只有关系四类、动机链、反派四要素、三层反差和感情线阶段；zhihu-style、deconstruction-examples 不挂在任何阶段上。
-- 交接契约静默断开：import 读拆文报告里不存在的三节；写前召回按旧名读情绪模块卡（「读者需求、触发器、可替换要素、反抄袭提醒」），而 `inspiration_index.py` 的门禁字段是「读者想看什么、情绪链、戏剧单元、可替换项、不可照搬」；节奏.md 没有「扩写技法」一列；短篇情节节点没有位置字段；短篇题材标签有两套；扫榜推荐的平台名写作端不认。
-- 短篇阻断门槛（钩子数等计数下限）没有消费者，作者补不出来时没有出口，导入要求阶段含 6 时可能反复重跑；Stage 4–6 多份人物标尺叠加超过 35K 且未登记叠加。
+- `manage_analysis_run.py`는 enhance에서도 누락 장을 `RAW` 배치로 계산하지만 pipeline-ops는 원문 읽기 0을 요구한다. `chunk_range`는 3장·2.5만 자 상한만 보는데 stage2-extraction·chapter-extractor는 긴 장·권 경계로 자유 분할하라고 한다. 문체 규약은 문장 길이 비율·`confidence: high`를 요구하지만 통계 스크립트가 없다. `--compact`는 문서가 보라는 장별 `missing_*` 키를 없앤다.
+- 집필에서 Stage 3+ 보완·문체 누락으로 보내지만 장편 시점 표에는 보완/강화가 없고 영감 라이브러리 경로도 예산에 없다.
+- deconstruction-notes는 클리셰 표만 유용하다. style-profile-protocol·generator가 반씩 설명하고 하위 활용법은 사라진 Gate D를 가리킨다. semantic-acceptance-fixtures는 final-checks만 참조하며 테스트가 쓰지 않는다. 단편이 장편 집필에서 가져온 인물·독자·기법 다섯 파일 약 33K 중 실제 필요한 것은 관계 네 유형·동기 사슬·반대 인물 네 요소·세 층 대비·연애 단계뿐이다. zhihu-style·deconstruction-examples는 어떤 단계에도 연결되지 않는다.
+- 인계가 조용히 끊긴다. import는 보고서에 없는 세 절을 읽는다. 집필 전 회상은 감정 모듈 카드의 옛 이름 “读者需求、触发器、可替换要素、反抄袭提醒”을 읽지만 `inspiration_index.py` 필수 필드는 “读者想看什么、情绪链、戏剧单元、可替换项、不可照搬”이다. 节奏.md에는 “扩写技法” 열이 없고 단편 사건 노드는 위치가 없으며 장르 태그는 두 묶음이고 조사 추천 플랫폼을 집필이 인식하지 못한다.
+- 단편 훅 개수 등 최소 차단 기준은 소비자가 없고 보충 불가 시 출구도 없어 import가 Stage 6을 요구하면 반복 실행할 수 있다. Stage 4–6 인물 척도 중첩은 35K를 넘지만 중첩 등록도 없다.
 
 ## Decision
 
-**长篇拆文（story-long-analyze）**
+**장편 분석(story-long-analyze)**
 
-- SKILL.md 新增「运行约定」（`{PYTHON}` 按 python3、python、py -3 探测；原文转 UTF-8 存 `原文/原文.txt`；全文不足 2 万字建议改用短篇拆文，导入调用时不提示）。Stage 0–6 各节合并为「各阶段要点」。「Phase 2」改成两张表：按 `inspect_existing_assets.py` 的 `recommended_path` 五个值写做法（`continue_partial` 先补齐缺的 Stage 1 产物并标 `stage1`），按 `stage_repairs` 代码写补哪一步：`stage3_emotion`、`stage3_rhythm`、`stage6_style` 是文件缺了要重写，不带后缀的 `stageN` 只表示阶段没标完成，产物在且合格就只 `mark-stage`。情绪模块卡字段不全时检查器不报缺，修法（备份旧文件、只改出错的卡、标 `stage3`）写在 Phase 2 末段，灵感库与收尾检查指向它。时刻表新增「补缺 / 增强」「灵感库」两行。
-- pipeline-ops 的 enhance 说法与 `manage_analysis_run.py` 一致：逐章成果覆盖全书时不读原文，仍有缺章时计划照样列出 `RAW` 批次；`--compact` 下缺章看 `semantic_coverage.missing_ranges`。
-- Stage 2 分块范围以计划为准，stage2-extraction 与 chapter-extractor 模板删掉自选分块写法，两边同序同条；证据等级 A/B/C 的定义写在 synthesis-inputs（给 Stage 3–5）、chapter-extractor 模板（给子代理）、stage2-extraction（主会话自己写批次时）三处，各对应一种读者。
-- style-profile-protocol 并入 style-profile-generator 后删除。文风不再自称「机械统计」：每项结论写一行「依据」（已有资料 / 原文锚点 / 样本不足），句长、标点、段落节奏最多写「原文锚点」，不再输出英文置信度代码；「不可模仿」一节改名「不建议模仿」，与拆文报告一致。下游 benchmark-style-load、style-resolution 只读「文风可用」、原文锚点与可借鉴技巧，不按 `confidence: high` 优先采纳。
-- deconstruction-notes 的桥段词表并入 stage3-plot-rhythm 后删除。stage3 的剧情字段、类型、自检各留一份，覆盖率只按情节点算；stage4 两张分级表合成一张，archetype、金手指类型改中文，去掉伪数值置信度。semantic-acceptance-fixtures 删除，final-checks 的维护者一节一并删除。
-- author-facing 改正深拆文件名，报告「基本信息」改为逐行「字段：值」（检查器正则能匹配「总章数：1200」），并列出有下游在读、保留原名的小节清单。stage5 写清 `选题决策.md` 的查找位置与回填格式。
+- SKILL.md 실행 규칙에 `{PYTHON}` 탐지 순서 python3·python·py -3, UTF-8 원문 `原文/原文.txt` 저장, 2만 자 미만이면 단편 권장(가져오기 호출은 안내 생략)을 넣는다. Stage 0–6 절은 단계별 요점으로 합친다. Phase 2를 표 둘로 바꾼다. `inspect_existing_assets.py`의 `recommended_path` 다섯 값별 처리(`continue_partial`은 누락 Stage 1 산출물 보완 후 `stage1` 표시)와 `stage_repairs` 코드별 복구다. `stage3_emotion`·`stage3_rhythm`·`stage6_style`은 파일 누락이라 다시 쓰고 접미사 없는 `stageN`은 완료 표시만 없어 파일이 유효하면 `mark-stage`만 한다. 감정 카드 필드 미비는 검사기가 누락으로 보고하지 않으므로 옛 파일 백업·문제 카드만 수정·`stage3` 표시를 Phase 2 끝에 쓰고 영감·마무리 검사에서 연결한다. 시점 표에 보완/강화·영감 라이브러리를 더한다.
+- pipeline-ops의 enhance를 `manage_analysis_run.py` 실제 동작과 맞춘다. 장별 결과가 전부 있으면 원문을 안 읽고 누락 장은 여전히 `RAW` 배치다. `--compact`에서는 `semantic_coverage.missing_ranges`로 누락을 본다.
+- Stage 2 분할은 계획을 따른다. stage2-extraction·chapter-extractor에서 자유 분할을 지우고 같은 순서·항목을 쓴다. 증거 A/B/C 정의는 Stage 3–5용 synthesis-inputs, 하위 에이전트용 chapter-extractor, 직접 배치 작성용 stage2-extraction 세 곳에 각 독자별로 둔다.
+- style-profile-protocol을 generator에 합치고 삭제한다. 문체를 기계적 통계라고 하지 않는다. 결론마다 기존 자료/원문 근거/표본 부족 중 근거 한 줄을 쓴다. 문장 길이·구두점·문단 리듬은 최대 원문 근거 수준이며 영어 신뢰도 코드를 출력하지 않는다. 모방 불가 절을 모방 비권장으로 바꿔 보고서와 맞춘다. benchmark-style-load·style-resolution은 사용 가능한 문체·원문 근거·참고 기법만 읽고 `confidence: high`로 우선 채택하지 않는다.
+- deconstruction-notes 클리셰 표를 stage3-plot-rhythm으로 옮기고 삭제한다. stage3 사건 필드·유형·검사는 각각 하나만 두고 포괄률은 사건 노드 기준이다. stage4 두 등급 표를 합치고 archetype·특수 능력 유형을 중국어로 바꾸며 가짜 수치 신뢰도를 없앤다. semantic-acceptance-fixtures와 final-checks 유지보수자 절을 삭제한다.
+- author-facing 심층 분석 파일명을 고친다. 기본 정보는 검사 정규식이 “总章数：1200”을 인식하도록 필드：값의 행별 형식으로 바꾸며 하위 소비자가 읽어 원명을 유지할 절 목록을 명시한다. stage5는 `选题决策.md` 탐색 위치·되쓰기 형식을 설명한다.
 
-**短篇拆文（story-short-analyze）**
+**단편 분석(story-short-analyze)**
 
-- 题材标尺按 SKILL 的 13 个标签重排，`genre_detected` 只取这 13 个值或「通用」。情节节点模板加 `位置{第N节，约X字}`，节点的「类型」改叫「功能」，与写作端召回一致。
-- 阻断门槛改为只看是否写齐：字段齐全、`beats` 含开端/发展/高潮/结局、取值合法；计数照实填，可以为 0，源文没有的写明「源文没有」也算写了。
-- 人物五份合并为 analysis-characters；书名、简介、导语、付费断点、平台写法新建 analysis-submission（平台集合对齐写作端 submission-craft）。删除 analysis-character-{basics,design,relations}、analysis-reader-profile、analysis-writing-techniques、analysis-paragraph-hooks、deconstruction-examples、zhihu-style；对白五级并入 stage4-6，不公平伤害并入 analysis-characters，围观者并入钩子标尺。real-market-data 只留在 short-scan，原共享组取消。
+- 장르 척도는 SKILL의 13태그로 재배열하며 `genre_detected`는 그 값 또는 “通用”만 허용한다. 노드 템플릿에 `位置{第N节，约X字}`를 추가하고 유형을 기능으로 바꿔 집필 회상과 맞춘다.
+- 차단은 작성 완전성만 본다. 필드 완비, `beats`에 시작/전개/절정/결말 포함, 유효 값이다. 개수는 0도 허용하고 실제대로 쓰며 원문에 없다고 명시해도 작성한 것으로 본다.
+- 인물 다섯 파일은 analysis-characters로 합친다. 제목·소개·도입·유료 전환·플랫폼 형식은 새 analysis-submission에 두고 플랫폼을 submission-craft와 맞춘다. analysis-character-{basics,design,relations}, analysis-reader-profile, analysis-writing-techniques, analysis-paragraph-hooks, deconstruction-examples, zhihu-style을 삭제한다. 대화 다섯 등급은 stage4-6, 부당한 피해는 analysis-characters, 구경꾼은 훅 척도로 옮긴다. real-market-data는 short-scan만 남기고 공유 그룹을 없앤다.
 
-**跨 skill 与守卫**
+**스킬 간 연결·검사**
 
-- import 长篇改读拆文报告真实存在的小节；写前召回与 benchmark-style-load 改用情绪模块卡的五个门禁字段；节奏参考改用「扩写方式」等真实列名；短篇写作端读节点的「位置、功能和事件」；短篇扫榜 topic-match 加「扫榜平台 → 写作目标平台」对照表（点众写成「小程序」）；import 短篇的可复用结构有几条写几条，源文没有时写「源文没有」；import 读短篇报告的小节一律加「」引用，交接测试才能覆盖。
-- doc-budget 登记「长篇拆文 补缺 / 增强」「长篇拆文 灵感库」「短篇拆文 拆完后同类对比或逐节节奏」三条新路径；短篇 Stage 2–3、Stage 4–6 的条件读取各登记 stacking（最坏 24.5K、29.4K）；删除指向已删文件的分支，其余拆文路径按实测收紧到约 100 字余量。`check-short-analysis-scope.py` 把两份新文件纳入观察标尺，并把已删的旧人物、读者、技法文件列为不许回流。
-- 新增 `scripts/test-handoff-contracts.py` 接入 static-check job。
+- 장편 import는 실제 보고서 절을 읽는다. 집필 전 회상·benchmark-style-load는 감정 카드 필수 다섯 필드, 리듬은 “扩写方式” 등 실제 열, 단편 집필은 노드 위치·기능·사건을 읽는다. short-scan topic-match에 조사→집필 플랫폼 표를 더하며 뎬중은 “小程序”로 쓴다. 단편 import의 재사용 구조는 있는 만큼만, 없으면 원문에 없다고 쓴다. 단편 보고서 절 이름은 모두 「」로 묶어 인계 테스트가 다루게 한다.
+- doc-budget에 장편 보완/강화·장편 영감·단편 완료 후 동종 비교/절별 리듬 세 경로를 추가한다. 단편 Stage 2–3·4–6 조건부 읽기에 stacking을 등록한다(최악 24.5K·29.4K). 삭제 파일 분기를 없애고 나머지는 실측에서 약 100자 여유로 조인다. `check-short-analysis-scope.py` 관찰 척도에 새 두 파일을 넣고 옛 인물·독자·기법 파일 재유입을 금지한다.
+- 새 `scripts/test-handoff-contracts.py`를 static-check job에 연결한다.
 
 ## Alternatives considered
 
-- **给文风加一个确定性句长统计脚本，保住 `high`**：数据真有来源，置信度说法也就成立。不采用：下游没有任何读取方按 `confidence: high` 采纳文风，加脚本要多维护一套跨平台计数与夹具，换来的只是一个没人用的标签；删掉虚假说法、按样本量定 med/low 就消除了误导。
-- **semantic-acceptance-fixtures 移进 scripts/bench 保留**：留一份人工验收样例备查。不采用：全仓没有脚本读它，移过去仍是没人跑的文本；内容留在 git 历史里。
-- **短篇的人物、读者、技法三份文件按原名各留一份精简版**：改动小，doc-budget 与共享清单不用大动。不采用：三份里大部分是长篇或写作内容（大弧 Boss、男频恋爱攻略、填空模板），短篇各阶段只用到五个概念，分三份读会让同一时刻多读两份文件。
-- **analysis-paragraph-hooks 三节全部并入钩子标尺**：一次删一份文件，去向简单。不采用：对白五级和不公平伤害不是钩子，放进钩子标尺会让同一概念出现在两个时刻；按真正用它的阶段放。
-- **保留短篇计数下限、给补不出时加出口**：数值门槛能逼模型多找证据。不采用：写作端只用 `reversal_type`，其余计数只作对照；下限与标尺自己的「不设固定数量」相反，硬凑出来的钩子会污染下游的对照。
+- **문장 길이 통계 스크립트로 `high` 유지**: 실제 근거가 생긴다. 그러나 `confidence: high`를 보고 채택하는 하위 소비자가 없어 아무도 안 쓰는 라벨을 위해 플랫폼별 계산·픽스처를 관리해야 한다. 가짜 설명을 지우고 표본량에 따라 med/low로 정하면 오해가 사라진다.
+- **semantic-acceptance-fixtures를 scripts/bench로 보관**: 수동 예시를 남긴다. 그러나 아무 스크립트도 안 읽어 여전히 실행되지 않는 글이며 git 이력으로 충분하다.
+- **인물·독자·기법 각 원명에 축약본 유지**: 예산·공유 목록 변경이 작다. 그러나 대부분 장편·집필 내용(대형 서사 Boss·남성향 연애 공략·빈칸 템플릿)이고 단편은 개념 다섯 개만 써 같은 시점에 두 파일을 더 읽게 한다.
+- **analysis-paragraph-hooks 세 절을 모두 훅 척도로 이동**: 목적지가 단순하다. 그러나 대화 등급·부당한 피해는 훅이 아니며 같은 개념이 두 시점에 중복된다. 실제 사용 단계에 둔다.
+- **최소 개수는 유지하고 보완 불가 출구 추가**: 증거를 더 찾게 한다. 그러나 집필은 `reversal_type`만 쓰고 나머지 개수는 비교용이다. 최소치는 척도의 고정 수 없음과 충돌하고 억지 훅이 비교를 오염시킨다.
 
 ## Consequences
 
-- 收益：拆文各时刻读到的文档与脚本行为一致，enhance、分块、缺章检查不再让模型照着错误说法做；写作端送作者来补拆时有对应时刻；短篇拆文资料从约 80.8K 降到约 42.5K，Stage 4–6 最坏叠加从超 35K 降到 29.4K；交接点有测试守着，改名会当场报错。
-- 代价：文风可信度降档后，`文风.md` 不再出现 `high`，依赖它的旧项目说法会变（下游不读这个字段，行为不变）。短篇阻断门槛放宽和 stage4-6 报告结构变化还没跑过真实短篇的完整管道，需要用追妻、甜宠、悬疑各一篇确认报告各段齐全、写作端能映射到题材包、导入不会反复重跑。长篇 stage1 只加了女频关系路由与「言情/宅斗」爽点形态，没有语料验证。chapter-extractor 模板改动随 agents_version 36 发布，用户重新部署后生效。
+- 이점: enhance·분할·누락 검사 설명이 스크립트와 같고 집필에서 보완 요청으로 보내도 대응 시점이 있다. 단편 자료 약 80.8K→42.5K, Stage 4–6 최악 중첩은 35K 초과→29.4K다. 인계 이름 변경은 테스트가 즉시 잡는다.
+- 비용: `文风.md`의 `high`가 사라져 옛 프로젝트 설명이 달라지지만 하위는 이 필드를 안 읽어 동작은 같다. 단편 차단 완화·보고 구조 변경은 실제 전체 파이프라인 미검증이다. 아내 되찾기·달콤한 연애·서스펜스 각 한 편으로 보고 완전성·장르 묶음 대응·import 재실행 방지를 확인해야 한다. 장편 stage1 여성향 관계 경로·연애/가문 다툼 쾌감 형태는 자료 검증 없이 추가했다. chapter-extractor는 agents_version 36과 함께 배포하며 사용자가 재배포해야 적용된다.

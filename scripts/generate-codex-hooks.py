@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Codex hook registration JSON from one event manifest."""
+"""하나의 이벤트 매니페스트에서 Codex 훅 등록 JSON을 생성한다."""
 
 from __future__ import annotations
 

@@ -1,24 +1,17 @@
 #!/usr/bin/env node
 /**
- * 晋江文学城排行榜采集脚本
- *
- * 配合 browser-cdp skill 使用。先启动 Chrome CDP 环境，再运行本脚本。
- * 采集策略：
- *   1) topten.php 列表页（纯文本，频道名直接出现，书名/作者交替行）解出频道分组。
- *   2) 从书名 anchor 取 novelid，逐本进 onebook.php 详情页补采核心指标
- *      （收藏数/营养液/积分/字数/状态），满足规范对晋江的硬性要求。
- * 晋江页面为 gb18030 编码：详情页用 fetch+arrayBuffer+TextDecoder('gb18030') 解码
- *   （同步 XHR 的 responseText 会按 UTF-8 解码导致中文乱码）。
- * 详情采集默认开启但有上限（每频道前 N + 总量上限），用 --list-only 可只采列表。
- *
- * 用法：
- *   node jjwxc-rank-scraper.js --type 12                  # 收入金榜（默认含详情）
- *   node jjwxc-rank-scraper.js --type 12 --top 15         # 每频道补采前 15 本
- *   node jjwxc-rank-scraper.js --type 12 --detail-limit 60 # 详情总量上限 60
- *   node jjwxc-rank-scraper.js --type 12 --list-only      # 只采列表（快，无核心指标）
- *   node jjwxc-rank-scraper.js --type all                 # 全部榜单
- *
- * 前置：
+ * 진장문학성 순위 수집기. browser-cdp로 Chrome CDP 환경을 먼저 시작한다.
+ * 1) topten.php의 평문 목록에서 채널명과 교대하는 제목·작가 행으로 채널 그룹을 해석한다.
+ * 2) 제목 anchor의 novelid로 onebook.php 상세 페이지에서 수집 수·영양액·포인트·글자 수·상태를 보충해 필수 요건을 충족한다.
+ * 페이지 인코딩은 gb18030이며 fetch+arrayBuffer+TextDecoder('gb18030')로 해석한다. 동기 XHR responseText는 UTF-8로 해석해 중국어가 깨진다.
+ * 상세 수집은 기본 활성화하되 채널별 상위 N개와 전체 상한이 있다. --list-only는 목록만 수집한다.
+ * 사용법:
+ *   node jjwxc-rank-scraper.js --type 12                  # 수입 골드 순위, 기본 상세 포함
+ *   node jjwxc-rank-scraper.js --type 12 --top 15         # 채널별 상위 15권 상세
+ *   node jjwxc-rank-scraper.js --type 12 --detail-limit 60 # 상세 총 60권 상한
+ *   node jjwxc-rank-scraper.js --type 12 --list-only      # 빠른 목록 전용, 핵심 지표 없음
+ *   node jjwxc-rank-scraper.js --type all                 # 전체 순위
+ * 사전 실행:
  *   node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
  */
 
@@ -37,10 +30,10 @@ const RANK_TYPES = [
   { id: "17", label: "千字金榜" },
 ];
 
-// 详情请求批大小（async fetch 并发，整批控制在 ab() 20s 超时内）
+// 상세 요청 배치 크기. 비동기 fetch를 병렬 실행하며 배치 전체를 ab()의 20초 이내로 제한한다.
 const DETAIL_CHUNK = 6;
 
-/** 连通性 + 页面就绪自检 */
+/** 연결·페이지 준비 상태 자체 검사. */
 function probePage(port) {
   return evalJSONBase64(
     port,
@@ -49,19 +42,17 @@ function probePage(port) {
 }
 
 // ---------------------------------------------------------------------------
-// 列表页提取
+// 목록 페이지 추출
 // ---------------------------------------------------------------------------
 
-/**
- * 提取晋江榜单数据（频道分组 + 书名/作者交替），并从书名 anchor 附上 novelid。
- */
+/** 채널 그룹·제목/작가 교대 구조에서 진장 순위를 추출하고 제목 anchor의 novelid를 붙인다. */
 function extractRankData(port) {
   const js =
     "JSON.stringify((function(){" +
     "var result={channels:[]};" +
     "var text=document.body.innerText||'';" +
     "var lines=text.split(/\\n/).map(function(l){return l.trim()}).filter(Boolean);" +
-    // 书名 anchor → novelid（排除霸王票"X向《书名》投了Y"这类记录）
+    // 제목 anchor → novelid. ‘X向《书名》投了Y’ 같은 후원표 기록은 제외한다.
     "var idMap={};" +
     "Array.from(document.querySelectorAll('a')).forEach(function(a){" +
     "  var hm=(a.getAttribute('href')||'').match(/novelid=([0-9]+)/);if(!hm)return;" +
@@ -107,10 +98,10 @@ function extractRankData(port) {
 }
 
 // ---------------------------------------------------------------------------
-// 详情页提取（gb18030 + itemprop 微数据）
+// 상세 페이지 추출(gb18030 + itemprop 마이크로데이터).
 // ---------------------------------------------------------------------------
 
-/** 构建：一批 novelid 的详情解码 JS（async fetch + TextDecoder，返回 JSON 字符串） */
+/** novelid 배치의 상세 해석 JS를 만든다(async fetch + TextDecoder, JSON 문자열 반환). */
 function buildDetailJS(ids) {
   return `Promise.all(${JSON.stringify(ids)}.map(function(id){
     return fetch('/onebook.php?novelid='+id)
@@ -128,9 +119,9 @@ function buildDetailJS(ids) {
 }
 
 /**
- * 分批解码详情，合并结果。
- * 每批单独 try/catch：整批的并发 fetch 贴着 ab() 的 20s 超时线，一次瞬时超时（或
- * 返回非 JSON）只该丢这 6 本，不能连坐后面几十本，更不能把已解析好的列表带走。
+ * 상세를 나누어 해석하고 합친다. 각 배치에 독립 try/catch를 둔다.
+ * 병렬 fetch는 ab()의 20초 제한에 가까우므로 일시적 시간 초과·비JSON 응답은 해당 6권만 잃게 하고
+ * 이후 수십 권과 이미 해석한 목록까지 잃게 해서는 안 된다.
  */
 function fetchDetails(port, ids) {
   const map = {};
@@ -155,7 +146,7 @@ function fetchDetails(port, ids) {
 }
 
 // ---------------------------------------------------------------------------
-// 格式化
+// 형식화
 // ---------------------------------------------------------------------------
 
 function fmtWan(s, unit) {
@@ -167,7 +158,7 @@ function fmtWan(s, unit) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -196,7 +187,7 @@ function scrapeRank(port, rankTypeId, channelId) {
     ab(port, "open", url);
     sleep(4000);
 
-    // 连通性自检：CDP 未起/被重定向时给可操作报错，而非误报"结构已变"
+    // 연결 자체 검사: CDP 미실행·리디렉션은 구조 변경으로 오보하지 않고 대응 가능한 오류를 준다.
     const probe = probePage(port);
     if (!probe) {
       console.error(
@@ -229,7 +220,7 @@ function scrapeRank(port, rankTypeId, channelId) {
   });
   console.log(`  ✓ 列表：${data.channels.length} 个频道，共 ${totalBooks} 本`);
 
-  // 选取每频道前 TOP 本（有 novelid 的）补采详情，受 DETAIL_LIMIT 总量约束
+  // novelid가 있는 채널별 상위 TOP권을 보충 수집하되 총 DETAIL_LIMIT를 적용한다.
   let detailMap = {};
   let detailPlanned = 0;
   let detailOk = 0;
@@ -248,8 +239,8 @@ function scrapeRank(port, rankTypeId, channelId) {
     detailPlanned = picked.length;
     if (picked.length) {
       console.log(`  → 补采详情 ${picked.length} 本（每频道前 ${TOP}，上限 ${DETAIL_LIMIT}）...`);
-      // 详情是列表的增补，不是前提：整段失败也要保住已解析好的列表落盘
-      // （下面的质量门会把 detailOk===0 标成 [详情解析异常/登录态缺失]）
+      // 상세는 목록의 보충이지 전제가 아니다. 전체 상세 실패에도 이미 해석한 목록은 저장한다.
+      // 아래 품질 관문이 detailOk===0을 [详情解析异常/登录态缺失]로 표시한다.
       try {
         const detailResult = fetchDetails(port, picked);
         detailMap = detailResult.map;
@@ -264,7 +255,7 @@ function scrapeRank(port, rankTypeId, channelId) {
     }
   }
 
-  // 质量状态：详情开启时，收藏数命中率是核心信号
+  // 품질 상태: 상세를 켰을 때 수집 수 적중률이 핵심 신호다.
   let quality = "[OK]";
   const detailPartial =
     !LIST_ONLY &&
@@ -339,13 +330,13 @@ function main() {
   if (RANKTYPE !== "all" && !RANK_TYPES.some((rank) => rank.id === RANKTYPE)) {
     throw new Error(`未知 --type: ${RANKTYPE}`);
   }
-  // 当前脚本只实现全站榜（t=0）；不能把任意数字静默标成“频道 N”。
-  // 若后续支持分频道，先从页面提取并维护明确 ID 白名单再开放。
+  // 현재는 사이트 전체 순위(t=0)만 구현한다. 임의 숫자를 ‘채널 N’으로 조용히 표시하지 않는다.
+  // 채널별 지원을 추가하려면 페이지에서 명시적 ID 허용 목록을 추출·관리한 뒤 공개한다.
   if (CHANNEL !== "0") {
     throw new Error(`未知 --channel: ${CHANNEL}（当前仅支持 0=全站）`);
   }
   const rankTypes = RANKTYPE === "all" ? RANK_TYPES.map((r) => r.id) : [RANKTYPE];
-  const channels = [CHANNEL]; // 晋江频道 ID 需从页面获取，默认全站
+  const channels = [CHANNEL]; // 진장 채널 ID는 페이지에서 얻어야 하며 기본값은 전체 사이트다.
   let written = 0;
   let failed = 0;
   let partial = false;
@@ -353,7 +344,7 @@ function main() {
 
   for (const rt of rankTypes) {
     for (const ch of channels) {
-      // per-榜单隔离：一个榜单出错不该掐掉 --type all 后面的榜单（与番茄/刺猬猫一致）
+      // 순위별 격리: 하나의 오류로 --type all의 나머지를 중단하지 않는다(판체·츠웨이마오와 동일).
       try {
         const result = scrapeRank(PORT, rt, ch);
         if (!result) {

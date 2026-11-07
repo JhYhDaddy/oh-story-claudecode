@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""跑一个基准用例：从 fixture 起一个隔离项目，部署指定版本的包，用真实 CLI 会话执行用例的轮次。
+"""벤치마크 사례를 실행한다. fixture로 격리 프로젝트를 만들고 지정 버전 패키지를 배포한 뒤 실제 CLI 세션으로 회차를 수행한다.
 
-用法：
-  run.py --case mid-daily --pkg <pkg目录> --host claude-code --out <runs目录> [--label v0711]
+사용법:
+  run.py --case mid-daily --pkg <pkg디렉터리> --host claude-code --out <runs디렉터리> [--label v0711]
 
-fixture 与主机配置都放在仓库外（见 README.md）：
-  BENCH_HOME（默认 ~/.oh-story-bench）/fixtures/<fixture>/   一本冻结的书
-  BENCH_HOME/hosts.json                                       各主机的可执行文件、模型和凭据文件
-产物（会话日志、项目快照）写到 --out，不进 git。
+fixture와 호스트 설정은 저장소 밖에 둔다(README.md 참조):
+  BENCH_HOME(기본 ~/.oh-story-bench)/fixtures/<fixture>/   고정된 작품
+  BENCH_HOME/hosts.json                                 호스트별 실행 파일·모델·자격 증명 파일
+산출물(세션 로그, 프로젝트 스냅샷)은 --out에 저장하며 git에 넣지 않는다.
 """
 import argparse
 import json
@@ -47,8 +47,8 @@ def host_env(cfg, home):
 
 
 def claude_env(cfg, home):
-    """real_home：凭据跟着真实 HOME（改了 HOME 就是 Not logged in），只能沿用它；
-    用户级设置、插件与 CLAUDE.md 由 --setting-sources 挡在外面，嵌套会话的环境变量去掉。"""
+    """real_home: 자격 증명은 실제 HOME에 있으므로 그대로 써야 한다(HOME을 바꾸면 Not logged in).
+    사용자 설정·플러그인·CLAUDE.md는 --setting-sources로 제외하고 중첩 세션 환경 변수는 제거한다."""
     if not cfg.get('real_home'):
         return host_env(cfg, home)
     env = {k: v for k, v in os.environ.items() if not k.startswith(('CLAUDE', 'OMC_'))}
@@ -57,7 +57,7 @@ def claude_env(cfg, home):
 
 
 def keep_transcripts(sid, home):
-    """real_home 时会话转录落在真实 ~/.claude/projects 下，复制进运行目录，metrics.py 照旧读。"""
+    """real_home의 세션 기록은 실제 ~/.claude/projects에 저장된다. 실행 디렉터리로 복사해 metrics.py가 기존 방식으로 읽게 한다."""
     for main in (Path.home() / '.claude' / 'projects').glob(f'*/{sid}.jsonl'):
         dest = home / '.claude' / 'projects' / main.parent.name
         dest.mkdir(parents=True, exist_ok=True)
@@ -67,11 +67,11 @@ def keep_transcripts(sid, home):
 
 
 def drive_claude(cfg, proj, home, log, prompt, resume):
-    """一轮 Claude Code stream-json 会话；后台子 agent 未结束前保持进程存活。"""
+    """Claude Code stream-json 세션 한 회차. 백그라운드 하위 agent가 끝날 때까지 프로세스를 유지한다."""
     cmd = [os.path.expanduser(cfg['bin']), '-p', '--input-format', 'stream-json', '--output-format',
            'stream-json', '--verbose', '--permission-mode', 'bypassPermissions']
     if cfg.get('real_home'):
-        # story-setup 把 hooks 注册在 settings.local.json，只写 project 时 hook 不生效。
+        # story-setup은 settings.local.json에 hooks를 등록하므로 project만 쓰면 훅이 작동하지 않는다.
         cmd += ['--setting-sources', 'project,local', '--strict-mcp-config']
     if cfg.get('model') and cfg['model'] != 'default':
         cmd += ['--model', cfg['model']]
@@ -139,8 +139,8 @@ def drive_codex(cfg, proj, home, log, prompt, resume):
             '--dangerously-bypass-approvals-and-sandbox'] + cfg.get('extra_args', [])
     cmd = base + (['resume', resume, prompt] if resume else ['-C', str(proj), prompt])
     env = dict(os.environ) if cfg.get('inherit_env', True) else host_env(cfg, home)
-    # 必须给独立 CODEX_HOME：用户全局配置里的插件（computer-use、浏览器）、notify 钩子和全局 skills
-    # 会被基准会话继承，既污染测量，也会去操作用户的电脑。
+    # 독립된 CODEX_HOME이 필요하다. 전역 설정의 플러그인(computer-use, 브라우저), notify 훅, 전역 skills를
+    # 벤치마크 세션이 상속하면 측정이 오염되고 사용자 컴퓨터를 조작할 수도 있다.
     env.update({k: os.path.expanduser(v) for k, v in cfg.get('env', {}).items()})
     if 'CODEX_HOME' not in env or Path(env['CODEX_HOME']).resolve() == (Path.home() / '.codex').resolve():
         raise SystemExit('codex 主机必须在 hosts.json 里配置独立的 CODEX_HOME（见 README）')
@@ -162,7 +162,7 @@ DRIVERS = {'claude-code': drive_claude, 'codex': drive_codex}
 
 
 def committed(book):
-    state = book / '追踪/_tracking-state.json'
+    state = book / '추적/_tracking-state.json'
     if not state.is_file():
         return 0
     return int(load_json(state).get('last_committed_chapter') or 0)
@@ -187,7 +187,7 @@ def main():
     proj, home = run_dir / 'proj', run_dir / 'home'
     book = proj / case['book_dir']
     shutil.copytree(BENCH_HOME / 'fixtures' / case['fixture'], book)
-    subprocess.run(['chmod', '-R', 'u+w', str(book)], check=True)  # fixture 可能是只读冻结的
+    subprocess.run(['chmod', '-R', 'u+w', str(book)], check=True)  # fixture는 읽기 전용으로 고정되어 있을 수 있다.
     deploy.deploy(a.pkg, a.host, proj)
     subprocess.run(['git', 'init', '-q'], cwd=proj, check=True)
     home.mkdir(parents=True, exist_ok=True)

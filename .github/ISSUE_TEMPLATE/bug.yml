@@ -1,5 +1,5 @@
-name: Bug 报告
-description: 报告可以复现的命令、文件、状态或 Runtime 异常
+name: "버그 보고"
+description: "재현할 수 있는 명령·파일·상태·런타임 오류를 보고합니다"
 title: "[Bug] "
 labels:
   - bug
@@ -8,16 +8,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        请说明失败动作，并提供最小复现步骤与完整错误信息。
+        실패한 동작을 설명하고 최소 재현 절차와 전체 오류 메시지를 제공해 주세요.
 
-        如果问题是生成内容的文风、人物、节奏或 AI 味不符合预期，请改用「输出质量 Case」。使用方法和流程疑问请前往 Discussions。
+        생성된 내용의 문체·인물·전개 속도·AI 문체가 기대와 다르다면 “출력 품질 사례” 양식을 사용하세요. 사용법이나 작업 절차에 관한 질문은 Discussions에 남겨 주세요.
 
   - type: input
     id: version
     attributes:
-      label: Oh Story 版本
-      description: 可查看 `skills/story/VERSION`；若使用 main，请填写 commit SHA。
-      placeholder: 例如 0.7.7 或 a03f0a8
+      label: "Oh Story 버전"
+      description: "`skills/story/VERSION`에서 확인할 수 있습니다. main을 사용한다면 커밋 SHA를 적어 주세요."
+      placeholder: "예: 0.7.7 또는 a03f0a8"
     validations:
       required: true
 
@@ -33,32 +33,32 @@ body:
         - OpenClaw
         - Reasonix
         - Google Antigravity
-        - 通用 Agent / Web AI
-        - 其他
+        - 범용 에이전트 / 웹 AI
+        - 기타
     validations:
       required: true
 
   - type: input
     id: runtime_version
     attributes:
-      label: Runtime 版本
-      description: 请填写 CLI 或客户端版本；不知道时说明“不知道”。
-      placeholder: 例如 Codex 0.123.0
+      label: "런타임 버전"
+      description: "CLI 또는 클라이언트 버전을 적어 주세요. 모른다면 “모름”이라고 적어 주세요."
+      placeholder: "예: Codex 0.123.0"
     validations:
       required: true
 
   - type: input
     id: model
     attributes:
-      label: 模型
-      placeholder: 例如 Claude Opus 4.6 / GPT-5 / GLM-5.1
+      label: "모델"
+      placeholder: "예: Claude Opus 4.6 / GPT-5 / GLM-5.1"
     validations:
       required: true
 
   - type: dropdown
     id: skill
     attributes:
-      label: 使用的 Skill
+      label: "사용한 스킬"
       multiple: true
       options:
         - story
@@ -74,82 +74,82 @@ body:
         - story-review
         - story-cover
         - browser-cdp
-        - 其他
+        - 기타
     validations:
       required: true
 
   - type: input
     id: operating_system
     attributes:
-      label: 操作系统
-      placeholder: 例如 Windows 11 / macOS 15.6 / Ubuntu 24.04
+      label: "운영체제"
+      placeholder: "예: Windows 11 / macOS 15.6 / Ubuntu 24.04"
     validations:
       required: true
 
   - type: textarea
     id: summary
     attributes:
-      label: 问题概述
-      description: 说明哪个动作失败，以及问题对你造成了什么影响。
-      placeholder: 执行……后，本应……，实际……，导致……
+      label: "문제 개요"
+      description: "어떤 동작이 실패했으며 그 문제가 어떤 영향을 주었는지 설명해 주세요."
+      placeholder: "……를 실행한 뒤 ……가 되어야 했지만, 실제로는 ……가 발생하여 ……에 영향을 주었습니다."
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: 最小复现步骤
-      description: 从一个可确认的起点开始，逐步列出命令、操作和必要输入。
+      label: "최소 재현 절차"
+      description: "확인할 수 있는 시작 상태부터 명령·조작·필요한 입력을 순서대로 나열해 주세요."
       placeholder: |
-        1. 在……目录执行……
-        2. 选择……
-        3. 打开……
-        4. 出现……
+        1. …… 디렉터리에서 …… 실행
+        2. …… 선택
+        3. …… 열기
+        4. …… 발생
     validations:
       required: true
 
   - type: dropdown
     id: reproducibility
     attributes:
-      label: 复现稳定性
+      label: "재현 빈도"
       options:
-        - 每次都能复现
-        - 多数时候能复现
-        - 偶尔复现
-        - 只出现过一次
+        - 항상 재현됨
+        - 대부분 재현됨
+        - 가끔 재현됨
+        - 한 번만 발생함
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: 期望结果
-      placeholder: 完成上述步骤后，应该发生什么？
+      label: "기대 결과"
+      placeholder: "위 절차를 완료하면 어떤 결과가 나와야 하나요?"
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: 实际结果
-      placeholder: 实际发生了什么？请包含完整错误信息，不要只写“失败”。
+      label: "실제 결과"
+      placeholder: "실제로 어떤 일이 일어났나요? “실패”라고만 쓰지 말고 전체 오류 메시지를 포함해 주세요."
     validations:
       required: true
 
   - type: textarea
     id: evidence
     attributes:
-      label: 日志、截图或最小样例
-      description: 请粘贴相关日志并使用代码块；删除 API Key、Token、真实姓名、未公开书稿等敏感信息。
+      label: "로그·스크린샷·최소 예제"
+      description: "관련 로그를 코드 블록으로 붙여 주세요. API 키, 토큰, 실명, 미공개 원고 등 민감한 정보는 삭제해 주세요."
       render: shell
 
   - type: checkboxes
     id: checks
     attributes:
-      label: 提交前确认
+      label: "제출 전 확인"
       options:
-        - label: 我搜索过现有 Issue 和 Discussion，没有找到同一问题。
+        - label: "기존 Issue와 Discussion을 검색했으며 같은 문제를 찾지 못했습니다."
           required: true
-        - label: 我已删除 API Key、Token、个人信息和不愿公开的正文内容。
+        - label: "API 키, 토큰, 개인정보, 공개하고 싶지 않은 본문을 삭제했습니다."
           required: true
 

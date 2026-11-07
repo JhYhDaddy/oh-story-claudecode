@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stable entry point for the single-state long-analysis runtime tests."""
+"""단일 상태 장편 분석 런타임 테스트의 안정적인 진입점."""
 
 from __future__ import annotations
 

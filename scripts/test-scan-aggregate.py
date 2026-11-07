@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""扫榜聚合脚本 aggregate-rank.js 的行为回归。
+"""순위 조사 집계 스크립트 aggregate-rank.js의 동작 회귀 검사.
 
-夹具按各采集脚本的实际 Markdown 渲染格式手写（番茄/起点/七猫/晋江/刺猬猫/点众/黑岩），
-经公开 CLI 断言：题材计数与去重、热度口径、字数分桶、标签热词、多榜重合、采集问题上浮、
-样本够不够、抽样取回原始条目、非榜单文件被跳过，以及聚合结果远小于原始榜单。
+fixture는 각 수집 스크립트의 실제 Markdown 렌더링 형식(판치에/치디엔/치마오/진장/츠웨이먀오/뎬중/헤이옌)으로
+직접 작성한다. 공개 CLI로 장르 집계와 중복 제거, 인기 기준, 글자 수 구간, 인기 태그, 여러 순위표 중복,
+수집 문제의 상위 보고, 표본 충분성, 추출 표본의 원본 항목 회수, 비순위표 파일 제외를 검증한다.
+집계 결과가 원본 순위표보다 훨씬 작다는 점도 검증한다.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def run(script: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 # ---------------------------------------------------------------------------
-# 夹具：逐平台模仿采集脚本 renderMarkdown 的输出
+# fixture: 플랫폼마다 수집 스크립트 renderMarkdown의 출력을 재현한다.
 # ---------------------------------------------------------------------------
 
 DESC = "他本是宗门弃徒，一朝觉醒系统，从此踏上逆天之路。可无人知道，那场灭门惨案背后另有其人，而真相就藏在他随身携带的那枚玉佩里。"
@@ -195,17 +196,17 @@ def write_fixture(tmp: Path) -> Path:
     (scan / "刺猬猫月票榜_20260926.md").write_text(ciweimao(), encoding="utf-8")
     (scan / "点众女频短篇_20260926.md").write_text(dianzhong(), encoding="utf-8")
     (scan / "黑岩书库列表_female_20260926.md").write_text(heiyan(), encoding="utf-8")
-    # 作者手动提供、按 manual-rank-input.md 格式整理的榜单
+    # 작가가 직접 제공하고 manual-rank-input.md 형식으로 정리한 순위표.
     (scan / "知乎盐言热门榜_20260926.md").write_text("\n".join([
         "# 知乎盐言 · 热门榜", "",
         "### #1 替嫁后我成了首辅夫人", "*盐一 · 古言 · 已完结 · 12000字 · 2.3万收藏*", "**标签：** 先婚后爱、追妻",
         "", "> 嫁过去的第一晚，他递来一纸和离书。", "",
         "### #2 我妈的第二个女儿", "*盐二 · 现实 · 已完结 · 9000字 · 8000收藏*", "",
     ]), encoding="utf-8")
-    # 非榜单文件：自家产物与作者笔记，都不该被当成榜单
-    (scan / "选题决策.md").write_text("# 选题决策：番茄男频\n\n### #1 不是榜单\n", encoding="utf-8")
-    (scan / "扫榜聚合.md").write_text("# 扫榜聚合\n", encoding="utf-8")
-    (scan / "短篇扫榜结论.md").write_text("# 短篇扫榜结论：点众 · 女频\n\n### #1 不是榜单\n", encoding="utf-8")
+    # 순위표가 아닌 파일: 자체 산출물과 작가 메모는 순위표로 취급하면 안 된다.
+    (scan / "소재선정.md").write_text("# 选题决策：番茄男频\n\n### #1 不是榜单\n", encoding="utf-8")
+    (scan / "순위조사집계.md").write_text("# 扫榜聚合\n", encoding="utf-8")
+    (scan / "단편순위조사결론.md").write_text("# 短篇扫榜结论：点众 · 女频\n\n### #1 不是榜单\n", encoding="utf-8")
     (scan / "笔记.md").write_text("# 随手记\n\n- 想写都市\n", encoding="utf-8")
     return scan
 
@@ -230,7 +231,7 @@ def test_json_aggregate(scan: Path) -> None:
     result = json.loads(proc.stdout)
 
     names = sorted(f["name"] for f in result["files"])
-    check(not {"选题决策.md", "扫榜聚合.md", "短篇扫榜结论.md", "笔记.md"} & set(names),
+    check(not {"소재선정.md", "순위조사집계.md", "단편순위조사결론.md", "笔记.md"} & set(names),
           f"non-rank files must be skipped: {names}")
     check(len(names) == 9, f"expected 9 rank files, got {names}")
     check(result["platforms"][0]["platform"] == "番茄", "platforms ordered by sample size")
@@ -306,7 +307,7 @@ def test_json_aggregate(scan: Path) -> None:
 
 
 def test_markdown_and_out(scan: Path, tmp: Path) -> None:
-    out = tmp / "out" / "扫榜聚合.md"
+    out = tmp / "out" / "순위조사집계.md"
     proc = run(LONG, str(scan / "番茄男频阅读榜_全题材_20260926.md"), str(scan / "番茄男频新书榜_全题材_20260926.md"),
                "--out", str(out), "--top", "1", "--desc", "8")
     check(proc.returncode == 0, f"markdown run failed: {proc.stderr}")
@@ -361,8 +362,8 @@ def test_compression(tmp: Path) -> None:
     check(len(proc.stdout) * 5 < len(raw), f"aggregate must be far smaller than raw: {len(proc.stdout)} vs {len(raw)}")
 
 
-# 番茄书库「最热」：列表页书名与数字都被字体反爬，脚本只按页面顺序取 bookId，其余字段靠详情页解码。
-# 这里打桩 cdp-utils，按真实页面的形状喂 bookId 与详情，跑完整书库流程再交给聚合。
+# 판치에 서고 ‘인기순’: 목록의 제목과 숫자에는 수집 방지 글꼴이 적용된다. 스크립트는 페이지 순서대로 bookId만 얻고 나머지는 상세 페이지에서 디코딩한다.
+# cdp-utils를 스텁으로 바꾸고 실제 페이지 형태의 bookId와 상세 정보를 넣어 서고 전체 흐름을 실행한 뒤 집계에 넘긴다.
 CDP_STUB = r"""
 const u = require(process.env.CDP_UTILS);
 let url = "";
@@ -427,7 +428,7 @@ def test_fanqie_library(tmp: Path) -> None:
 
 
 def test_fanqie_library_failures(tmp: Path) -> None:
-    # --channel all 时女频被跳验证页：男频照常写出，整体报部分失败（exit 2）并说明哪个频道没采到
+    # --channel all에서 여성향이 인증 페이지로 전환되면 남성향은 정상 저장하고 전체는 부분 실패(exit 2)로 처리하며 수집하지 못한 채널을 알린다.
     out = tmp / "library-partial"
     proc = run_library(tmp, out, "all", STUB_BLOCK_FEMALE="1")
     check(proc.returncode == 2, f"one blocked channel must be a partial failure (exit 2), got {proc.returncode}: {proc.stderr}")
@@ -436,7 +437,7 @@ def test_fanqie_library_failures(tmp: Path) -> None:
     files = sorted(p.name for p in out.glob("*.md"))
     check(len(files) == 1 and "男频" in files[0], f"only the male-channel file is written: {files}")
 
-    # 书库一本都没抓到：不写空文件，整次采集失败（exit 1）
+    # 서고에서 한 권도 얻지 못하면 빈 파일을 쓰지 않고 전체 수집을 실패(exit 1) 처리한다.
     out = tmp / "library-empty"
     proc = run_library(tmp, out, "1", STUB_EMPTY_LIBRARY="1")
     check(proc.returncode == 1, f"empty library must fail, got {proc.returncode}: {proc.stderr}")
@@ -444,7 +445,7 @@ def test_fanqie_library_failures(tmp: Path) -> None:
     check(not list(out.glob("*.md")) if out.exists() else True, "empty library must not write a file")
 
 
-# 详情页夹具：推荐书对象排在正文书之前，数字一个是数字一个是字符串，最新章节带转义引号。
+# 상세 페이지 fixture: 추천 작품 객체가 본 작품보다 먼저 나오고 숫자는 숫자형/문자열형 하나씩이며 최신 장 제목에는 이스케이프된 따옴표가 있다.
 DETAIL_WITH_BOOK_ID = (
     '<html><head><title>诡舍2完整版在线免费阅读_番茄小说官网</title>'
     '<meta property="og:novel:author" content="乙"></head><body>'
@@ -457,14 +458,14 @@ DETAIL_WITH_BOOK_ID = (
     '"readCount":488046,"wordNumber":"217097","creationStatus":"1",'
     '"lastChapterTitle":"第100章 他说\\"开门\\"","chapterList":[{"title":"x}y"}]}};</script></body></html>'
 )
-# 没有 bookId 的形状：按 <title> 里的书名定位正文书
+# bookId가 없는 형식: <title>의 책 제목으로 본 작품을 찾는다.
 DETAIL_TITLE_ONLY = (
     '<html><head><title>合院亿富翁最新章节_番茄小说</title></head><body>'
     '<script>window.__INITIAL_STATE__={"rec":[{"bookName":"推荐书","readCount":5,"lastChapterTitle":"推荐章"}],'
     '"book":{"bookName":"合院亿富翁","author":"丙","readCount":"90000","wordNumber":120000,'
     '"lastChapterTitle":"第30章"}};</script></body></html>'
 )
-# 定位不到正文书：数字宁可留空，也不拿推荐书的
+# 본 작품을 찾지 못하면 추천 작품의 숫자를 쓰지 않고 빈칸으로 둔다.
 DETAIL_UNANCHORED = (
     '<html><head><title>番茄小说</title></head><body>'
     '<script>window.__INITIAL_STATE__={"rec":[{"bookName":"推荐书","readCount":5,"lastChapterTitle":"推荐章"}]};'
@@ -559,15 +560,15 @@ def test_title_parse_failure_words(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 书库筛选页（七猫书库、起点书库）：按页序排、页面没有热度数字；所有页写进一个文件，名次跨页连续。
-# 列表名带「新书」，聚合时进「新书榜」列；和同平台带热度的榜单放在一起时，不能把平台热度口径拉掉。
+# 서고 필터 페이지(치마오/치디엔): 페이지 순서로 정렬되며 인기 수치는 없다. 모든 페이지를 한 파일에 쓰고 순위를 페이지 간 연속으로 매긴다.
+# 목록 이름에 ‘新书’가 있으면 집계의 ‘新书榜’ 열로 넣는다. 같은 플랫폼의 인기 수치가 있는 순위표와 함께 있어도 플랫폼 인기 기준을 없애면 안 된다.
 # ---------------------------------------------------------------------------
 
 LIB_DESC = "末世降临第三天，他发现自己能看见每个人头顶的倒计时，而他自己的只剩七天。"
 
 
 def qimao_rank(list_title: str, books: list[tuple]) -> str:
-    """七猫榜单页（大热榜），字段齐全、质量 [OK]，照 qimao-rank-scraper.js 的 renderMarkdown。"""
+    """치마오 인기 순위 페이지: 필드가 완전하고 품질은 [OK]이며 qimao-rank-scraper.js의 renderMarkdown을 따른다."""
     n = len(books)
     lines = [f"# 七猫 · {list_title}", "", "- 数据质量：[OK]", f"- 有效条目：{n} / {n}", "- 问题摘要：无",
              f"- 作品页链接：{n} / {n}", f"- 热度命中：{n} / {n}", "- 来源：https://www.qimao.com/paihang/boy/hot/date/",
@@ -580,7 +581,7 @@ def qimao_rank(list_title: str, books: list[tuple]) -> str:
 
 
 def qimao_library(books: list[tuple]) -> str:
-    """七猫书库：元信息行和大热榜同序、去掉热度段；更新时间单独一行。"""
+    """치마오 서고: 메타정보 줄은 인기 순위와 같은 순서지만 인기 수치 구간을 빼고 갱신 시각은 별도 줄로 둔다."""
     lines = ["# 七猫 · 全站书库点击新书", "", "- 来源：https://www.qimao.com/shuku/a-a-a-1-1-a-0-click-1/",
              "- 筛选：全部频道·30万字以下·3天内更新·连载中；按点击量排序，取前 5 页；页序即名次，页面没有热度数字",
              "- 抓取时间：2026-10-09T02:00:00.000Z", f"- 有效条目：{len(books)}", "- 问题摘要：无", "- 数据质量：[OK]",
@@ -594,8 +595,8 @@ def qimao_library(books: list[tuple]) -> str:
 
 
 def qidian_library(books: list[tuple]) -> str:
-    """起点书库：照 qidian-rank-scraper.js 的 renderMarkdown（--type library）。作品页的总推荐单列为
-    「新书总推荐」，不是聚合认的热度行名，所以这份是只按名次的榜。"""
+    """치디엔 서고: qidian-rank-scraper.js의 renderMarkdown(--type library)을 따른다. 작품 페이지의 총추천 수는
+    ‘新书总推荐’로 따로 표시해 집계가 인식하는 인기 행 이름이 아니므로 이 표는 순위만 사용한다."""
     lines = ["# 起点 · 男频书库人气新书", "", "- 来源：https://www.qidian.com/all/action0-size1-update1/",
              "- 抓取方式：cdp-pc", "- 抓取时间：2026-10-09T03:00:00.000Z", f"- 条目数：{len(books)}",
              "- 热度：名次即人气排名；作品页的总推荐单列为「新书总推荐」，不进聚合的热度口径",
@@ -612,28 +613,28 @@ def qidian_library(books: list[tuple]) -> str:
 def write_library_fixture(tmp: Path) -> Path:
     lib = tmp / "library-mix"
     lib.mkdir()
-    # 七猫：大热榜 30 本带热度（都市 20、玄幻 1、历史 5、仙侠 4）+ 书库前 5 页 75 本只有名次。
-    # 书库 75 本超过带热度书的 2.33 倍：门槛分母若按全平台 104 本算，热度口径会退成「按榜单名次」。
-    rank = [("都市至尊归来", "猫甲", "都市", "都市异能", "13.09万字", "520.0万")]  # 新书冲上大热榜，也在书库第 1 页
+    # 치마오: 인기 순위 30권에 인기 수치가 있음(도시 20, 현환 1, 역사 5, 선협 4) + 서고 첫 5페이지 75권에는 순위만 있음.
+    # 서고 75권은 인기 수치가 있는 책의 2.33배를 넘는다. 임계값 분모를 플랫폼 전체 104권으로 잡으면 인기 기준이 순위 기준으로 바뀐다.
+    rank = [("都市至尊归来", "猫甲", "都市", "都市异能", "13.09万字", "520.0万")]  # 신간이 인기 순위와 서고 1페이지에 동시에 등장한다.
     rank += [(f"都市热书{i}", f"都市作者{i}", "都市", "都市生活", f"{60 + i}.5万字", f"{300 - i * 10}.0万") for i in range(1, 20)]
     rank += [("万古神帝续", "猫乙", "玄幻", "东方玄幻", "320.0万字", "200.0万")]
     rank += [(f"历史热书{i}", f"历史作者{i}", "历史", "架空历史", f"{90 + i}.0万字", f"{150 - i * 5}.0万") for i in range(5)]
     rank += [(f"仙侠热书{i}", f"仙侠作者{i}", "仙侠", "修真文明", f"{110 + i}.0万字", f"{120 - i * 5}.0万") for i in range(4)]
     (lib / "七猫男生榜大热榜日榜_20261009.md").write_text(qimao_rank("男生榜 · 大热榜日榜", rank), encoding="utf-8")
     shelf, n = [], 0
-    for page in range(5):  # 每页 15 本：玄幻 9、都市 4、科幻 2
+    for page in range(5):  # 페이지마다 15권: 현환 9, 도시 4, SF 2.
         for kind, count in (("玄幻", 9), ("都市", 4), ("科幻", 2)):
             for _ in range(count):
                 n += 1
                 words = f"{n % 25 + 3}.{n % 10}9万字"
                 if kind == "都市" and page == 0 and not any(b[2] == "猫甲" for b in shelf):
-                    shelf.append(("1000000", "都市至尊归来", "猫甲", "都市", "都市异能", words))  # 同时在大热榜
+                    shelf.append(("1000000", "都市至尊归来", "猫甲", "都市", "都市异能", words))  # 인기 순위에도 동시에 등장한다.
                 else:
                     sub = {"玄幻": "东方玄幻", "都市": "都市生活", "科幻": "末世危机"}[kind]
                     shelf.append((str(1000000 + n), f"{kind}书库新书{n}", f"库作者{n}", kind, sub, words))
     (lib / "七猫全站书库点击新书_20261009.md").write_text(qimao_library(shelf), encoding="utf-8")
 
-    # 起点：月票榜 10 本带总推荐 + 书库 2 页 40 本（总推荐 [待补]）。
+    # 치디엔: 월표 순위 10권에 총추천 수가 있음 + 서고 2페이지 40권(총추천 수는 [待补]).
     yuepiao = [(f"起点月票{i}", f"起点作者{i}", "玄幻·东方玄幻" if i < 6 else "都市·都市生活", f"{150 + i}0000",
                 f"{30 - i}.3万", "") for i in range(10)]
     (lib / "起点月票榜_20261009.md").write_text(qidian("月票榜", yuepiao), encoding="utf-8")
@@ -711,7 +712,7 @@ def test_library_markdown_words(lib: Path) -> None:
 
 
 def test_short_scale_unchanged(scan: Path, tmp: Path) -> None:
-    # 短篇扫榜照旧：点众评分、盐言收藏；黑岩整份没有热度数字，平台退回按榜单名次。
+    # 단편 순위 조사는 기존과 같다. 뎬중 평점과 옌옌 즐겨찾기를 쓰며 헤이옌은 인기 수치가 전혀 없어 플랫폼 기준을 순위로 대체한다.
     short = tmp / "short"
     short.mkdir()
     for name in ("点众女频短篇_20260926.md", "黑岩书库列表_female_20260926.md", "知乎盐言热门榜_20260926.md"):
@@ -732,7 +733,7 @@ def test_short_scale_unchanged(scan: Path, tmp: Path) -> None:
 
 
 def qimao_rank_partial(books: list[tuple]) -> str:
-    """大热榜里有些书没取到热度：照 renderMarkdown 在热度位置写 [待补]（heat 传 None）。"""
+    """인기 순위의 일부 책에 인기 수치가 없으면 renderMarkdown처럼 그 자리에 [待补]를 쓴다(heat는 None)."""
     lines = ["# 七猫 · 男生榜 · 大热榜日榜", "", "- 数据质量：[存在问题]", "- 问题摘要：热度缺失",
              "- 抓取时间：2026-10-09T01:00:00.000Z", "", "---", ""]
     for i, (title, author, genre_name, heat) in enumerate(books, 1):
@@ -753,15 +754,15 @@ def aggregate_qimao(tmp: Path, name: str, rank: list[tuple], shelf: list[tuple])
 
 
 def test_library_metric_edges(tmp: Path) -> None:
-    """门槛分母、有值本数下限、同书跨榜：三处边界各钉一个数，变成别的口径就会红。"""
+    """임계값 분모, 값이 있는 권수 하한, 같은 책의 여러 순위표 등장이라는 세 경계에 숫자를 고정해 다른 기준으로 바뀌면 실패하게 한다."""
     shelf = [(str(3000000 + i), f"书库新书{i}", f"库作者{i}", "玄幻", "东方玄幻", "12.3万字") for i in range(45)]
 
-    # 分母是「上过带热度数字的榜的书」（30 本），不是「带值的书」（5 本）：门槛 9，5 本不够，退回按名次。
+    # 분모는 값이 있는 책 5권이 아니라 인기 수치를 제공하는 순위표에 등장한 책 30권이다. 임계값은 9라 5권으로는 부족하므로 순위 기준으로 돌아간다.
     rank = [(f"热书{i}", f"作者{i}", "都市", f"{100 + i}.0万" if i < 5 else None) for i in range(30)]
     qm = aggregate_qimao(tmp, "edge-denominator", rank, shelf)
     check(qm and not qm.get("metric"), f"30 本热度榜只有 5 本有值，门槛按 30 本算，不能定成热度口径: {qm.get('metric')!r}")
 
-    # 有值本数下限 3：恰好 2 本不报中位，恰好 3 本照报并写明几本有值。
+    # 값이 있는 책의 하한은 3권이다. 정확히 2권이면 중앙값을 보고하지 않고 3권이면 보고하면서 값이 있는 권수를 명시한다.
     rank = [(f"都市热书{i}", f"都市作者{i}", "都市", f"{200 + i}.0万") for i in range(10)]
     rank += [(f"玄幻热书{i}", f"玄幻作者{i}", "玄幻", f"{150 + i}.0万") for i in range(2)]
     rank += [(f"仙侠热书{i}", f"仙侠作者{i}", "仙侠", f"{120 + i}.0万") for i in range(3)]
@@ -774,8 +775,8 @@ def test_library_metric_edges(tmp: Path) -> None:
     else:
         check(False, f"edge-min-known 应定成热度口径: {qm.get('metric')!r}")
 
-    # 同书跨榜：这本书先在书库（文件名排在前面）出现、后在热度榜出现，仍算进分母。
-    # 热度榜 11 本、3 本有值：分母 11 → 门槛 4，不够；漏算这本 → 分母 10 → 门槛 3，会误定成热度。
+    # 같은 책의 여러 순위표 등장: 서고(파일명이 앞섬)에 먼저 나온 뒤 인기 순위에 나와도 분모에 포함한다.
+    # 인기 순위 11권 중 값이 있는 책 3권: 분모 11 → 임계값 4라 부족하다. 이 책을 빠뜨리면 분모 10 → 임계값 3이 되어 인기 기준으로 오판한다.
     rank = [("跨榜书", "跨榜作者", "都市", None)] + [(f"热书{i}", f"作者{i}", "都市", f"{100 + i}.0万" if i < 3 else None) for i in range(10)]
     overlap_shelf = [("5000000", "跨榜书", "跨榜作者", "都市", "都市生活", "13.0万字")] + shelf[:10]
     qm = aggregate_qimao(tmp, "edge-overlap", rank, overlap_shelf)
@@ -783,7 +784,7 @@ def test_library_metric_edges(tmp: Path) -> None:
 
 
 def test_manual_missing_author(tmp: Path) -> None:
-    """作者手动整理的盐言榜：元信息按位置认「作者 · 题材」，截图没作者时 manual-rank-input 要求写「佚名」占位。"""
+    """작가가 직접 정리한 옌옌 순위표: 위치로 ‘作者 · 题材’를 인식하며 스크린샷에 작가가 없으면 manual-rank-input 규약에 따라 ‘佚名’을 넣는다."""
     case = tmp / "manual-missing-author"
     case.mkdir()
     (case / "知乎盐言热门榜_20261017.md").write_text("\n".join([
@@ -802,7 +803,7 @@ def test_manual_missing_author(tmp: Path) -> None:
 
 
 def test_same_page_lists_count_once(tmp: Path) -> None:
-    """起点手机版的两个签约榜是同一页：条目逐条相同的两份榜只按一份计，多榜重合不虚高。"""
+    """치디엔 모바일의 두 계약 순위표는 같은 페이지다. 항목이 모두 같은 두 표는 하나로 세어 여러 표 중복률을 부풀리지 않는다."""
     case = tmp / "same-page"
     case.mkdir()
     books = [("书甲", "作者甲", "玄幻·东方玄幻", "12.0万字", "3000", ""),
@@ -828,7 +829,7 @@ def test_same_page_lists_count_once(tmp: Path) -> None:
     check("- 起点 · 签约作者新书榜：2 条，2026-09-25，质量未标；和「新人签约新书榜」条目完全相同，是同一份数据，只按一份计" in md,
           "采集情况说明哪份按重复计")
 
-    # 书名都没解出来的两份榜不能因为都是「（标题待解析）· 未知」就被当成同一份。
+    # 제목을 해석하지 못한 순위표 두 개가 모두 ‘（标题待解析）· 未知’라고 해서 같은 표로 취급하면 안 된다.
     blank = tmp / "same-page-unresolved"
     blank.mkdir()
     for name in ("男频阅读榜", "男频新书榜"):
@@ -838,7 +839,7 @@ def test_same_page_lists_count_once(tmp: Path) -> None:
     files = json.loads(run(LONG, str(blank), "--json").stdout)["files"]
     check(not any(f.get("duplicateOf") for f in files), f"unresolved lists are never merged: {files}")
 
-    # 抽样也只按一份计：重复榜的条目不重复出现、不占 --n 名额。
+    # 표본 추출도 한 표로만 센다. 중복 순위표의 항목은 반복 등장하거나 --n 할당량을 차지하지 않는다.
     sample = run(LONG, str(case), "--sample", "玄幻", "--n", "5").stdout
     check(sample.startswith("# 抽样：玄幻（命中 3 条，显示 3 条）"), f"sample skips the duplicate list: {sample[:80]!r}")
     check(sample.count("## #1 书甲") == 2 and "签约作者新书榜" not in sample,
@@ -846,7 +847,7 @@ def test_same_page_lists_count_once(tmp: Path) -> None:
 
 
 def test_per_genre_cap_noted(tmp: Path) -> None:
-    """番茄逐题材取前 N 本：聚合要注明本数是采样上限，主会话才不会把本数读成题材大小。"""
+    """판치에에서 장르별 상위 N권을 얻으면 집계에 권수가 표본 상한임을 명시해 주 세션이 장르 규모로 오해하지 않게 한다."""
     case = tmp / "per-genre-cap"
     case.mkdir()
     (case / "番茄男频阅读榜_全题材_20261017.md").write_text(big_fanqie(genre_count=3, per_genre=20), encoding="utf-8")
@@ -873,7 +874,7 @@ def test_per_genre_cap_noted(tmp: Path) -> None:
 
 
 def test_new_list_names(tmp: Path) -> None:
-    """晋江新手金榜是新书榜：和收入金榜一起采时聚合显示「新书榜」列。"""
+    """진장 신인 골드 랭킹은 신간 순위다. 수입 골드 랭킹과 함께 수집하면 집계에 ‘新书榜’ 열을 표시한다."""
     case = tmp / "jj-new"
     case.mkdir()
     (case / "晋江收入金榜_全站_20261017.md").write_text(jjwxc(), encoding="utf-8")
@@ -886,7 +887,7 @@ def test_new_list_names(tmp: Path) -> None:
 
 
 def test_ciweimao_manual_and_sparse(tmp: Path) -> None:
-    """刺猬猫：作者手动整理的「作者 · 题材」按通用位置读；样本门槛默认 10 本，给了 --sparse 就统一用它。"""
+    """츠웨이먀오: 작가가 정리한 ‘作者 · 题材’는 공통 위치로 읽는다. 표본 하한은 기본 10권이며 --sparse가 있으면 공통으로 그 값을 쓴다."""
     case = tmp / "cwm-manual"
     case.mkdir()
     rows = ["# 刺猬猫 · 月票榜", "", "- 数据质量：作者提供", ""]

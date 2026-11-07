@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * 黑岩短篇书库列表采集脚本
+ * 헤이옌 단편 서고 목록 수집 스크립트
  *
- * ⚠️ 前置条件（必须）：
- *   1. 启动 Chrome CDP 环境
- *   2. 在 Chrome 中手动登录 https://manage.zhangwenpindu.cn
- *      登录后会生成 Admin-Token cookie，脚本需要它调用后端 API
- *      未登录 → 脚本报错「未检测到 Admin-Token」
+ * ⚠️ 필수 사전 조건:
+ *   1. Chrome CDP 환경 시작
+ *   2. Chrome에서 https://manage.zhangwenpindu.cn 에 수동 로그인
+ *      로그인하면 백엔드 API 호출에 필요한 Admin-Token 쿠키가 생성된다.
+ *      미로그인 → Admin-Token을 감지하지 못했다는 오류 발생
  *
- * 采集策略：从 Cookie 提取 Bearer token，调用 ms.zhangwenpindu.cn 后端 API
- * 获取结构化 JSON 数据（书名、作者、字数、分类、标签等）。
+ * 수집 전략: 쿠키에서 Bearer 토큰을 추출해 ms.zhangwenpindu.cn 백엔드 API를 호출한다.
+ * 제목, 작가, 글자 수, 분류, 태그 등의 구조화된 JSON 데이터를 얻는다.
  *
- * 用法：
- *   node heiyan-booklist-scraper.js --pages 5              # 采集前5页（每页20条）
- *   node heiyan-booklist-scraper.js --pages 3 --channel male   # 仅男频
- *   node heiyan-booklist-scraper.js --pages 2 --detail         # 含逐本详情（标签等）
+ * 사용법:
+ *   node heiyan-booklist-scraper.js --pages 5                 # 앞 5페이지(페이지당 20개)
+ *   node heiyan-booklist-scraper.js --pages 3 --channel male  # 남성향만
+ *   node heiyan-booklist-scraper.js --pages 2 --detail        # 개별 상세 정보(태그 등) 포함
  */
 
 const fs = require("fs");
@@ -26,15 +26,15 @@ const API_BASE = "https://ms.zhangwenpindu.cn";
 const PAGE_SIZE = 20;
 
 // ---------------------------------------------------------------------------
-// API 调用
+// API 호출
 // ---------------------------------------------------------------------------
 
-/** 连通性自检：区分 CDP 未连 vs 已连但未登录 */
+/** 연결 자체 점검: CDP 미연결과 연결됐으나 미로그인인 경우를 구분한다. */
 function probePage(port) {
   return evalJSON(port, "JSON.stringify({host:location.host})");
 }
 
-/** 从 Cookie 中提取 Admin-Token */
+/** 쿠키에서 Admin-Token을 추출한다. */
 function getToken(port) {
   const js =
     "JSON.stringify((()=>{" +
@@ -44,7 +44,7 @@ function getToken(port) {
   return evalJSON(port, js) || "";
 }
 
-/** 调用后端 API 获取书籍列表 */
+/** 백엔드 API를 호출해 책 목록을 가져온다. */
 function fetchBookList(port, token, pageNum) {
   const t = safeStr(token);
   const js =
@@ -59,7 +59,7 @@ function fetchBookList(port, token, pageNum) {
   return evalJSON(port, js);
 }
 
-/** 调用后端 API 获取书籍详情（标签等） */
+/** 백엔드 API를 호출해 책 상세 정보(태그 등)를 가져온다. */
 function fetchBookDetail(port, token, bookId) {
   const t = safeStr(token);
   const js =
@@ -70,7 +70,7 @@ function fetchBookDetail(port, token, bookId) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -81,10 +81,10 @@ const CHANNEL = getArg(args, "--channel") || "all";
 const DETAIL = args.includes("--detail");
 
 /**
- * 字数格式化：手写千分位，不能用 toLocaleString()。
- * 后者按宿主 ICU locale 取分隔符，de_* 会写成「123.456字」（读起来像 123 字），
- * fr_* 用 U+202F、en-IN 会分成「1,23,456」——同一份报告在不同机器上数字不一样。
- * 兼容接口把 words 返回成字符串的情况。
+ * 글자 수 형식: 천 단위 구분을 직접 구현하며 toLocaleString()은 사용하지 않는다.
+ * 호스트 ICU 로캘에 따라 de_*는 ‘123.456字’(123자로 오독 가능),
+ * fr_*는 U+202F, en-IN은 ‘1,23,456’을 사용해 같은 보고서의 숫자가 기기마다 달라진다.
+ * API가 words를 문자열로 반환하는 경우도 지원한다.
  */
 function fmtWords(words) {
   const n =
@@ -103,8 +103,9 @@ function outputFilename(channel, date) {
 }
 
 /**
- * 文件头「数据质量」：书库没有热度字段，列表模式只有书单；--detail 按详情取到几成定级。
- * 取值要在 aggregate-rank.js 的 QUALITY_WORDS 里，聚合「采集情况」才会翻成白话。
+ * 파일 머리말의 데이터 품질: 서고에는 인기 필드가 없어 목록 모드는 책 목록만 제공한다.
+ * --detail은 상세 정보 확보 비율에 따라 등급을 정한다.
+ * 값이 aggregate-rank.js의 QUALITY_WORDS에 있어야 집계 수집 현황이 쉬운 표현으로 바뀐다.
  */
 function dataQuality(books, detail) {
   if (!detail) return "[仅列表-无核心指标]";
@@ -151,11 +152,11 @@ function buildAndSave(allBooks, total, filtered, filepath, detail = DETAIL) {
       try {
         const b = g.books[i];
         lines.push(`### #${i + 1} ${b.name}`);
-        // 聚合按位置认「作者 · 题材」：缺作者时用占位，否则题材会被当成作者
+        // 집계는 위치로 ‘작가 · 소재’를 판별한다. 작가가 없으면 자리표시자를 넣어 소재를 작가로 오인하지 않게 한다.
         const meta = [
           b.userName || "佚名",
-          // 分别入数组再拼：预先 classifyStr + "/" + typeDesc 会把缺字段拼成
-          // 「undefined/undefined」这种真值字符串，filter(Boolean) 拦不住，直接写进报告
+          // 각각 배열에 넣은 뒤 합친다. classifyStr + "/" + typeDesc를 먼저 하면 누락 필드가
+          // ‘undefined/undefined’ 같은 참인 문자열이 되어 filter(Boolean)을 통과하고 보고서에 그대로 들어간다.
           [b.classifyStr, b.typeDesc].filter(Boolean).join("/"),
           fmtWords(b.words),
           b.price ? b.price + "钻" : "",
@@ -197,13 +198,13 @@ function main() {
   const filename = outputFilename(CHANNEL, localDateStamp());
   const filepath = path.join(OUTDIR, filename);
 
-  // 先导航到管理后台获取 token
+  // 먼저 관리 화면으로 이동해 토큰을 얻는다.
   let token;
   try {
     ab(PORT, "open", BOOKLIST_URL);
     sleep(3000);
 
-    // 连通性自检：把"CDP 没起来"和"没登录"分开，避免误导用户去登录
+    // 연결 자체 점검: CDP 미실행과 미로그인을 구분해 불필요한 로그인을 안내하지 않는다.
     const probe = probePage(PORT);
     if (!probe) {
       console.error(
@@ -226,7 +227,7 @@ function main() {
   }
   console.log("  ✓ 获取到认证 token");
 
-  // 分页采集
+  // 페이지별 수집
   const allBooks = [];
   let total = 0;
 
@@ -235,7 +236,7 @@ function main() {
       sleep(800);
       const resp = fetchBookList(PORT, token, p);
 
-      // 区分失败：接口无响应(超时/CDP) / 401 未授权
+      // 실패 구분: API 무응답(시간 초과/CDP) / 401 인증되지 않음
       if (!resp) {
         console.error(`  ✗ 第${p}页接口无响应（请求超时或 CDP 中断），已停止。`);
         break;
@@ -247,8 +248,8 @@ function main() {
 
       const rows = resp?.data?.rows;
       if (!rows || !rows.length) {
-        // 仅在无数据时才用 code 区分"服务端错误"与"正常到底"，避免把
-        // 携带非常规成功 code 的有效响应误判为错误（成功带 rows 一律放行）
+        // 데이터가 없을 때만 code로 서버 오류와 정상적인 끝을 구분한다. 비표준 성공 code를
+        // 포함한 유효 응답을 오류로 오인하지 않도록 한다(rows를 포함한 성공 응답은 모두 허용).
         if (resp.code != null && resp.code !== 0 && resp.code !== 200) {
           console.error(`  ✗ 第${p}页接口返回错误 code=${resp.code} ${resp.msg || ""}，已停止。`);
         } else {
@@ -278,9 +279,9 @@ function main() {
     return 0;
   }
 
-  // 质量门：核心字段命中率。API 改字段名时会整片 undefined，必须拦截而非静默写盘。
-  // classifyStr 同样要查：它决定男频/女频分组和 --channel 筛选，字段一改全部书都掉进
-  // 「其他」、--channel male 直接筛成 0 条，写出一份「已采集：0 条」的假成功报告。
+  // 품질 검사: 핵심 필드 적중률. API 필드명이 바뀌면 모두 undefined가 되므로 조용히 저장하지 말고 차단해야 한다.
+  // classifyStr도 검사한다. 남성향/여성향 분류와 --channel 필터를 결정하므로 필드가 바뀌면 모든 책이
+  // 기타로 분류되고 --channel male 결과가 0개가 되어 ‘수집 완료: 0개’라는 거짓 성공 보고서가 생성된다.
   const CORE_FIELDS = [
     { key: "name", label: "书名" },
     { key: "classifyStr", label: "频道(classifyStr)" },
@@ -295,14 +296,14 @@ function main() {
     }
   }
 
-  // 频道筛选
+  // 채널 필터
   let filtered = allBooks;
   if (CHANNEL === "male" || CHANNEL === "female") {
     const want = CHANNEL === "male" ? "男频" : "女频";
     filtered = allBooks.filter((b) => b.classifyStr === want);
     if (!filtered.length) {
-      // 筛成 0 条不能算成功：把实际 classifyStr 分布打出来，区分「接口字段变了」
-      // 和「这个频道确实没作品」，而不是写一份看不出差别的空报告
+      // 필터 결과 0개는 성공이 아니다. 실제 classifyStr 분포를 출력해 API 필드 변경과
+      // 해당 채널에 작품이 실제로 없는 경우를 구분한다. 둘을 구분할 수 없는 빈 보고서를 쓰지 않는다.
       const seen = {};
       for (const b of allBooks) {
         const k = b && b.classifyStr ? b.classifyStr : "(空)";
@@ -317,7 +318,7 @@ function main() {
     }
   }
 
-  // 可选：逐本获取详情（标签等）
+  // 선택 사항: 책별 상세 정보(태그 등)를 가져온다.
   if (DETAIL && filtered.length) {
     console.log(`  获取 ${filtered.length} 本详情...`);
     for (let i = 0; i < filtered.length; i++) {

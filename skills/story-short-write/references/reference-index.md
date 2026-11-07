@@ -1,21 +1,21 @@
-# 短篇参考资料索引
+# 단편 참조 자료 색인
 
-阶段必读项及检测、验收命令按 SKILL.md「写前必读」与各 workflow 执行；其余资料按下表选择：
+단계별 필수 읽기와 탐지·검수 명령은 SKILL.md의 ‘집필 전 필수 읽기’ 및 각 workflow를 따른다. 나머지는 아래에서 선택한다.
 
-| 文件 | 何时加载 |
+| 파일 | 읽을 때 |
 |------|----------|
-| [submission-craft.md](submission-craft.md) | 构思：定平台、导语写法、字数区间、付费点 |
-| [genre-styles/](genre-styles/) | 确定题材后读一个风格包 |
-| [genre-writing-formulas.md](genre-writing-formulas.md) | 冷门题材结构骨架（核心 10 题材用 genre-styles/） |
-| [short-reversal.md](short-reversal.md) · [villain-and-reveal.md](villain-and-reveal.md) | 设计反转；设计反派、真相揭露与报应 |
-| [emotional-methods.md](emotional-methods.md) · [hooks-chapter.md](hooks-chapter.md) | 设计情感结构（三板斧 / 拉扯节奏）；节尾钩子与段落钩子 |
-| [benchmark-recall.md](benchmark-recall.md) · [cross-book-recall.md](cross-book-recall.md) | 有对标时选定与召回；2 本以上时召回副对标 |
-| [short-format.md](short-format.md) · [short-craft.md](short-craft.md) · [scene-craft.md](scene-craft.md) | 写正文：格式与字数统计；情绪直写与在场叙述；场景写法 |
-| [dialogue-mastery.md](dialogue-mastery.md) | 写对话 |
-| [agent-calls.md](agent-calls.md) | 派写手写正文或去味的 prompt |
-| [style-resolution.md](style-resolution.md) | 写正文、改写、去味或审稿前裁决文风 |
-| [short-deslop.md](short-deslop.md) · [deslop-gates.md](deslop-gates.md) · [banned-words.md](banned-words.md) | 精修去味：短篇保护项、检查范围与分工、AI 味词句信号 |
-| [expression.md](expression.md) · [narrative-focus.md](narrative-focus.md) · [story-logic.md](story-logic.md) | 作者要完整三层去味时（入口见 short-deslop.md） |
-| [author-memory.md](author-memory.md) · [author-memory-maintenance.md](author-memory-maintenance.md) | 管理作者习惯 |
+| [submission-craft.md](submission-craft.md) | 구상: 플랫폼·도입 요약·분량 범위·유료 전환 지점 결정 |
+| [genre-styles/](genre-styles/) | 장르를 정한 뒤 스타일 패키지 하나 읽기 |
+| [genre-writing-formulas.md](genre-writing-formulas.md) | 비주류 장르 구조(핵심 10장르는 genre-styles/) |
+| [short-reversal.md](short-reversal.md) · [villain-and-reveal.md](villain-and-reveal.md) | 반전 및 악역·진실 공개·응보 설계 |
+| [emotional-methods.md](emotional-methods.md) · [hooks-chapter.md](hooks-chapter.md) | 감정 구조(세 핵심 기법/밀고 당기는 리듬), 절 끝·단락 훅 설계 |
+| [benchmark-recall.md](benchmark-recall.md) · [cross-book-recall.md](cross-book-recall.md) | 비교 작품 선택·회수, 2권 이상이면 보조 작품 회수 |
+| [short-format.md](short-format.md) · [short-craft.md](short-craft.md) · [scene-craft.md](scene-craft.md) | 본문: 형식·글자 수 집계, 감정 직접 서술·현장 중심 서술, 장면 작성 |
+| [dialogue-mastery.md](dialogue-mastery.md) | 대화 작성 |
+| [agent-calls.md](agent-calls.md) | 집필자에게 본문 작성·AI 문체 제거를 맡기는 prompt |
+| [style-resolution.md](style-resolution.md) | 본문·재작성·AI 문체 제거·검토 전 문체 판단 |
+| [short-deslop.md](short-deslop.md) · [deslop-gates.md](deslop-gates.md) · [banned-words.md](banned-words.md) | 정밀 수정: 단편 보호 항목·검사 범위와 분담·AI 문체 신호 |
+| [expression.md](expression.md) · [narrative-focus.md](narrative-focus.md) · [story-logic.md](story-logic.md) | 작가가 완전한 세 층위 AI 문체 제거를 요청할 때(short-deslop.md에서 진입) |
+| [author-memory.md](author-memory.md) · [author-memory-maintenance.md](author-memory-maintenance.md) | 작가 습관 관리 |
 
-**同一主题先读谁**：平台、导语、字数 → `submission-craft.md`；情绪怎么写 → `short-craft.md`「情绪落地」；人物声线与开篇 → 题材包的「对话风格」「开篇范式」；反转 → `short-reversal.md`，反派揭露 → `villain-and-reveal.md`；格式与节奏 → `short-format.md`。
+**같은 주제에서 먼저 읽을 것**: 플랫폼·도입 요약·분량은 `submission-craft.md`, 감정 표현은 `short-craft.md`의 ‘감정 구체화’, 인물 목소리·도입은 장르 패키지의 ‘대화 스타일’·‘도입 형식’, 반전은 `short-reversal.md`, 악역 공개는 `villain-and-reveal.md`, 형식·리듬은 `short-format.md`.

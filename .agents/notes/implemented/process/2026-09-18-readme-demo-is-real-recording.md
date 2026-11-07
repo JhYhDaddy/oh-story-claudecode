@@ -1,33 +1,33 @@
-# Agent Note: README 顶部的演示是真实录屏，仓库 demo 跟着视频走
+# Agent Note: README 상단 데모는 실제 녹화이며 저장소 데모를 영상에 맞춘다
 
 Status: implemented
 
 ## Problem
 
-README 瘦身前是 543 行说明文字，没有一处让读者看到 skill 真正跑起来的样子。第一版演示视频用 Remotion 动效「模拟」了一个终端，维护者一眼判定为假；第二版真录了，但审阅发现片中的第 21 章与仓库 `demo/长篇` 里的第 21 章不是同一次运行（文件名、字数、伏笔都对不上），读者看完视频点进 demo 会发现对不上。此外视频文件不能进仓库（`npx skills add` 会整库克隆）。
+README를 줄이기 전에는 설명이 543줄이나 있었지만 스킬이 실제로 실행되는 모습을 보여 주는 부분이 없었다. 첫 데모 영상은 Remotion 애니메이션으로 터미널을 “모사”했고 유지보수자가 바로 가짜라고 판단했다. 두 번째는 실제로 녹화했지만 검토 결과 영상의 제21장과 저장소 `demo/长篇`의 제21장이 서로 다른 실행 결과였다. 파일명, 글자 수, 복선이 모두 달라 영상을 본 독자가 데모를 열면 불일치를 발견하게 된다. 영상 파일도 저장소에 넣을 수 없다. `npx skills add`가 저장소 전체를 복제하기 때문이다.
 
 ## Decision
 
-- README 顶部（中英）嵌入一段**真实录屏**：tmux 100×24 里的 Claude Code 会话，asciinema 录 cast，在 cast 层做分段倍速与跳切（`retime`），agg 渲染，Remotion 只加片头片尾与底部角标。删掉 ≥ 1 分钟处角标写「跳过 · 实际 mm:ss」，倍速处写「×N · 实际 mm:ss」，静帧写「定格」。
-- **仓库 demo 跟视频走，不反过来**：`demo/长篇/让你管账号，你高燃混剪炸全网` 的第 21 章、细纲、追踪状态、`.deslop-whitelist`、新角色卡，全部原样同步自录制那次会话的产物（`sync_run_to_demo.py` 只复制 `大纲/ 设定/ 正文/ 追踪/`），README 里引用的数字（2068 / 2300、F057/F058）与回写 diff 也取自同一次运行。补录会话改动的文件同样同步。
-- 视频托管在 GitHub user-attachments（PR 评论里发布一次即可匿名可达），仓库不含任何视频文件；README 用 `<video src=…>`，`poster` / `width` 在 GitHub 上会被 sanitizer 剥掉，不写。
-- 录制环境固定：项目层 `.claude/settings.json` 钉死简体回复、停用无关 plugin、清空 statusLine、免提示权限；录前把上一次录影的副本目录移出书稿父目录。
-- 视频只回答网文作者的四个顾虑（这是给我的 / 不难 / 它读过我的书 / 写出来能看 / 我说了算），不演门禁术语；教学交给 README 正文「看看它的输出」。
+- 중국어·영어 README 상단에 **실제 화면 녹화**를 삽입한다. tmux 100×24의 Claude Code 세션을 asciinema로 cast에 기록하고 cast 단계에서 구간별 배속과 점프 컷(`retime`)을 적용한다. agg로 렌더링하며 Remotion은 도입부·마무리·하단 표시만 추가한다. 1분 이상 생략한 구간은 “건너뜀 · 실제 mm:ss”, 배속 구간은 “×N · 실제 mm:ss”, 정지 화면은 “정지 화면”으로 표시한다.
+- **저장소 데모를 영상에 맞춘다. 반대로 하지 않는다.** `demo/长篇/让你管账号，你高燃混剪炸全网`의 제21장, 상세 개요, 추적 상태, `.deslop-whitelist`, 새 인물 카드는 모두 녹화한 세션의 산출물을 그대로 동기화한다. `sync_run_to_demo.py`는 `大纲/ 设定/ 正文/ 追踪/`만 복사한다. README의 숫자(2068 / 2300, F057/F058)와 상태 반영 diff도 같은 실행에서 가져온다. 추가 녹화 세션에서 변경한 파일도 동기화한다.
+- 영상은 GitHub user-attachments에 호스팅한다. PR 댓글에 한 번 게시하면 로그인 없이 접근할 수 있다. 저장소에는 영상 파일을 넣지 않는다. README는 `<video src=…>`를 사용하며 GitHub의 정제기가 제거하는 `poster` / `width`는 쓰지 않는다.
+- 녹화 환경은 고정한다. 프로젝트의 `.claude/settings.json`에서 간체 중국어 답변을 고정하고, 관련 없는 플러그인을 끄고, statusLine을 비우며, 권한 확인 메시지가 없도록 설정한다. 녹화 전에 이전 녹화의 복사 디렉터리를 원고 상위 디렉터리 밖으로 옮긴다.
+- 영상은 웹소설 작가의 네 가지 우려에만 답한다(나를 위한 도구인가 / 어렵지 않은가 / 내 책을 읽었는가 / 결과물을 읽을 만한가 / 내가 결정하는가). 검증 관문 용어를 시연하지 않으며 사용법 교육은 README 본문의 “출력 살펴보기”에 맡긴다.
 
-来源：#434
+출처: #434
 
 ## Alternatives considered
 
-- **Remotion 动效模拟终端**——最强理由：可控、每一帧都好看、不用等一小时真跑。否：观众一眼看出是假的，对「AI 写的网文能不能看」这个成见零说服力。
-- **视频跟仓库 demo 走（按仓库里已有的第 21 章重录一遍）**——最强理由：不动仓库。否：真跑每次产出都不同，永远追不上；反过来让 demo 同步自录制产物，只需一个同步脚本，且 demo 因此获得「一次真实会话的完整产物」这个更强的身份。
-- **视频文件入库 / 走 Git LFS**——最强理由：不依赖 user-attachments 这种非正式托管。否：`npx skills add` 整库克隆，2 MB 起步且每次重剪都累加；LFS 对 skill 安装器不透明。
-- **同时出竖版**——最强理由：短视频平台可用。否：只有一个维护者，README 才是目标位置，先不做。
+- **Remotion 애니메이션으로 터미널 모사** — 가장 큰 장점은 제어하기 쉽고 모든 프레임을 보기 좋게 만들 수 있으며 실제 실행을 한 시간 기다리지 않아도 된다는 점이다. 그러나 관객은 가짜임을 바로 알아보고 “AI가 쓴 웹소설은 읽을 만한가”라는 선입견을 바꾸는 데 설득력이 없다.
+- **영상을 저장소 데모에 맞춤(저장소의 기존 제21장을 다시 녹화)** — 저장소를 바꾸지 않는다는 장점이 있다. 그러나 실제 실행은 매번 다른 결과를 내므로 계속 어긋난다. 데모를 녹화 산출물에 맞추면 동기화 스크립트 하나면 되고 데모도 “실제 한 세션의 전체 산출물”이라는 더 강한 근거를 갖는다.
+- **영상 파일을 저장소에 넣거나 Git LFS 사용** — user-attachments 같은 비공식 호스팅에 의존하지 않아도 된다. 그러나 `npx skills add`는 저장소 전체를 복제하며 파일은 최소 2 MB부터 시작하고 재편집할 때마다 누적된다. 스킬 설치기가 LFS를 투명하게 처리하지도 못한다.
+- **세로 영상도 함께 제작** — 짧은 영상 플랫폼에서 사용할 수 있다. 그러나 유지보수자가 한 명뿐이고 목표 게시 위치는 README이므로 우선 제작하지 않는다.
 
 ## Consequences
 
-- **收益**：README 首屏 40 秒内回答「装了会怎样」；视频、README 数字、demo 文件三者互证；重剪只改 `spec.json` 与 Remotion，不碰母带。
-- **代价与已知上限**：每次重录都要同步 demo 并重跑 `chapter check` / `tracking_commit.py check`；user-attachments 的链接由 GitHub 托管，无法自建 CDN 或加封面图；母带里的路径（`/Users/<user>/写作/…`）会入镜，下次录制换目录。
+- **이점**: README 첫 화면에서 40초 안에 “설치하면 어떻게 되는가”에 답한다. 영상, README 수치, 데모 파일이 서로를 입증한다. 재편집은 `spec.json`과 Remotion만 수정하고 원본 녹화는 건드리지 않는다.
+- **비용과 알려진 한계**: 다시 녹화할 때마다 데모를 동기화하고 `chapter check` / `tracking_commit.py check`를 다시 실행해야 한다. user-attachments 링크는 GitHub가 호스팅하므로 자체 CDN이나 표지 이미지를 붙일 수 없다. 원본 녹화의 경로(`/Users/<user>/写作/…`)가 화면에 나오므로 다음 녹화에서는 디렉터리를 바꾼다.
 
-## Verification
+## 검증
 
-`python3 skills/story-long-write/scripts/tracking_commit.py check --project demo/长篇/让你管账号，你高燃混剪炸全网` → `last_committed_chapter 21, state_revision 1`；`storyctl.py chapter check --chapter 21` → 2068/2300 internal_pass；GitHub 渲染的 README 含 `<video src="https://github.com/user-attachments/assets/…">`，匿名 HEAD 302。
+`python3 skills/story-long-write/scripts/tracking_commit.py check --project demo/长篇/让你管账号，你高燃混剪炸全网` → `last_committed_chapter 21, state_revision 1`; `storyctl.py chapter check --chapter 21` → 2068/2300 internal_pass. GitHub가 렌더링한 README에는 `<video src="https://github.com/user-attachments/assets/…">`가 포함되며 비로그인 HEAD 응답은 302이다.

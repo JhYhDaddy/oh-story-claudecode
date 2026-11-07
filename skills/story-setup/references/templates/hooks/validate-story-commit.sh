@@ -1,5 +1,5 @@
 #!/bin/bash
-# validate-story-commit.sh — 在 git commit 时检查格式问题（WARNING only, no BLOCKING）
+# validate-story-commit.sh — git commit 시 형식 검사(경고만, 차단 없음)
 set -euo pipefail
 
 source "$(dirname "$0")/lib/common.sh"
@@ -8,43 +8,43 @@ HOOK_INPUT="${CLAUDE_TOOL_INPUT:-}"
 if [ -z "$HOOK_INPUT" ] && [ ! -t 0 ]; then
   HOOK_INPUT="$(cat)"
 fi
-# 故意不 export：export 会把负载塞进本脚本每个子进程的 envp（git/grep/basename 全算上），
-# 负载一大 execve 就 E2BIG（Linux 单个环境变量上限 128 KiB）。只在真正读它的那一次 node 调用上
-# 做单命令赋值（is-git-commit 只认 HOOK_INPUT 环境变量，不读 stdin），把暴露面收到一处。
-# 本 hook 挂 Bash 工具，负载只是命令串，实际都很小；收紧是为了对齐另两个 hook 的同一约定。
+# 의도적으로 export하지 않는다. 입력이 git/grep/basename 등 모든 자식 프로세스 envp에 들어가면
+# 큰 입력에서 execve E2BIG가 난다(Linux 단일 환경 변수 128 KiB 상한). 실제 읽는 node 호출 한 곳에서만
+# 명령별로 할당한다(is-git-commit은 stdin 대신 HOOK_INPUT 환경 변수만 읽음).
+# 이 훅은 Bash에 연결돼 입력이 명령 문자열뿐이라 작지만 다른 두 훅과 같은 규칙에 맞춰 제한한다.
 
 is_git_commit_command() {
-  # 走 node 共享核 isGitCommitCommand：命令优先取 STORY_COMMIT_COMMAND，缺省从 HOOK_INPUT
-  # 挖 command/cmd/script。js 分词语义，与 OpenCode/ZCode 一致；对「引号内分隔符」这类边界
-  # 与旧 python shlex 有已文档化、仅 advisory 的差异（不影响本 hook 的 exit 0 非阻塞语义）。
-  # node 探测不到就当「非 commit」，让下方静默放行（兜底不反噬提交流程；native 安装可能
-  # 无 node，此时 commit 格式提示停用，session-start.sh 会在会话起点提示一次）。
+  # node 공유 코어 isGitCommitCommand 사용: STORY_COMMIT_COMMAND를 우선하고 없으면 HOOK_INPUT의
+  # command/cmd/script를 찾는다. JS 토큰화 의미로 OpenCode/ZCode와 같다. 인용 안 구분자 같은 경계는
+  # 이전 Python shlex와 문서화된 advisory 차이가 있지만 exit 0 비차단 의미에는 영향이 없다.
+  # node가 없으면 커밋 아님으로 보고 조용히 허용한다. 보완 검사가 커밋 절차를 막으면 안 된다. 네이티브 설치에
+  # node가 없으면 커밋 형식 안내가 중단되고 session-start.sh가 세션 시작에 한 번 알린다.
   node -e "" >/dev/null 2>&1 || return 1
   local CLI; CLI="$(dirname "$0")/story_hook_cli.js"
   [ -f "$CLI" ] || return 1
   HOOK_INPUT="$HOOK_INPUT" node "$CLI" is-git-commit >/dev/null 2>&1
 }
 
-# PreToolUse matcher 可能过宽或目标 CLI 不支持 if 字段；脚本必须内部自检。
-# 没有明确 git commit 命令时完全静默退出，避免 echo/grep 等命令误触发。
+# PreToolUse matcher가 너무 넓거나 CLI가 if를 지원하지 않을 수 있어 스크립트 내부에서 자체 확인해야 한다.
+# 명확한 git commit 명령이 없으면 조용히 종료해 echo/grep 등의 오작동을 막는다.
 if ! is_git_commit_command; then
   exit 0
 fi
 
-# 后续 case + grep 在中文路径/正文内容上做匹配。Windows 中文系统若导出 GBK 区域设置，
-# grep 按 GBK 多字节解码 UTF-8 内容会乱。强制 C 区域走字节匹配才稳定（issue #164 同类）。
-# 放在 is_git_commit_command（node 共享核）之后，避免影响其输入解码。
+# 이후 case + grep은 중국어 경로/본문을 비교한다. 중국어 Windows에서 GBK 로캘을 내보내면
+# grep이 UTF-8을 GBK 멀티바이트로 잘못 해석하므로 C 로캘 바이트 일치가 필요하다(이슈 #164 유형).
+# 입력 디코딩에 영향이 없도록 is_git_commit_command(node 공유 코어) 뒤에 둔다.
 export LC_ALL=C
 
 ROOT=$(project_root)
 GIT_ROOT=$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || printf '%s\n' "$ROOT")
-# 警告串用真实换行拼接（NL），不用字面 `\n` 占位：输出端必须 printf '%s'，见文末注释。
+# 경고는 리터럴 `\n` 대신 실제 NL로 합치며 출력은 printf %s를 쓴다(끝 주석 참조).
 NL=$'\n'
 WARNINGS=""
 
-# 获取即将 commit 的文件列表（使用 -z null 分隔避免空格路径问题）
+# 커밋할 파일 목록을 가져온다(공백 경로 문제를 피하려고 -z NUL 구분 사용).
 while IFS= read -r -d '' file; do
-  # 跳过非 md 文件
+  # md 아닌 파일 건너뜀
   case "$file" in
     *.md) ;;
     *) continue ;;
@@ -55,64 +55,64 @@ while IFS= read -r -d '' file; do
     FULL_PATH="$GIT_ROOT/$file"
   fi
 
-  # 检查正文文件是否包含硬编码的情节值
-  # 匹配语义与警告文案对齐 JS core（story_hook_core.js stagedMarkdownWarnings，跨 CLI 的
-  # 权威实现；py↔js 由 scripts/test-prose-net-parity.sh Part E 锁 parity）。
-  # 冒号/空白都用交替而不是把全角字符塞进方括号字符组：含全角字符的字符组在 C 区域会被
-  # 拆成单字节、漏匹配；(：|:) 同时命中全角「：」和半角「:」，([[:space:]]|　) 在 LC_ALL=C 下
-  # 也认全角空格 U+3000（否则全角空格分隔的写法会漏检/误判）。
+  # 본문 파일의 하드코딩된 플롯 값을 검사한다.
+  # 일치 의미와 경고 문구는 여러 CLI의 기준 구현인 JS 코어 story_hook_core.js stagedMarkdownWarnings에 맞춘다.
+  # Python↔JS 동등성은 scripts/test-prose-net-parity.sh E부가 고정한다.
+  # 콜론/공백은 전각 문자를 대괄호 집합에 넣지 않고 선택식을 쓴다. 전각 집합은 C 로캘에서
+  # 단일 바이트로 나뉘어 일치를 놓친다. (：|:)는 전각/반각 콜론을 모두 찾고 ([[:space:]]|　)는 LC_ALL=C에서도
+  # 전각 공백 U+3000을 인식해 전각 공백 구분의 누락/오판을 막는다.
   case "$file" in
-    正文.md|*/正文.md|正文/*|*/正文/*)
+    본문.md|*/본문.md|본문/*|*/본문/*)
       HARDCODED=$(grep -nE "(身高|体重|年龄)([[:space:]]|　)*(：|:)([[:space:]]|　)*[0-9]+" "$FULL_PATH" 2>/dev/null || true)
       if [ -n "$HARDCODED" ]; then
-        WARNINGS="$WARNINGS${NL}⚠ $file: 正文硬编码角色属性，应引用设定文件：${NL}$HARDCODED"
+        WARNINGS="$WARNINGS${NL}⚠ $file: 본문에 인물 속성을 직접 고정했습니다. 설정 파일을 참조하세요: ${NL}$HARDCODED"
       fi
       ;;
   esac
 
-  # 检查角色卡的必填字段（结构化匹配：key:value 格式）。grep -i 对齐 JS core 的 /i：
-  # 大小写不敏感命中 name/NAME/Name（LC_ALL=C 下 -i 只折叠 ASCII，中文字节不受影响）。
+  # 인물 카드 필수 필드를 key:value 구조로 검사한다. grep -i는 JS 코어 /i와 맞춰
+  # name/NAME/Name을 대소문자 무관하게 찾는다(LC_ALL=C의 -i는 ASCII만 접어 중국어 바이트에 영향 없음).
   #
-  # 只查角色卡：设定/ 下还住着一批项目级设定件——artifact-protocols.md 规定的 关系.md
-  # （正文是「# 角色关系图」）、题材定位.md（「# 题材定位」），以及 文风.md、题材正文提示卡.md、
-  # 世界观/*、势力/* 等，它们本来就没有 名字/姓名 字段。整棵 设定/ 一刀切会让每次碰设定的提交
-  # 都刷一屏假警告，把同框的「正文硬编码角色属性」真警告埋掉。判定：设定/角色|人物 子目录内的
-  # 文件 + 设定/ 直属的扁平角色卡（角色.md/主角.md/配角.md/反派.md 等自定义命名）才查；
-  # 其余子目录与已知项目级文件跳过。
-  # 四端同口径：本脚本（Claude）、OpenCode 的 .git/hooks/pre-commit、JS core 的
-  # isCharacterSheetPath / stagedMarkdownWarnings、codex 的 _is_character_sheet_path /
-  # staged_markdown_warnings 已全部收窄到同一判定。改任一端都要四端一起改，否则
-  # 同一次提交在不同 CLI 上会给出不同警告（parity 测试 Part E 锁 py↔js 两端）。
-  # 别为了「对齐权威实现」把这段改回去——那会把假警告一起改回来。
+  # 인물 카드만 검사한다. 설정/에는 artifact-protocols.md의 관계.md(인물 관계도),
+  # 소재방향.md(소재 포지셔닝), 문체.md, 소재본문안내.md,
+  # 세계관/*, 세력/* 등 프로젝트 설정도 있으며 원래 名字/姓名 필드가 없다. 설정/ 전체를 일괄 검사하면 설정 변경 커밋마다
+  # 거짓 경고가 화면을 채워 실제 본문 인물 속성 하드코딩 경고를 묻는다. 설정/角色|人物 하위 파일과
+  # 설정/ 직속 평면 인물 카드(인물.md/주인공.md/조연.md/악역.md 등의 사용자 이름)만 검사한다.
+  # 나머지 하위 디렉터리와 알려진 프로젝트 파일은 건너뛴다.
+  # 네 환경의 기준은 같다. 이 스크립트(Claude), OpenCode .git/hooks/pre-commit, JS 코어
+  # isCharacterSheetPath / stagedMarkdownWarnings, Codex _is_character_sheet_path /
+  # staged_markdown_warnings 모두 같은 범위로 제한했다. 어느 하나를 바꾸면 네 곳을 함께 바꿔야
+  # 같은 커밋에 CLI마다 다른 경고가 나오지 않는다(동등성 테스트 E부가 Python↔JS를 고정).
+  # 기준 구현에 맞춘다는 이유로 되돌리면 거짓 경고까지 되살아나므로 되돌리지 않는다.
   IS_CHARACTER_SHEET=false
   case "$file" in
-    设定/角色/*|*/设定/角色/*|设定/人物/*|*/设定/人物/*)
+    설정/인물/*|*/설정/인물/*|설정/인물/*|*/설정/인물/*)
       IS_CHARACTER_SHEET=true
       ;;
-    设定/*/*|*/设定/*/*)
-      # 世界观/势力/报告/原理/人物关系 等非角色子目录：整目录跳过
+    설정/*/*|*/설정/*/*)
+      # 세계관/세력/보고서/원리/인물 관계 등 인물 카드 외 하위 디렉터리는 통째로 건너뛴다.
       ;;
-    设定/*|*/设定/*)
+    설정/*|*/설정/*)
       case "${file##*/}" in
-        关系.md|题材定位.md|题材正文提示卡.md|文风.md|世界规则.md|世界观.md|金手指.md|背景设定.md) ;;
+        관계.md|소재방향.md|소재본문안내.md|문체.md|세계규칙.md|세계관.md|특전.md|배경설정.md) ;;
         *) IS_CHARACTER_SHEET=true ;;
       esac
       ;;
   esac
   if [ "$IS_CHARACTER_SHEET" = true ] \
     && ! grep -qiE "^([[:space:]]|　)*(名字|姓名|名称|name)([[:space:]]|　)*(：|:)" "$FULL_PATH" 2>/dev/null; then
-    WARNINGS="$WARNINGS${NL}⚠ $file: 设定文件缺少 name/名字 必填字段。"
+    WARNINGS="$WARNINGS${NL}⚠ $file: 설정 파일에 필수 이름 필드(name/名字)가 없습니다."
   fi
 done < <(git -C "$ROOT" -c core.quotepath=false diff --cached --relative --name-only --diff-filter=ACM -z -- . 2>/dev/null || true)
 
 if [ -n "$WARNINGS" ]; then
   echo "=== Story Commit Warnings（advisory only）==="
-  # 必须 %s 不能 %b：$WARNINGS 里嵌着 grep -n 抓出的作者正文原文。%b 会把正文里的 `\n`、`\b`
-  # 当转义展开，`\c`（Windows 路径 C:\code 就带）更会直接终止 printf，把后面所有文件的警告
-  # 连同收尾框线一起吞掉。分隔换行由上面拼接时的 ${NL} 真实换行承担。
+  # 반드시 %s를 쓴다. $WARNINGS에는 grep -n이 추출한 작가 원문이 있어 %b는 본문의 `\n`, `\b`를
+  # 확장하고 `\c`(Windows 경로 C:\code에도 포함)는 printf를 종료해 뒤의 모든 파일 경고와
+  # 마무리 테두리를 삼킨다. 구분은 위 ${NL} 실제 줄바꿈으로 한다.
   printf '%s\n' "$WARNINGS"
   echo "=== End Warnings ==="
 fi
 
-# Always exit 0 — 写作流程不能被 hook 卡住
+# 항상 exit 0 — 훅이 집필 절차를 막으면 안 된다.
 exit 0

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Deterministic checks for the Reasonix native plugin manifest (issue #204/#252).
-# Reasonix (DeepSeek-Reasonix CLI) reads a root reasonix-plugin.json and scans project
-# skill roots. This guard covers the global manifest; project-level `story-setup`
-# deployment is skills-only (target_cli=reasonix, skills + AGENTS.md, no hooks/custom
-# agents -> solo/direct fallback) and is guarded by check-story-setup-deployment.sh.
-# Reasonix hooks and custom agents remain later phases. Live `reasonix doctor
-# capabilities` needs the CLI and is not in CI.
+# Reasonix 네이티브 플러그인 매니페스트의 결정론적 검사(이슈 #204/#252).
+# Reasonix(DeepSeek-Reasonix CLI)는 루트 reasonix-plugin.json을 읽고 프로젝트 스킬 루트를
+# 스캔한다. 이 검사는 전역 매니페스트를 다룬다. 프로젝트 수준 `story-setup` 배포는
+# 스킬만 제공한다(target_cli=reasonix, skills + AGENTS.md, 훅/사용자 지정 에이전트 없음
+# → 단독/직접 실행 대체 경로). check-story-setup-deployment.sh가 이를 검증한다.
+# Reasonix 훅과 사용자 지정 에이전트는 후속 단계다. 실제 `reasonix doctor
+# capabilities`는 CLI가 필요하므로 CI에 포함하지 않는다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,7 +32,7 @@ assert manifest['skills'] == 'skills', manifest.get('skills')
 assert isinstance(manifest.get('description'), str) and manifest['description'], 'description required'
 version = Path('skills/story/VERSION').read_text().strip()
 assert manifest['version'] == version, f"version {manifest['version']!r} must match skills/story/VERSION {version!r}"
-# The manifest promises the skills under `skills`; keep it honest.
+# 매니페스트가 `skills` 아래 스킬을 제공한다는 약속을 확인한다.
 skills = sorted(Path('skills').glob('*/SKILL.md'))
 assert len(skills) == 14, f'expected 14 skills, got {len(skills)}'
 PY

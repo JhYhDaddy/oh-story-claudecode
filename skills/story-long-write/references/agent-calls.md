@@ -1,47 +1,51 @@
-# agent-calls.md：spawn 子代理的调用方式
+# agent-calls.md: 하위 에이전트 호출 방법
 
-派出 agent 时才读。下文只给目标角色与 prompt；调用参数按 SKILL 顶部的当前宿主映射，不照搬其他宿主工具字段。
+에이전트를 보낼 때만 읽는다. 아래에는 대상 역할과 prompt만 제시한다. 호출 인수는 SKILL 상단의 현재 호스트 매핑을 따르며 다른 호스트의 도구 필드를 그대로 가져오지 않는다.
 
-## narrative-writer：写一章
+## narrative-writer: 한 장 집필
 
-全章细纲交给写手统筹编排，默认同一 session 按前后两组交付：按实际叙述顺序在自然转场或因果停顿处分组，不在一句对话或同一动作中间截断，可交错情节点但不增删批准内容、不拆逐点字数配额；写手先把前组写到工作目录 `前组.md`，主会话只调用一次 `storyctl.py wordcount checkpoint --file {segment} --project {项目根} --chapter {N}`，把 `actual / remaining_user_range` 连同后组交回同一写手，两组按原文拼接，不回改前组追字数。作者明确要求一次成文时执行安排填「全章」，直接落盘，不跑 checkpoint。
+장 전체의 상세 개요를 집필자에게 주어 통합 구성하게 한다. 기본적으로 같은 session에서 앞뒤 두 묶음으로 납품한다. 실제 서술 순서에 따라 자연스러운 전환이나 인과적 휴지점에서 나누며 대사 한 문장이나 하나의 동작 중간을 자르지 않는다. 플롯 지점은 교차 배치할 수 있지만 승인 내용을 추가·삭제하거나 지점별 글자 수 할당량으로 나누지 않는다. 집필자는 먼저 앞 묶음을 작업 디렉터리의 `전반.md`에 쓴다. 주 세션은 `storyctl.py wordcount checkpoint --file {segment} --project {项目根} --chapter {N}`를 딱 한 번 호출하고 `actual / remaining_user_range`를 뒤 묶음과 함께 같은 집필자에게 전달한다. 두 묶음은 원문 그대로 연결하며 글자 수를 맞추려고 앞 묶음을 되돌려 고치지 않는다. 작가가 한 번에 완성하도록 명시하면 실행 계획에 `全章`(장 전체)을 적고 바로 저장하며 checkpoint는 실행하지 않는다.
 
-组装脚本的输出（`====` 以上）就是 prompt 骨架。**主会话填九槽**（搜 `［主会话填］`）：执行安排 ／ 本章意图 ／ 作者本轮要求 ／ 本章技法（只填类别，写手自己读）／ 本节速记 ／ 涉及角色（列名字，角色卡写手自己读）／ `genre_prose_card` ／ 必读设定 ／ `style_resolution`；外加脚本标出的条件槽（降档不成立时的情绪与节奏召回；作者偏好限定范围记忆，适用时带 `--genre`／`--workflow` 跑 SKILL.md「核心方法」的 query 命令补查）。`author_preferences` 由脚本注入，只作低优先级倾向。空槽以外一字不改，整份照抄进 Agent prompt。脚本**跑不起来**时读 [writer-prompt-fallback.md](writer-prompt-fallback.md) 手动组装并报 `Fallback: build_writer_prompt -> 手动组装`。
+조립 스크립트 출력 중 `====` 위의 내용이 prompt 골격이다. **주 세션은 9개 슬롯을 채운다**(`［主会话填］` 검색): 실행 계획 / 이번 장의 의도 / 작가의 이번 요청 / 이번 장의 기법(범주만 기입하고 집필자가 직접 읽음) / 이번 절의 간단 메모 / 관련 인물(이름만 나열하고 인물 카드는 집필자가 직접 읽음) / `genre_prose_card` / 필독 설정 / `style_resolution`. 스크립트가 표시한 조건부 슬롯도 채운다. 검색 축소가 성립하지 않을 때의 감정·리듬 검색, 작가 선호의 범위 한정 기억이 이에 해당한다. 해당하면 `--genre`/`--workflow`를 붙여 SKILL.md의 핵심 방법에 있는 query 명령으로 보충 조회한다. `author_preferences`는 스크립트가 주입하며 낮은 우선순위의 성향으로만 취급한다. 빈 슬롯 외에는 한 글자도 바꾸지 않고 전체를 Agent prompt에 그대로 넣는다. 스크립트가 **실행되지 않을 때**는 [writer-prompt-fallback.md](writer-prompt-fallback.md)를 읽어 수동 조립하고 `Fallback: build_writer_prompt -> 手动组装`을 보고한다.
 
-## story-architect：定设定、出卷纲、出一批细纲（换新上下文）
+## story-architect: 설정·권 개요·상세 개요 묶음 작성(새 컨텍스트)
 
-先跑 `{PYTHON} {skill 根}/scripts/build_architect_brief.py --project {书目录} --task world`（卷纲 `--task volume --volume {N}`，细纲 `--task outline --chapters {A-B}`，一批最多 10 章），只取输出里的任务包路径，不读包的内容。交接前确认作者在对话里定下的方向、偏好和否掉的方案都已写进 `设定/`。
+먼저 `{PYTHON} {skill 根}/scripts/build_architect_brief.py --project {书目录} --task world`를 실행한다. 권 개요는 `--task volume --volume {N}`, 상세 개요는 `--task outline --chapters {A-B}`이며 한 묶음은 최대 10장이다. 출력에서 작업 패키지 경로만 가져오고 패키지 내용은 읽지 않는다. 인계 전에 작가가 대화에서 확정한 방향·선호·기각한 안이 모두 `설정/`에 기록되었는지 확인한다.
 
-Prompt：`项目目录：{dir}\n任务包：{任务包路径}\n先完整读取任务包，按包里的流程与模板完成；作者已定的方向、设定和要求都在 设定/，对话内容不会传给你\n交付后只回任务包开头要求的几项`
+Prompt: `프로젝트 디렉터리: {dir}\n작업 패키지: {작업 패키지 경로}\n먼저 패키지 전체를 읽고 내부 절차와 템플릿에 따라 완수한다. 작가가 정한 방향·설정·요구는 모두 설정/에 있으며 대화 내용은 전달되지 않는다.\n납품 후에는 패키지 첫머리에서 요구한 항목만 답한다.`
 
-收回后主会话：设定提案拿给作者逐项确认，按作者意见改文件；新卷纲跑 `outline_view.py --check --strict {卷纲路径}`（往旧卷纲追加单元去掉 `--strict`），细纲每章跑 `check-outline-contract.js`；失败把报错原样交回同一 agent 修一次。按 workflow-volume.md / workflow-outline.md 的汇报模板用故事话告诉作者，不转述任务包。
+회수 후 주 세션은 설정 제안을 작가에게 항목별로 확인받고 의견에 따라 파일을 고친다. 새 권 개요에는 `outline_view.py --check --strict {卷纲路径}`를 실행한다. 기존 권 개요에 단위를 추가할 때는 `--strict`를 뺀다. 상세 개요에는 장마다 `check-outline-contract.js`를 실행한다. 실패하면 오류를 그대로 같은 에이전트에게 전달해 한 번 수정하게 한다. workflow-volume.md / workflow-outline.md의 보고 템플릿에 따라 작가에게 이야기의 언어로 설명하고 작업 패키지를 그대로 전달하지 않는다.
 
-## story-architect、character-designer：题材定位与角色细化（可选）
+## story-architect·character-designer: 소재 방향과 인물 구체화(선택)
 
-定方向以和作者来回讨论为主，默认主会话自己做；复杂世界观、多线结构、强反转工程或作者明确要求时才派：
-- `story-architect`，Prompt：`项目目录：{dir}\n任务类型：题材定位\n查询参数：{作者选定的方向与对标信息}`
-- `character-designer`，Prompt：`项目目录：{dir}\n任务类型：角色设定\n查询参数：{主角设定信息}` — 辅助角色设定和语言风格档案
+방향은 작가와 대화하며 정하는 것이 중심이며 기본적으로 주 세션이 직접 맡는다. 복잡한 세계관·다중 서사·강한 반전 설계가 필요하거나 작가가 명시적으로 요청할 때만 보낸다.
 
-## consistency-checker：写正文后的事实核对
+- `story-architect`, Prompt: `프로젝트 디렉터리: {dir}\n任务类型：题材定位\n조회 인수: {작가가 고른 방향과 벤치마크 정보}`
+- `character-designer`, Prompt: `프로젝트 디렉터리: {dir}\n任务类型：角色设定\n조회 인수: {주인공 설정 정보}` — 인물 설정과 말투 프로필 작성을 지원한다. 작업 유형의 원문 값은 호출 계약이다.
 
-Prompt：`项目目录：{dir}\n检查范围：{本次写作的章节}\n检查类型：事实冲突+伏笔断线+角色属性不一致\n本章新增申报：{申报表原样粘贴，无则写 0}；同时核对正文有无未申报的跨章事实，逐处列原文和细纲出处。只读与新增项和本章出场角色相关的设定、角色卡与追踪条目。冲突按 S1-S4 报出，申报项逐条给出登记/修复/先问作者的建议\n状态：last_committed_chapter={N}，state_revision={R}（取自 tracking_commit.py check）`
+## consistency-checker: 본문 집필 후 사실 검증
 
-## narrative-writer：审查+去AI味
+Prompt: `프로젝트 디렉터리: {dir}\n검사 범위: {이번에 쓴 장}\n검사 유형: 사실 충돌+복선 단절+인물 속성 불일치\n이번 장 신규 신고: {신고표를 그대로 붙이고 없으면 0}. 본문에 신고하지 않은 장간 사실이 있는지도 대조하고 각 원문과 상세 개요 출처를 나열한다. 신규 항목 및 이번 장 등장인물과 관련된 설정·인물 카드·추적 항목만 읽는다. 충돌은 S1-S4로 보고하고 신고 항목마다 등록/수정/작가에게 먼저 질문 중 하나를 제안한다.\n상태: last_committed_chapter={N}, state_revision={R}(tracking_commit.py check에서 가져옴)`
 
-Prompt：`项目目录：{dir}\n任务描述：审查+去AI味\n检查分工：你负责本次检测触发的定点语义修复及原定自检；最终文件扫描由主会话执行\n检查范围：{本次写作的章节}\n文风路径：{设定/文风.md 全文路径}\nstyle_resolution：{与写作一致的裁决}\n作者偏好：{本章 query 输出的 lines，无写「无」}\n触发本次审查的检测结果：{chapter check 里 blocking 与语义类 advisory 的行号和类别，照录}\n执行边界：按写手资料 deslop-gates「按检测类别或问题限定范围」与三层方法修复；不扩大为完整故事诊断或新增剧情设计；原文有依据的承接与详略可改，无依据的设计缺口只报告\n验收：在完整场景中复读改动，说明原文问题、具体修法和有功能写法的保留理由，不用固定删减率`
+## narrative-writer: 검토와 AI 말투 제거
 
-## narrative-writer：超字一次净删（compress-once）
+Prompt: `프로젝트 디렉터리: {dir}\n任务描述：审查+去AI味\n검사 분담: 이번 검사에서 촉발된 지점별 의미 수정과 원래의 자체 검사를 맡는다. 최종 파일 스캔은 주 세션이 수행한다.\n검사 범위: {이번에 쓴 장}\n문체 경로: {설정/문체.md의 전체 경로}\nstyle_resolution: {집필과 같은 판정}\n작가 선호: {이번 장 query 출력의 lines, 없으면 无}\n이번 검토를 촉발한 검사 결과: {chapter check의 blocking 및 의미 관련 advisory 행 번호와 범주를 그대로 기록}\n실행 범위: 집필자 자료 deslop-gates의 검사 범주·문제별 범위 제한과 3계층 방법에 따라 수정한다. 전체 이야기 진단이나 새 플롯 설계로 확대하지 않는다. 원문 근거가 있는 연결과 서술 분량은 조정할 수 있으나 근거 없는 설계 공백은 보고만 한다.\n검수: 완전한 장면 안에서 수정 부분을 다시 읽고 원문의 문제·구체적 수정법·기능이 있는 표현을 유지한 이유를 설명한다. 고정 삭제율을 쓰지 않는다.`
 
-Prompt：`项目目录：{dir}\n任务描述：净删压缩\n正文：{正文路径}\n删除区间：{chapter check 给的 remove_to_internal_band}\n只删不增：优先删重复解释、装饰排比、无功能微动作；全部情节点、事实、因果、情绪兑现、钩子都保留，不改写成新句\n文风路径：{设定/文风.md 全文路径}`
+`审查+去AI味`는 검토 작업을 식별하는 계약 값이므로 유지한다.
 
-## narrative-writer：改写一章（大修）
+## narrative-writer: 글자 수 초과 시 한 번만 순삭제(compress-once)
 
-Prompt：`项目目录：{dir}\n任务描述：改写已写章节\n正文：{正文路径}（原稿已备份）\n细纲：{细纲路径}\n改动范围：{局部：哪几段或哪个场面，要改成什么／整章：按细纲重写}\n作者本轮要求：{作者原话要点}\n不动的部分：{局部修改时其余段落一字不改}\n衔接：{前一章结尾与后一章开头各一两句}\n文风路径：{设定/文风.md 全文路径}\nstyle_resolution：{与写作一致的裁决}\n作者偏好：{prose_style 查询的 lines，无写「无」}\n不借改稿新增细纲外的剧情；交付后回：改了哪些段、新增申报（无写 0）`
+Prompt: `프로젝트 디렉터리: {dir}\n任务描述：净删压缩\n본문: {본문 경로}\n삭제 범위: {chapter check의 remove_to_internal_band}\n추가 없이 삭제만 한다. 반복 설명·장식적 병렬 표현·기능 없는 미세 동작을 우선 삭제한다. 모든 플롯 지점·사실·인과·감정적 보상·후킹은 유지하며 새 문장으로 다시 쓰지 않는다.\n문체 경로: {설정/문체.md의 전체 경로}`
 
-## story-explorer：写前对标召回
+## narrative-writer: 한 장 재작성(대규모 수정)
 
-召回降档不成立、项目已部署 story-explorer 时，可一次召回文风/模块材料（不可用就按 benchmark-recall.md 自己召回）：
-- 查询类型：`benchmark_style_load`；传入项目目录、章节号、目标基调/字数和爽点类型。
-- 需要返回：`style_profile_path`、`style_profile_summary`、`selected_emotion_module`、`rhythm_reference`、来源路径、匹配章节、锚点片段、`gaps`。
-- `gaps` 分流：`no_benchmark` → `custom_style` 为真则用 `设定/文风.md` 写、情绪/节奏取本书内部材料，否则标「无对标参考」；`missing_primary_contract` → 按 `repair_action` 修复（重跑拆文或导入）并停止生成，自定义文风不豁免；`benchmark_book_missing` → 停止核对登记名，不换书；`conflict` / `module_rhythm_conflict` → 意图里说明冲突并按情绪模块/节奏的权威执行；profile_missing → custom_style 为真则用本书文风继续，否则停止；`profile_degenerate` → 有本书文风就用，没有回默认；`tone_match_failed` → 只用整书文风。其余字段原样进 writer prompt，`gaps` 原值保留在写前准备记录里。
-- 主会话另行直接读 `设定/文风.md`：含实质内容时作为本书风格基准；但不豁免情绪/节奏缺失。
+Prompt: `프로젝트 디렉터리: {dir}\n任务描述：改写已写章节\n본문: {본문 경로}(원고 백업 완료)\n상세 개요: {상세 개요 경로}\n수정 범위: {부분 수정이면 어느 문단·장면을 어떻게 고칠지, 장 전체면 상세 개요에 따라 재작성}\n작가의 이번 요청: {작가 원문의 요점}\n유지할 부분: {부분 수정이면 나머지 문단은 한 글자도 바꾸지 않음}\n연결: {이전 장 끝과 다음 장 시작에서 각각 한두 문장}\n문체 경로: {설정/문체.md의 전체 경로}\nstyle_resolution: {집필과 같은 판정}\n작가 선호: {prose_style 조회의 lines, 없으면 无}\n수정을 빌미로 상세 개요 밖의 플롯을 추가하지 않는다. 납품 후 수정한 문단과 신규 신고(없으면 0)를 답한다.`
+
+## story-explorer: 집필 전 벤치마크 검색
+
+검색 축소가 성립하지 않고 프로젝트에 story-explorer가 배치되어 있으면 문체·모듈 자료를 한 번에 검색할 수 있다. 사용할 수 없으면 benchmark-recall.md에 따라 직접 검색한다.
+
+- 조회 유형: `benchmark_style_load`. 프로젝트 디렉터리·장 번호·목표 기조/글자 수·쾌감 요소 유형을 전달한다.
+- 반환 항목: `style_profile_path`, `style_profile_summary`, `selected_emotion_module`, `rhythm_reference`, 출처 경로, 일치한 장, 근거 조각, `gaps`.
+- `gaps` 분기: `no_benchmark`이면 `custom_style`이 참일 때 `설정/문체.md`로 집필하고 감정·리듬은 작품 내부 자료에서 가져온다. 거짓이면 벤치마크 없음으로 표시한다. `missing_primary_contract`이면 `repair_action`에 따라 재분석·가져오기로 수정하고 생성을 멈춘다. 맞춤 문체도 예외가 아니다. `benchmark_book_missing`이면 멈추고 등록명을 확인하며 다른 작품으로 바꾸지 않는다. `conflict` / `module_rhythm_conflict`이면 의도에 충돌을 설명하고 감정 모듈·리듬의 권위에 따른다. `profile_missing`이면 `custom_style`이 참일 때 작품 자체 문체로 계속하고 아니면 멈춘다. `profile_degenerate`이면 작품 자체 문체가 있을 때 그것을 쓰고 없으면 기본값으로 돌아간다. `tone_match_failed`이면 작품 전체 문체만 쓴다. 나머지 필드는 writer prompt에 그대로 넣고 `gaps` 원래 값은 집필 전 준비 기록에 보존한다.
+- 주 세션은 별도로 `설정/문체.md`를 직접 읽는다. 실질적인 내용이 있으면 작품의 문체 기준으로 삼지만 감정·리듬 누락을 면제하지는 않는다.

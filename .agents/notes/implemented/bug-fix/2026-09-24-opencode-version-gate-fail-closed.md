@@ -1,36 +1,36 @@
-# Agent Note: OpenCode 版本门改为 fail-closed，版本不明时停止部署
+# Agent Note: OpenCode 버전 검사를 fail-closed로 변경하여 버전을 모르면 배포 중단
 
 Status: implemented
 Date: 2026-09-24
-Related: [2026-09-23-opencode-v2-only](../architecture/2026-09-23-opencode-v2-only.md)（本篇翻转其中「命令不可用时继续部署」一条）
+Related: [2026-09-23-opencode-v2-only](../architecture/2026-09-23-opencode-v2-only.md)(이 기록은 ‘명령을 사용할 수 없어도 배포를 계속한다’는 기존 결정을 뒤집음)
 
 ## Problem
 
-#443 只适配 OpenCode 2.x。story-setup 的部署前置在 `opencode --version` 取不到或解析不出版本时继续部署，只在安装报告首行提示「未能确认版本」。发版前复查发现这条分支不安全：
+#443은 OpenCode 2.x만 지원한다. story-setup은 배포 전 `opencode --version`을 실행할 수 없거나 버전을 파싱하지 못해도 배포를 계속하고 설치 보고서 첫 줄에 ‘버전을 확인하지 못했다’고만 안내했다. 출시 전 재검토에서 이 분기가 안전하지 않음을 확인했다.
 
-- 1.x 不认 agents 的 2.x 原生 `permissions:` 规则列表，未知字段被忽略，三个只读 agent（`chapter-extractor`、`consistency-checker`、`story-explorer`）会拿到完整的写文件与 shell 权限。插件加载失败只是守卫缺席，权限失效会让只读 agent 真的改写项目。
-- 1.x 被拦时，文档没有说 `.story-deployed` 怎么处理。只部署 OpenCode 的项目如果照常写入或抬高 `agents_version`，session-start 与各 skill 的版本提示就会认为项目已是当前部署，用户不会再被提醒重跑。
-- story-review 按 `permission` 字段判断 OpenCode agent 是否完好，#443 后 agent 只有复数的 `permissions:`，模型可能把合法 agent 判成 malformed 并降级 solo。
-- 多个 skill 写着「Claude/OpenCode 用 `subagent_type`」。OpenCode 2.x 的委派工具是 `subagent`，参数是 `agent`（2.0.16 二进制自带说明：`subagent` 取 `agent` 而不是 `subagent_type`）。
+- 1.x는 에이전트의 2.x 기본 `permissions:` 규칙 목록을 인식하지 못하고 알 수 없는 필드를 무시한다. 읽기 전용 에이전트 세 개(`chapter-extractor`, `consistency-checker`, `story-explorer`)가 전체 파일 쓰기와 shell 권한을 받게 된다. 플러그인 로드 실패는 검사기가 없는 문제지만 권한 실패는 읽기 전용 에이전트가 프로젝트를 실제로 고칠 수 있게 한다.
+- 1.x를 차단할 때 `.story-deployed`를 어떻게 처리하는지 문서가 설명하지 않았다. OpenCode만 배포하는 프로젝트에서 이 파일을 평소처럼 쓰거나 `agents_version`을 올리면 session-start와 스킬 버전 알림이 이미 현재 배포라고 판단하여 재실행 안내가 나오지 않는다.
+- story-review는 `permission` 필드로 OpenCode 에이전트의 정상 여부를 판단했다. #443 이후에는 복수형 `permissions:`만 있어 모델이 정상 에이전트를 malformed로 판단하고 solo로 대체할 수 있었다.
+- 여러 스킬이 ‘Claude/OpenCode는 `subagent_type` 사용’이라고 설명했다. OpenCode 2.x 위임 도구는 `subagent`이고 인자는 `agent`다(2.0.16 바이너리 내장 설명도 `subagent_type`이 아닌 `agent` 사용을 명시).
 
 ## Decision
 
-- `skills/story-setup/references/deploy-opencode.md`「部署前置」（2026-09-26 起从 SKILL.md 拆出，见 [按宿主拆分部署](../architecture/2026-09-26-setup-by-host.md)）：主版本 < 2 或版本无法确定，都停止 OpenCode 部署。版本无法确定时请用户在自己的终端运行 `opencode --version`，用户在对话里确认是 2.x 才继续。
-- 停止 OpenCode 部署时：target 只有 opencode，就不写、不更新 `.story-deployed`（已有的原样保留，不抬 `agents_version`），也不写任何 OpenCode 文件；多 target 时其它端照常部署，写入的 `target_cli` 不含 opencode，报告首行说明 OpenCode 未部署及原因，并告诉作者升级后重跑、选择把 OpenCode 加回来。
-- 已部署项目重跑时，`target_cli` 不含 opencode 但项目里有 `.opencode/plugins/story-hooks.ts` 或 `.opencode/agents/`，用 AskUserQuestion 问是否加回 OpenCode；选加回先过版本门，通过后写回 `target_cli`。否则 sentinel 已是当前 `agents_version`、又以 `target_cli` 为准跳过探测，升级后的 OpenCode 永远不会重新部署，旧插件在 2.x 上静默失效。
-- 升级命令先 `npm rm -g opencode-ai` 再装 `@opencode/cli`：两个包都提供 `opencode` 命令，不卸旧包时 PATH 上可能仍是 1.x。
-- story-review 改为检查 `mode: subagent` 与 `permissions:` 规则列表；旧版单数 `permission:` 视为待重新部署。
-- story-short-write、story-deslop、story-import、story-review 的委派说明改为「OpenCode 用 `subagent` 的 `agent` 参数」。
-- `scripts/check-opencode-adapter.sh` 断言版本门文案存在：版本不明时停止、OpenCode-only 被拦时不写 `.story-deployed`，并拒绝旧的「解析不出版本 → 继续部署」；同时断言 story-review 按 `permissions:` 校验。
+- `skills/story-setup/references/deploy-opencode.md`의 배포 전제(2026-09-26부터 SKILL.md에서 분리, [호스트별 배포 분리](../architecture/2026-09-26-setup-by-host.md) 참조): 주 버전이 2 미만이거나 버전을 확정할 수 없으면 OpenCode 배포를 중단한다. 버전을 모르면 사용자 터미널에서 `opencode --version`을 실행해 달라고 요청하고 대화에서 2.x임을 확인한 뒤에만 계속한다.
+- OpenCode 배포 중단 시 대상이 opencode뿐이면 `.story-deployed`를 쓰거나 갱신하지 않는다(기존 파일은 그대로 두고 `agents_version`을 올리지 않음). OpenCode 파일도 전혀 쓰지 않는다. 대상이 여러 개면 다른 호스트는 정상 배포하되 기록하는 `target_cli`에서 opencode를 제외한다. 보고서 첫 줄에 OpenCode 미배포와 이유를 알리고 업그레이드 후 재실행하여 OpenCode를 다시 추가하도록 안내한다.
+- 이미 배포한 프로젝트에서 재실행할 때 `target_cli`에 opencode가 없지만 `.opencode/plugins/story-hooks.ts` 또는 `.opencode/agents/`가 있으면 AskUserQuestion으로 OpenCode를 다시 추가할지 묻는다. 추가를 선택하면 먼저 버전 검사를 통과한 뒤 `target_cli`에 기록한다. 그렇지 않으면 sentinel의 `agents_version`은 이미 현재 버전이고 `target_cli`에 따라 감지도 건너뛰어 업그레이드한 OpenCode가 영원히 다시 배포되지 않으며 예전 플러그인이 2.x에서 조용히 실패한다.
+- 업그레이드 명령은 먼저 `npm rm -g opencode-ai`를 실행하고 `@opencode/cli`를 설치한다. 두 패키지 모두 `opencode` 명령을 제공하므로 구패키지를 제거하지 않으면 PATH에 1.x가 남을 수 있다.
+- story-review는 `mode: subagent`와 `permissions:` 규칙 목록을 검사한다. 구버전 단수형 `permission:`은 재배포가 필요한 것으로 본다.
+- story-short-write·story-deslop·story-import·story-review의 위임 설명을 ‘OpenCode는 `subagent`의 `agent` 인자 사용’으로 바꾼다.
+- `scripts/check-opencode-adapter.sh`는 버전 불명 시 중단, OpenCode-only 차단 시 `.story-deployed`를 쓰지 않는다는 문구를 단언하고 예전 ‘버전 파싱 실패 → 계속 배포’를 거부한다. story-review가 `permissions:`로 검증하는지도 단언한다.
 
 ## Alternatives considered
 
-- **保留「版本不明继续部署 + 报告首行提示」**——最强理由：沙箱里跑不了 `opencode` 的环境（命令不在 PATH、在 OpenCode 自身会话里被限制）也能完成部署，不打断用户。否：版本不明的最坏情况是 1.x，而 1.x 上只读 agent 会拿到写与 shell 权限，这是写坏项目的风险，不是体验降级；报告首行提示很容易被略过。改成请用户确认版本后继续，沙箱场景多一步对话，但仍能完成。
-- **在 1.x 上改用单数 `permission:` 兜底生成一份 agent**——最强理由：1.x 用户也能得到只读约束。否：维护者已决定仓库不保留 1.x 分支代码（见 Related），而且 1.x 上写正文守卫插件仍然加载不了，部署下去也不完整。
-- **被拦时仍写 `.story-deployed`，只把 `target_cli` 留空**——最强理由：保留一次部署尝试的痕迹。否：session-start 与 skill 版本提示按 `agents_version` 判断是否过期，写入当前版本号会让未部署的项目看起来已是最新，用户收不到重跑提醒。
+- **‘버전 불명이어도 계속 배포하고 보고서 첫 줄에 안내’ 유지**: 샌드박스에서 `opencode`를 실행할 수 없는 환경(PATH에 없음, OpenCode 자체 세션의 제한)에서도 사용자를 멈추지 않고 배포를 끝낼 수 있다는 장점이 있다. 그러나 최악의 경우는 1.x이며 이때 읽기 전용 에이전트가 쓰기·shell 권한을 받는다. 이는 편의성 저하가 아니라 프로젝트를 망가뜨릴 위험이고 첫 줄 안내는 쉽게 지나칠 수 있다. 사용자 버전 확인 후 계속하는 방식은 샌드박스에서 대화 한 번이 추가되지만 여전히 완료할 수 있다.
+- **1.x에서 단수형 `permission:`으로 대체 에이전트 생성**: 1.x 사용자도 읽기 전용 제약을 받을 수 있다. 그러나 유지 관리자는 1.x 분기 코드를 남기지 않기로 결정했다(Related 참조). 1.x에서는 본문 검사 플러그인도 로드할 수 없어 배포가 불완전하다.
+- **차단되어도 `.story-deployed`를 쓰고 `target_cli`만 비우기**: 배포 시도 흔적을 남길 수 있다. 그러나 session-start와 스킬 버전 알림은 `agents_version`으로 오래되었는지 판단하므로 현재 버전을 기록하면 미배포 프로젝트가 최신처럼 보이고 재실행 안내를 받지 못한다.
 
 ## Consequences
 
-- **收益**：1.x 或版本不明时不会再部署出权限失效的只读 agent；OpenCode-only 项目被拦后，下次会话仍会提示需要重跑 story-setup；多端项目被拦后，升级再重跑会被问到是否加回 OpenCode；story-review 不再把 2.x 合法 agent 误判为 malformed。
-- **代价**：无法在部署环境里运行 `opencode --version` 的用户多一步确认；多 target 部署时 OpenCode 被拦会让 `target_cli` 少一项，要靠重跑时的加回询问补回；作者手动删了 `.opencode/` 的项目不会被问到。
-- **已知上限**：版本门仍靠 skill 文本约束模型执行，没有脚本强制；`check-opencode-adapter.sh` 只守文案存在，不在真实 1.x 上跑部署。
+- **이점**: 1.x나 버전 불명일 때 권한이 무효인 읽기 전용 에이전트를 배포하지 않는다. OpenCode-only 프로젝트가 차단되면 다음 세션에서도 story-setup 재실행 안내가 나온다. 다중 호스트 프로젝트는 업그레이드 후 재실행 시 OpenCode 재추가 질문을 받는다. story-review가 정상 2.x 에이전트를 malformed로 오인하지 않는다.
+- **비용**: 배포 환경에서 `opencode --version`을 실행할 수 없는 사용자는 확인 단계가 하나 늘어난다. 다중 대상 배포에서 OpenCode가 차단되면 `target_cli` 한 항목이 빠져 재실행 때 질문으로 추가해야 한다. 작가가 `.opencode/`를 직접 삭제한 프로젝트에는 질문하지 않는다.
+- **알려진 한계**: 버전 검사는 여전히 스킬 텍스트가 모델 실행을 제약하는 방식이며 스크립트로 강제하지 않는다. `check-opencode-adapter.sh`는 문구 존재만 검사하고 실제 1.x에서 배포를 실행하지 않는다.

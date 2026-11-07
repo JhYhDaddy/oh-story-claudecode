@@ -1,8 +1,8 @@
 ---
-description: 短篇网文拆文，分析故事核、情绪线、结构和反转。
+description: 단편 웹소설 분석. 이야기 핵심·감정선·구조·반전을 분석한다.
 skills: story-short-analyze
 ---
 
-调用 `$story-short-analyze` 拆解用户指定的短篇小说。
+`$story-short-analyze`를 호출하여 사용자 지정 단편 소설을 분석한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

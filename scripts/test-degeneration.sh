@@ -1,5 +1,5 @@
 #!/bin/bash
-# test-degeneration.sh — regression tests for the model-degeneration detector.
+# test-degeneration.sh — 모델 출력 퇴화 탐지기의 회귀 테스트.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -17,7 +17,7 @@ POS="$TMP_DIR/degen-positive.md"
 NEG="$TMP_DIR/degen-negative.md"
 OUT="$TMP_DIR/out.json"
 
-# Positive: 紧邻整行复读 + 长句复读3次 + AI自指 + 括号省略占位符 + 末尾截断。
+# 양성: 인접한 전체 줄 반복 + 긴 문장 3회 반복 + AI 자기 지칭 + 괄호 생략 자리표시자 + 끝 잘림.
 cat > "$POS" <<'EOF'
 他握紧了拳头，慢慢站起身来，眼里全是不甘。
 他握紧了拳头，慢慢站起身来，眼里全是不甘。
@@ -31,7 +31,7 @@ cat > "$POS" <<'EOF'
 他转过身，慢慢地走向门口，手还在
 EOF
 
-# Negative: 通俗网文体裁内的「正常重复」必须不报——弹幕道歉刷屏、短句排比、对话复沓。
+# 음성: 대중 웹소설 장르의 정상 반복은 보고하면 안 된다. 실시간 댓글 사과 도배, 짧은 병렬문, 대사 반복 등.
 cat > "$NEG" <<'EOF'
 他站在原地，看着那条消息，久久没有动。
 “对不起。”
@@ -67,7 +67,7 @@ for (const [type, n] of Object.entries(want)) {
 }
 NODE
 
-# Negative fixture must be clean (exit 0). 通俗网文 的排比/复沓/弹幕刷屏不是退化。
+# 음성 데이터는 종료 0이어야 한다. 대중 웹소설의 병렬/반복/댓글 도배는 퇴화가 아니다.
 set +e
 neg_out="$(node "$SCRIPT" "$NEG" 2>&1)"
 neg_status=$?
@@ -78,9 +78,9 @@ if [ "$neg_status" -ne 0 ]; then
   exit 1
 fi
 
-# --- AI 自指（不带拒绝语）：上面正例的第29行其实是被「生成拒绝语」规则接住的，AI 自指规则
-#     本身此前零覆盖——带型号后缀的最典型退化开场（AI语言模型/AI助手/人工智能语言模型/AI模型）
-#     整类漏检也照样通过。这条只留自指、不含 我无法/我不能，逐条锁到 label 上。
+# --- AI 자기 지칭(거부 표현 없음): 위 양성의 29행은 실제로 생성 거부 표현 규칙이 탐지했으며 자기 지칭 규칙은
+#     이전에 전혀 검증되지 않았다. 모델명 접미어가 붙은 전형적 퇴화 도입(AI 언어 모델/AI 도우미/인공지능 언어 모델/AI 모델)을
+#     통째로 놓쳐도 통과했다. 여기서는 자기 지칭만 남기고 ‘할 수 없다’ 표현을 빼서 각 label을 고정한다.
 AI_SELF="$TMP_DIR/ai-selfref.md"
 cat > "$AI_SELF" <<'EOF'
 作为一个AI语言模型，我需要提醒您。
@@ -110,7 +110,7 @@ if (!leaks.every((f) => f.message.includes('AI 自指'))) {
 }
 NODE
 
-# --- 软拒绝语只豁免成对引号内部：混合行的引号外泄漏必须命中，合法台词仍静默 ---
+# --- 완곡한 거부는 짝이 맞는 따옴표 안만 제외한다. 혼합 줄의 인용 밖 누출은 탐지하고 유효 대사는 보고하지 않는다. ---
 QUOTE_SCOPE="$TMP_DIR/quote-scope.md"
 cat > "$QUOTE_SCOPE" <<'EOF'
 “任务完成。”作为AI，我无法继续创作。
@@ -169,11 +169,11 @@ for (const finding of leaks) {
 }
 NODE
 
-# --- 工程词泄漏 meta-leak（issue #173 comment 4814607240）---
+# --- 제작 용어 누출 meta-leak(이슈 #173 댓글 4814607240) ---
 META_POS="$TMP_DIR/meta-positive.md"
 META_NEG="$TMP_DIR/meta-negative.md"
 
-# 正例：纯工程词(细纲/情节点) + 章节结构词(本章/下一章，含对话里的) + 系统标签词(任务描述)。
+# 양성: 제작 용어(상세 개요/플롯 지점) + 장 구조어(이 장/다음 장, 대사 포함) + 시스템 라벨어(작업 설명).
 cat > "$META_POS" <<'EOF'
 ## 第5章 真相
 他握紧了拳头，慢慢站起身来。
@@ -195,7 +195,7 @@ if (meta.length !== 5) {
 }
 NODE
 
-# 负例：标题行「第N章 章名」(无 ## 前缀) 必须不算工程词泄漏；正常正文 0 命中。
+# 음성: ## 접두어 없는 ‘第N章 章名’ 제목 줄은 제작 용어 누출로 세면 안 된다. 정상 본문은 0건.
 cat > "$META_NEG" <<'EOF'
 第1章 军宣新星
 他站在台上，看着台下黑压压的人群。
@@ -212,7 +212,7 @@ if [ "$meta_neg_status" -ne 0 ]; then
   exit 1
 fi
 
-# --- 引号整行豁免回归：混合行（叙述 + 引号内物件）的复读不能被一个引号整行跳过 ---
+# --- 인용으로 전체 줄 제외 회귀: 혼합 줄(서술 + 따옴표 안 사물)의 반복을 따옴표 하나로 통째로 건너뛰면 안 됨 ---
 MIX="$TMP_DIR/mix-repeat.md"
 cat > "$MIX" <<'EOF'
 他把纸条展开，上面写着“归来”，她看着窗外那场整夜的大雨，心里空落落的。
@@ -230,8 +230,8 @@ if (rep.length === 0) throw new Error('引号整行豁免回归：混合行复�
 if (!rep.every((f) => f.severity === 'blocking')) throw new Error('verbatim-repeat 应为 severity=blocking');
 NODE
 
-# 纯台词复沓仍豁免（体裁手法）：同一句长台词紧邻重复、全文三次都不报。台词本身
-# 过了紧邻复读与长句复读的长度门槛，只能靠去引号豁免，而不是短句豁免。
+# 순수 대사 반복은 계속 제외한다(장르 기법). 같은 긴 대사의 인접 반복과 전체 3회 반복 모두 보고하지 않는다. 대사는
+# 인접/긴 문장 반복 길이 임계값을 넘어 짧은 문장 제외가 아닌 인용 제거로만 제외되어야 한다.
 PURE_DLG="$TMP_DIR/pure-dialogue.md"
 cat > "$PURE_DLG" <<'EOF'
 “我说了今天晚上哪儿也不去，就在这儿等他回来。”
@@ -249,7 +249,7 @@ if [ "$pure_dlg_status" -ne 0 ]; then
   exit 1
 fi
 
-# --- severity 字段 + --fail-on 语义：仅 advisory（tier2）时默认退出 1，--fail-on=blocking 退出 0 ---
+# --- severity 필드 + --fail-on 의미: advisory(tier2)만 있으면 기본 종료 1, --fail-on=blocking은 0 ---
 ADV="$TMP_DIR/advisory-only.md"
 cat > "$ADV" <<'EOF'
 他翻看着那段记录，想起本章之前发生的事，那个伏笔一直没人提起。
@@ -277,7 +277,7 @@ if [ "$adv_blocking_status" -ne 0 ]; then
   exit 1
 fi
 
-# --- tier1 工程词：叙述行 blocking；对话行（写手/编剧题材合法台词）降级 advisory ---
+# --- tier1 제작 용어: 서술은 blocking, 작가/각본가 소재의 유효 대사는 advisory로 낮춤 ---
 TIER1="$TMP_DIR/tier1-dialogue.md"
 cat > "$TIER1" <<'EOF'
 “今天的字数目标是六千字。”他盯着屏幕，烟一根接一根。
@@ -295,7 +295,7 @@ if (!dlg || dlg.severity !== 'advisory') throw new Error('tier1 在对话行应�
 if (!nar || nar.severity !== 'blocking') throw new Error('tier1 在叙述行应为 blocking: ' + JSON.stringify(nar));
 NODE
 
-# --- tier1 引号范围：只降级实际落在成对引号内的匹配，不因同一行别处有引号而整行降级 ---
+# --- tier1 인용 범위: 실제 짝 맞는 따옴표 안의 일치만 등급을 낮추며 같은 줄 다른 곳의 따옴표로 전체 줄을 낮추지 않음 ---
 TIER1_MIXED="$TMP_DIR/tier1-mixed-quote.md"
 TIER1_QUOTED="$TMP_DIR/tier1-pure-quote.md"
 cat > "$TIER1_MIXED" <<'EOF'
@@ -347,10 +347,10 @@ if (findings.length !== 2 || !findings.every((f) => f.severity === 'advisory') |
 }
 NODE
 
-# --- wiring：携带 check-degeneration.js 副本的 skill 必须在自己的工作流文本里实际调用它 ---
-# 调用点可以在 SKILL.md，也可以在该 skill 的 references/ 工作流文件里（长篇的单章流程
-# 就随 Phase 4-5 下沉到了 references/workflow-chapter.md）。只要求「在本 skill 内被调用」，
-# 不再钉死在 SKILL.md 这一个文件上；一处都没有仍然 FAIL。
+# --- 연결: check-degeneration.js 복사본이 있는 스킬은 자기 작업 흐름 텍스트에서 실제 호출해야 함 ---
+# 호출 위치는 SKILL.md 또는 해당 스킬의 references/ 작업 흐름 파일일 수 있다(장편 단일 장 흐름은
+# 4~5단계와 함께 references/workflow-chapter.md로 옮겨졌다). 해당 스킬 안에서 호출하기만 하면 되며
+# SKILL.md 하나로 제한하지 않는다. 호출이 한 곳도 없으면 여전히 실패한다.
 for skill_js in $(find "$REPO_ROOT/skills" -name check-degeneration.js); do
   skill_dir="$(dirname "$(dirname "$skill_js")")"
   skill_md="$skill_dir/SKILL.md"

@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * 点众阅读短篇采集脚本
+ * 뎬중 독서 단편 수집 스크립트
  *
- * 配合 browser-cdp skill 使用。先启动 Chrome CDP 环境，再运行本脚本。
- * 采集策略：以 /book/{id} 链接为骨架，按 bookId 聚合每本书的多个 anchor
- * （封面/书名+评分/简介各一个），从中解出书名、评分、简介、作品页，再从卡片
- * 容器文本里解出 作者·标签·状态·字数 与最新章节。避免纯 innerText 行序解析把
- * UI 文字或简介误当书名。
- * 输出 Markdown 格式。
+ * browser-cdp 스킬과 함께 사용한다. Chrome CDP 환경을 먼저 시작한 뒤 실행한다.
+ * 수집 전략: /book/{id} 링크를 기준으로 bookId별 여러 anchor를 모은다
+ * (표지/제목+평점/소개가 각각 하나). 여기서 제목, 평점, 소개, 작품 페이지를 추출하고
+ * 카드 컨테이너 텍스트에서 작가·태그·상태·글자 수와 최신 장을 추출한다.
+ * innerText 줄 순서만 해석해 UI 텍스트나 소개를 제목으로 오인하지 않는다.
+ * Markdown 형식으로 출력한다.
  *
- * 用法：
- *   node dz-browse-scraper.js --channel male              # 男频
- *   node dz-browse-scraper.js --channel female             # 女频
- *   node dz-browse-scraper.js --channel all                # 全部
+ * 사용법:
+ *   node dz-browse-scraper.js --channel male              # 남성향
+ *   node dz-browse-scraper.js --channel female            # 여성향
+ *   node dz-browse-scraper.js --channel all               # 전체
  *
- * 前置：
+ * 사전 실행:
  *   node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
  */
 
@@ -28,10 +28,10 @@ const CHANNELS = [
 ];
 
 // ---------------------------------------------------------------------------
-// 页面操作
+// 페이지 조작
 // ---------------------------------------------------------------------------
 
-/** 连通性 + 页面就绪自检 */
+/** 연결·페이지 준비 상태 자체 검사. */
 function probePage(port) {
   return evalJSONBase64(
     port,
@@ -39,7 +39,7 @@ function probePage(port) {
   );
 }
 
-/** 点击指定文本的 tab */
+/** 지정 텍스트의 탭을 클릭한다. */
 function clickTab(port, text) {
   const js =
     "JSON.stringify((function(){" +
@@ -51,9 +51,9 @@ function clickTab(port, text) {
 }
 
 /**
- * 以 /book/{id} 链接为骨架聚合每本书的字段。
- * 书名取自“书名+评分”anchor（去掉尾部 X.X分），简介取自最长 anchor，
- * 作者/标签/状态/字数从卡片容器文本里正则提取。
+ * /book/{id} 링크를 기준으로 책별 필드를 모은다.
+ * 제목은 ‘제목+평점’ anchor에서 끝의 X.X分을 제거해 얻고, 소개는 가장 긴 anchor에서 얻는다.
+ * 작가/태그/상태/글자 수는 카드 컨테이너 텍스트에서 정규식으로 추출한다.
  */
 function buildStoriesJS() {
   return `JSON.stringify((function(){
@@ -106,7 +106,7 @@ function extractStories(port) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -125,7 +125,7 @@ function scrapeChannel(port, channelId) {
     ab(port, "open", ch.url);
     sleep(3000);
 
-    // 连通性自检：CDP 未起/被重定向时给可操作报错，而非静默产空
+    // 연결 자체 검사: CDP 미실행·리디렉션 시 빈 출력을 조용히 만들지 않고 대응 가능한 오류를 준다.
     const probe = probePage(port);
     if (!probe) {
       console.error(
@@ -138,7 +138,7 @@ function scrapeChannel(port, channelId) {
       return null;
     }
 
-    // 切换频道（female 已有独立 URL，tab 失败不致命）
+    // 채널을 전환한다(female은 별도 URL이 있으므로 탭 실패는 치명적이지 않다).
     try {
       if (clickTab(port, ch.tab)) {
         console.log(`  ✓ 切换到${ch.tab}`);
@@ -164,7 +164,7 @@ function scrapeChannel(port, channelId) {
     return null;
   }
 
-  // 质量门：书名命中率是点众采集成败的核心信号
+  // 품질 검사: 제목 적중률이 뎬중 수집 성공 여부의 핵심 신호다.
   const titled = stories.filter((s) => s.title).length;
   const ratio = titled / stories.length;
   const quality = ratio < 0.5 ? "[书名解析异常]" : "[OK]";

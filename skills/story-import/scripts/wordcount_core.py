@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small deterministic wordcount core shared by storyctl and tracking."""
+"""storyctl과 추적 기능이 공유하는 작은 결정적 글자 수 핵심 모듈."""
 
 from __future__ import annotations
 
@@ -26,9 +26,9 @@ _FRONTMATTER_KEY_RE = re.compile(r"^[A-Za-z_\u3400-\u9FFF][^:\n]{0,80}:[ \t]*(?:
 _LEADING_BLANK_RE = re.compile(r"^[\u0009\u0020\u3000]*$")
 _ATX_HEADING_RE = re.compile(r"^[\u0009\u0020]{0,3}#{1,6}[\u0009\u0020]+\S")
 _POSITIVE_INTEGER_RE = re.compile(r"^[1-9]\d*$")
-# 细纲「字数目标」「字数范围」「字数口径」的唯一写法语法；check-outline-contract.js 逐字镜像同一组正则，
-# scripts/test-storyctl.py 用同一批写法同时跑两边，保证细纲验收过了、章节检查不会再拒。
-# 值里一个数字都没有的目标/范围行（「字数目标：按卷规划」）是说明文字，不参与取值。
+# 상세 개요 ‘字数目标’, ‘字数范围’, ‘字数口径’의 유일한 표기 문법. check-outline-contract.js가 같은 정규식을 정확히 복제하며
+# scripts/test-storyctl.py가 같은 표기를 양쪽에서 실행해 개요 검증 통과 후 장 검사에서 거부하지 않도록 보장한다.
+# 숫자가 없는 목표·범위 행(‘字数目标：按卷规划’)은 설명문이며 값을 추출하지 않는다.
 _NUMBER = r"([1-9][0-9]{0,2}(?:[,，][0-9]{3})+|[1-9][0-9]*)"
 _NOTE = r"(?:[（(][^（）()]*[）)])?"
 _TARGET_VALUE_RE = re.compile(rf"^(?:约|大约)?[ \t]*{_NUMBER}[ \t]*字?(?:左右)?[ \t]*{_NOTE}$")
@@ -55,7 +55,7 @@ def _number(raw: str) -> int:
 
 
 def parse_target_field(text: str) -> dict[str, Any]:
-    """Return {"status": ok|missing|invalid|conflict, "value": int|None, "raw": [...]}."""
+    """{"status": ok|missing|invalid|conflict, "value": int|None, "raw": [...]}를 반환한다."""
     raws = _numeric_field_values(normalize_newlines(text).lstrip("\ufeff"), "字数目标")
     if not raws:
         return {"status": "missing", "value": None, "raw": raws}
@@ -69,7 +69,7 @@ def parse_target_field(text: str) -> dict[str, Any]:
 
 
 def parse_range_field(text: str) -> dict[str, Any]:
-    """Optional author range line 「字数范围：2000-2600」; same status vocabulary as parse_target_field."""
+    """선택적 작가 범위 행 ‘字数范围：2000-2600’. 상태 이름은 parse_target_field와 같다."""
     raws = _numeric_field_values(normalize_newlines(text).lstrip("\ufeff"), "字数范围")
     if not raws:
         return {"status": "missing", "value": None, "raw": raws}
@@ -86,7 +86,7 @@ def parse_range_field(text: str) -> dict[str, Any]:
 
 
 def parse_metric_field(text: str) -> dict[str, Any]:
-    """「字数口径：visible_chars_v1（按可见字符）」；每行都得是口径名（可带括号备注），且只能是 METRIC。"""
+    """‘字数口径：visible_chars_v1（按可见字符）’. 각 행은 기준 이름(괄호 메모 선택)이어야 하며 METRIC만 허용한다."""
     raws = _field_values(normalize_newlines(text).lstrip("\ufeff"), "字数口径")
     matches = [_METRIC_VALUE_RE.fullmatch(raw) for raw in raws]
     ok = bool(raws) and all(matches) and {match.group(1) for match in matches if match} == {METRIC}
@@ -94,7 +94,7 @@ def parse_metric_field(text: str) -> dict[str, Any]:
 
 
 class WordcountError(ValueError):
-    """Expected deterministic wordcount contract failure."""
+    """예상 가능한 결정적 글자 수 계약 위반."""
 
 
 def require(condition: bool, message: str) -> None:
@@ -144,7 +144,7 @@ def parse_target(value: Any) -> int:
 
 
 def normalize_author_range(value: Any) -> dict[str, int] | None:
-    """作者明确给出的上下限；None 表示沿用默认 ±12% / ±15% 双层带。"""
+    """작가가 명시한 상한·하한. None은 기본 ±12% / ±15% 이중 범위 유지다."""
     if value is None:
         return None
     require(isinstance(value, dict) and set(value) == {"min", "max"}, "author range must be {min, max}")
@@ -161,7 +161,7 @@ def compute_wordcount_bands(value: Any, author_range: Any = None) -> dict[str, d
     target = parse_target(value)
     author = normalize_author_range(author_range)
     if author is not None:
-        # 作者给定区间原样优先：内部带与用户带都取它，不再有 borderline。
+        # 작가 지정 범위를 그대로 우선한다. 내부·사용자 범위 모두 이 값을 사용하며 borderline은 없다.
         return {"internal": dict(author), "user": dict(author)}
     return {
         "internal": {"min": (target * 88 + 99) // 100, "max": target * 112 // 100},
@@ -266,7 +266,7 @@ def target_from_outline(value: str) -> int:
 
 
 def range_from_outline(value: str) -> dict[str, int] | None:
-    """细纲可选行「字数范围：2000-2600」；没写返回 None，写了但写不对就报错而不是静默回落默认带。"""
+    """선택 행 ‘字数范围：2000-2600’. 없으면 None, 잘못 쓰면 기본 범위로 조용히 돌아가지 않고 오류를 낸다."""
     parsed = parse_range_field(value)
     if parsed["status"] == "missing":
         return None
@@ -275,10 +275,10 @@ def range_from_outline(value: str) -> dict[str, int] | None:
 
 
 def _chapter_number_from_name(name: str, *, outline: bool) -> int | None:
-    # 改稿流程把原文备份为 第N章_章名_原稿_{日期}.md，与 hooks 一样不把它当本章正文。
-    if not outline and "_原稿_" in name:
+    # 개고에서 원문을 제N장_장제목_원본_{日期}.md로 백업하며 훅처럼 이를 해당 장의 본문으로 보지 않는다.
+    if not outline and "_원본_" in name:
         return None
-    pattern = r"^细纲_第0*(\d+)章.*\.md$" if outline else r"^第0*(\d+)章(?:[_\- 　].*)?\.md$"
+    pattern = r"^상세개요_제0*(\d+)장.*\.md$" if outline else r"^제0*(\d+)장(?:[_\- 　].*)?\.md$"
     match = re.match(pattern, name)
     return int(match.group(1)) if match else None
 
@@ -296,7 +296,7 @@ def find_chapter_file(directory: Path, chapter: int, *, outline: bool) -> Path:
 
 
 def read_chapter_outline(project: Path, chapter: int) -> tuple[Path, str]:
-    outline_path = find_chapter_file(project.resolve() / "大纲", chapter, outline=True)
+    outline_path = find_chapter_file(project.resolve() / "개요", chapter, outline=True)
     try:
         return outline_path, outline_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
@@ -304,23 +304,23 @@ def read_chapter_outline(project: Path, chapter: int) -> tuple[Path, str]:
 
 
 def effective_author_range(outline: str, author_range: Any = None) -> dict[str, int] | None:
-    """命令行给了上下限就以它为准（细纲「字数范围」写错也不阻断）；否则读细纲。"""
+    """명령행 상한·하한이 있으면 상세 개요의 잘못된 범위에도 차단하지 않고 우선 적용한다. 없으면 개요를 읽는다."""
     return normalize_author_range(author_range) if author_range is not None else range_from_outline(outline)
 
 
 def read_project_chapter(
     project: Path, chapter: int, author_range: Any = None,
 ) -> tuple[Path, Path, int, dict[str, int] | None]:
-    """定位本章细纲与正文，读出字数目标和生效的作者字数范围。"""
+    """이번 장의 개요·본문을 찾아 목표 글자 수와 유효한 작가 범위를 읽는다."""
     outline_path, outline = read_chapter_outline(project, chapter)
-    body_path = find_chapter_file(project.resolve() / "正文", chapter, outline=False)
+    body_path = find_chapter_file(project.resolve() / "본문", chapter, outline=False)
     return outline_path, body_path, target_from_outline(outline), effective_author_range(outline, author_range)
 
 
 def build_project_wordcount_record(
     project: Path, chapter: int, *, resolution: str, author_range: Any = None,
 ) -> dict[str, Any]:
-    """author_range=None 时读细纲「字数范围」；显式传入（命令行 --min-chars/--max-chars）时以它为准。"""
+    """author_range=None이면 개요의 ‘字数范围’를 읽고 명시적 --min-chars/--max-chars가 있으면 우선 적용한다."""
     require(resolution in RESOLUTIONS, f"unsupported wordcount resolution: {resolution}")
     _, body_path, target, author = read_project_chapter(project, chapter, author_range)
     try:
@@ -375,14 +375,13 @@ def normalize_wordcount_record(value: object) -> dict[str, Any]:
 
 
 def wordcount_record_drift(project: Path, chapter: int, value: object) -> list[str]:
-    """已提交的字数记录对当前文件过期了哪几项：只核对记录钉住的正文字节与字数目标。
-
-    作者事后在细纲补/改「字数范围」只影响下次计数的判定带，不让已提交的记录过期。
+    """제출된 글자 수 기록 중 현재 파일 대비 만료된 항목. 고정된 본문 바이트와 목표만 대조한다.
+    작가가 나중에 개요의 ‘字数范围’를 추가·수정하면 다음 계산의 판정 범위만 바뀌며 기존 기록은 만료되지 않는다.
     """
     record = normalize_wordcount_record(value)
     root = project.resolve()
-    outline_path = find_chapter_file(root / "大纲", chapter, outline=True)
-    body_path = find_chapter_file(root / "正文", chapter, outline=False)
+    outline_path = find_chapter_file(root / "개요", chapter, outline=True)
+    body_path = find_chapter_file(root / "본문", chapter, outline=False)
     try:
         outline = outline_path.read_text(encoding="utf-8")
         body_bytes = body_path.read_bytes()

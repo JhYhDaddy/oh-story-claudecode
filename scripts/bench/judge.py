@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""基准正文的质量评测：单份细纲兑现核对 + 配对盲评。评委默认走 Antigravity（Gemini），
-写手是 Gemini 时用 --judge claude 或 codex 换家族：评委必须与写手不同家族。
+"""벤치마크 본문의 품질 평가: 개별 상세 개요의 실현 여부 대조와 쌍별 블라인드 평가. 기본 평가자는 Antigravity(Gemini)다.
+집필자가 Gemini이면 --judge claude 또는 codex로 계열을 바꾼다. 평가자와 집필자는 서로 다른 계열이어야 한다.
 
-用法：
-  judge.py [--judge agy|claude|codex] coverage <run目录>... --out <结果目录>
-  judge.py [--judge agy|claude|codex] pairwise --base <run目录>... --cand <run目录>... --out <结果目录>
+사용법:
+  judge.py [--judge agy|claude|codex] coverage <run디렉터리>... --out <결과디렉터리>
+  judge.py [--judge agy|claude|codex] pairwise --base <run디렉터리>... --cand <run디렉터리>... --out <결과디렉터리>
 
-coverage：每章单独评，评委只看本章细纲与正文，不知道版本；逐条判情节点是否落地、
-          列出细纲没授权的新剧情事实。可数，结论不靠打分。
-          --strict：改判「演成场景 / 概括转述 / 缺失」并摘原句——默认口径对 Gemini Flash 太宽，
-          两个版本全是 1.00，看不出关键交锋被写成概括的问题。
-pairwise：同 (主机, 用例, 章号) 的两个版本随机分 A/B，交换顺序各评一次；
-          两次一致才算胜负，不一致记平。评委不知道哪份是哪个版本。两版细纲不同（用例现补细纲）时
-          各附各的细纲，不拿一方的细纲评另一方。
-所有原始回复落在 --out，便于复核；重复运行跳过已有结果。
+coverage: 장별 평가. 평가자는 버전을 모른 채 해당 장의 개요와 본문만 보고 플롯 포인트별 실현 여부를 판정한다.
+          상세 개요가 허용하지 않은 새로운 플롯 사실도 열거한다. 개수로 검증하며 점수에 의존하지 않는다.
+          --strict: ‘장면으로 구현 / 요약 서술 / 누락’으로 구분하고 원문을 인용한다. 기본 기준은 Gemini Flash에 너무 관대해
+          양쪽 버전 모두 1.00이 나와 핵심 대립이 요약으로 처리된 문제를 드러내지 못한다.
+pairwise: 같은 (호스트, 사례, 장 번호)의 두 버전을 무작위 A/B로 배정하고 순서를 바꿔 한 번씩 평가한다.
+          두 결과가 같아야 승패를 인정하고 다르면 무승부다. 평가자는 버전을 모른다. 사례 실행 중 개요를 보충해 두 버전이 다르면
+          각각의 개요를 첨부하며 한쪽 개요로 다른 쪽을 평가하지 않는다.
+모든 원본 응답은 재검토할 수 있도록 --out에 저장한다. 재실행하면 기존 결과는 건너뛴다.
 """
 import argparse
 import hashlib
@@ -84,7 +84,7 @@ PAIRWISE_PROMPT = """你是番茄小说的资深编辑。下面是{source}写出
 def ask(prompt, cwd):
     model = JUDGE_MODELS[JUDGE]
     if JUDGE == 'claude':
-        # 不读任何用户/项目设置与 CLAUDE.md，评委只看 prompt。
+        # 사용자·프로젝트 설정과 CLAUDE.md를 읽지 않는다. 평가자는 프롬프트만 본다.
         cmd, stdin = ['claude', '-p', '--model', model, '--output-format', 'text', '--setting-sources', '',
                       '--disallowedTools', 'Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent'], prompt
     elif JUDGE == 'codex':
@@ -108,8 +108,8 @@ def chapters(run):
     meta = json.loads((run / 'meta.json').read_text(encoding='utf-8'))
     book = run / 'proj' / meta['case']['book_dir']
     for n in range(meta['start_committed'] + 1, meta.get('end_committed', 0) + 1):
-        body = sorted((book / '正文').glob(f'第{n:03d}章*.md'))
-        outline = sorted((book / '大纲').glob(f'细纲_第{n:03d}章*.md'))
+        body = sorted((book / '본문').glob(f'제{n:03d}장*.md'))
+        outline = sorted((book / '개요').glob(f'상세개요_제{n:03d}장*.md'))
         if body and outline:
             yield meta, n, body[0], outline[0]
 

@@ -1,106 +1,107 @@
-# OpenCode 部署
+# OpenCode 배포
 
-`target_cli` 含 `opencode` 时，由 SKILL.md Phase 2 完整读取并依次执行本文件。路径检查、幂等重跑、残留清理、部署标记、模板占位符、项目指令合并和报告遵循 SKILL.md 的公共规则。
+`target_cli`에 `opencode`가 있으면 SKILL.md Phase 2에서 이 파일을 전부 읽고 순서대로 실행한다. 경로 검사·멱등 재실행·잔여물 정리·배포 표식·템플릿 자리표시자·프로젝트 지침 병합·보고는 SKILL.md의 공통 규칙을 따른다.
 
-## 部署前置（先于下表任何 OpenCode 行执行）
+## 배포 선행 조건(아래 OpenCode 행보다 먼저 실행)
 
-只适配 OpenCode 2.x：1.x 的插件 loader 读不了 `story-hooks.ts`，只记一行日志后照常运行，写正文守卫整场缺席；1.x 也不认 agents 的 `permissions:` 规则，只读 agent（`consistency-checker`、`story-explorer`）会拿到写文件与 shell 权限。版本门 fail-closed。
+OpenCode 2.x만 지원한다. 1.x 플러그인 loader는 `story-hooks.ts`를 읽지 못해 로그 한 줄만 남기고 계속 실행하므로 본문 가드가 내내 없다. 1.x는 에이전트 `permissions:`도 인식하지 못해 읽기 전용 `consistency-checker`·`story-explorer`에 파일 쓰기·shell 권한을 준다. 버전 관문은 확인 실패 시 차단한다.
 
-1. 运行 `opencode --version`，取第一个 `主.次.修` 版本号：
-   - 主版本 ≥ 2 → 继续
-   - 主版本 < 2 → 停止 OpenCode 部署（其它 target 照常），告诉用户先升级到 2.x（先 `npm rm -g opencode-ai`，再 `npm i -g @opencode/cli` 或 `curl -fsSL https://opencode.ai/v2/install | bash`），装好后重跑 story-setup
-   - 命令不可用或解析不出版本 → 同样停止 OpenCode 部署，请用户在自己的终端运行 `opencode --version`：用户在对话里确认显示 2.x 后才继续；是 1.x 按上一条处理
-   - 停止 OpenCode 部署时：target 只有 opencode 则不写、不更新 `.story-deployed`（已有的原样保留，不抬 `agents_version`），也不写任何 OpenCode 文件；多 target 时其它端照常部署，写入的 `target_cli` 不含 opencode；安装报告「现在可以做什么」只写装上的端，「你还需要做的事」里用白话说 OpenCode 这次没装上及原因（如版本太旧），升级后重新部署时选把它加回来
-2. 插件由 OpenCode 自动发现 `.opencode/plugins/*.ts` 加载，不写 `opencode.json`。项目根已有 `opencode.json` / `opencode.jsonc` 时，从其 `plugin`、`plugins` 数组删掉指向 `.opencode/plugins/story-hooks.ts` 的项（旧版部署留下；2.x 丢弃单文件路径并告警），数组删空就删掉该键，其余内容原样保留。
+1. `opencode --version`을 실행하고 첫 `주.부.수정` 버전 번호를 취한다.
+   - 주 버전 ≥ 2이면 계속한다.
+   - 주 버전 < 2이면 OpenCode 배포만 중단하고 다른 target은 계속한다. 먼저 2.x로 갱신하도록 알린다. `npm rm -g opencode-ai` 뒤 `npm i -g @opencode/cli` 또는 `curl -fsSL https://opencode.ai/v2/install | bash`로 설치하고 story-setup을 재실행한다.
+   - 명령을 사용할 수 없거나 버전을 해석하지 못해도 OpenCode 배포를 중단한다. 사용자 터미널에서 `opencode --version`을 실행하게 하고 대화에서 2.x 표시를 확인한 뒤에만 계속한다. 1.x이면 위와 같이 처리한다.
+   - 중단 시 target이 opencode뿐이면 `.story-deployed`를 만들거나 갱신하지 않고 기존 값을 유지하며 `agents_version`도 높이지 않는다. OpenCode 파일도 쓰지 않는다. 여러 target이면 다른 호스트만 배포하고 저장할 `target_cli`에서 opencode를 뺀다. 설치 보고의 ‘지금 할 수 있는 것’에는 설치된 호스트만, ‘남은 할 일’에는 OpenCode 미설치와 이유(예: 구버전)를 쉬운 말로 쓴다. 업그레이드 후 재배포 때 다시 추가한다.
+2. OpenCode가 `.opencode/plugins/*.ts`를 자동 발견하여 읽으므로 `opencode.json`에 등록하지 않는다. 루트 `opencode.json` / `opencode.jsonc`가 있으면 `plugin`·`plugins` 배열에서 `.opencode/plugins/story-hooks.ts`를 가리키는 과거 항목을 제거한다(2.x는 단일 파일 경로를 버리고 경고함). 빈 배열이 되면 키를 지우고 나머지는 원형 보존한다.
 
-## 部署清单（机械可检查）
+## 배포 목록(기계적 검사 가능)
 
 | Source path | Target path | Owner class | Merge mode | Validation check |
 |-------------|-------------|-------------|------------|------------------|
-| `skills/story-setup/references/opencode/AGENTS.md.tmpl` | `AGENTS.md` | user+managed | managed block merge | contains story skill routing sections |
-| `skills/story-setup/references/opencode/agents/` | `.opencode/agents/` | story-setup managed | replace | 7 agent files exist（replace 前按下方「保留已有模型配置」缓存现有 `model:`，避免覆盖用户已配模型） |
-| `skills/story-setup/references/opencode/plugin.ts` | `.opencode/plugins/story-hooks.ts` | story-setup managed | replace | TypeScript plugin file exists |
-| `skills/story-setup/references/opencode/story_hook_core.js` | `.opencode/plugins/lib/story_hook_core.js` | story-setup managed | replace | Node syntax valid；与 ZCode 副本字节一致；被 story-hooks.ts import |
-| `skills/story-setup/references/opencode/commands/` | `.opencode/commands/` | story-setup managed | replace | 14 command files exist |
-| repository `skills/story-setup/references/agent-references/` | `skills/story-setup/references/agent-references/` | story-setup managed | replace | every reference resolves |
-| `skills/story-setup/references/opencode/pre-commit.sh` | `.git/hooks/pre-commit` | user+managed | append or create | file exists and is executable；含 marker 块则替换块内容，不含则检测 exit 0 位置智能插入 |
+| `skills/story-setup/references/opencode/AGENTS.md.tmpl` | `AGENTS.md` | user+managed | 관리 블록 병합 | story 스킬 라우팅 절 포함 |
+| `skills/story-setup/references/opencode/agents/` | `.opencode/agents/` | story-setup 관리 | replace | 에이전트 파일 7개 존재. replace 전에 아래 기존 모델 보존 절로 `model:`을 캐시하여 사용자 모델 보호 |
+| `skills/story-setup/references/opencode/plugin.ts` | `.opencode/plugins/story-hooks.ts` | story-setup 관리 | replace | TypeScript 플러그인 존재 |
+| `skills/story-setup/references/opencode/story_hook_core.js` | `.opencode/plugins/lib/story_hook_core.js` | story-setup 관리 | replace | Node 구문 유효, ZCode 사본과 바이트 동일, story-hooks.ts에서 import |
+| `skills/story-setup/references/opencode/commands/` | `.opencode/commands/` | story-setup 관리 | replace | 명령 파일 14개 존재 |
+| 저장소 `skills/story-setup/references/agent-references/` | `skills/story-setup/references/agent-references/` | story-setup 관리 | replace | 모든 참조 해석 가능 |
+| `skills/story-setup/references/opencode/pre-commit.sh` | `.git/hooks/pre-commit` | user+managed | 추가 또는 생성 | 파일 존재·실행 가능. marker 블록이 있으면 내용 교체, 없으면 exit 0 위치를 감지하여 삽입 |
 
-## 部署步骤
+## 배포 단계
 
-1. **先缓存已有模型配置**：执行下方「配置 Agent 模型」的「保留已有模型配置」，再做第 2 步的 replace。先覆盖会丢失用户已配模型。
-2. 复制 `references/opencode/agents/` 到 `.opencode/agents/`。Agent 正文以 Claude Code Markdown 为真源，这里是仓库里预生成的产物，部署只做复制。
-3. 复制 `plugin.ts` 到 `.opencode/plugins/story-hooks.ts`，`story_hook_core.js` 到 `.opencode/plugins/lib/`，`commands/` 到 `.opencode/commands/`，`pre-commit.sh` 按清单行合并进 `.git/hooks/pre-commit`。
-4. 复制 agent references 到 `skills/story-setup/references/agent-references/`。OpenCode 只使用当前规范前缀 `skills/`，不在运行时遍历历史备选路径。
-5. 将 `references/opencode/AGENTS.md.tmpl` 按 SKILL.md「项目指令合并」写入根 `AGENTS.md`（`--host opencode`）。
-6. 执行「配置 Agent 模型」其余步骤。
-7. `.story-deployed` 的 `references_dir` 写 `skills/story-setup/references/agent-references`（多端时与其他端逗号拼接）。
+1. **기존 모델 설정부터 캐시한다.** 아래 모델 설정의 ‘기존 모델 설정 보존’을 먼저 수행한 뒤 2단계 replace를 한다. 먼저 덮어쓰면 사용자 모델을 잃는다.
+2. `references/opencode/agents/`를 `.opencode/agents/`로 복사한다. Claude Code Markdown이 본문 원본이며 이곳은 저장소에서 미리 생성한 산출물이므로 배포는 복사만 한다.
+3. `plugin.ts`를 `.opencode/plugins/story-hooks.ts`, `story_hook_core.js`를 `.opencode/plugins/lib/`, `commands/`를 `.opencode/commands/`로 복사한다. `pre-commit.sh`는 목록의 규칙대로 `.git/hooks/pre-commit`에 병합한다.
+4. 에이전트 참조를 `skills/story-setup/references/agent-references/`에 복사한다. OpenCode는 현재 표준 접두사 `skills/`만 사용하고 실행 중 과거 대체 경로를 순회하지 않는다.
+5. `references/opencode/AGENTS.md.tmpl`을 SKILL.md의 프로젝트 지침 병합에 따라 루트 `AGENTS.md`에 쓴다(`--host opencode`).
+6. 에이전트 모델 설정의 나머지 단계를 실행한다.
+7. `.story-deployed`의 `references_dir`는 `skills/story-setup/references/agent-references`로 쓴다. 여러 호스트는 쉼표로 연결한다.
 
-## 配置 Agent 模型
+## 에이전트 모델 설정
 
-> 子代理不指定模型时继承主模型，低成本 Agent 也耗主模型额度；此步骤自动检测用户模型并写入 `model:` 字段。
+> 하위 에이전트가 모델을 지정하지 않으면 주 모델을 상속하므로 저비용 역할도 주 모델 한도를 쓴다. 이 단계는 사용자 모델을 자동 탐지하여 `model:`에 쓴다.
 
-### 保留已有模型配置（必须在 `.opencode/agents/` 的 replace 之前执行）
+### 기존 모델 설정 보존(`.opencode/agents/` replace 전에 필수)
 
-OpenCode agents 部署是 `replace`，会覆盖上次写入的 `model:`。所以在执行该 replace **之前**先扫描现有 `.opencode/agents/*.md`，缓存每个 agent 的 `model:`（agent 名 → 模型 ID）。后续检测失败/超时、或用户跳过某一级时，用缓存值回填，避免把用户上次配好的低成本模型抹成主模型。若 replace 已先发生、缓存为空，则按全新部署处理，并在安装报告中提示"未能保留上次模型配置"。
+배포는 `replace`라 이전 `model:`을 덮어쓴다. **그 전에** `.opencode/agents/*.md`를 탐색하고 에이전트별 `model:`을 캐시한다(에이전트명 → 모델 ID). 후속 탐지 실패/시간 초과 또는 사용자의 특정 등급 건너뛰기에는 캐시를 복원하여 기존 저비용 모델이 주 모델로 지워지지 않게 한다. 이미 replace했고 캐시가 비었다면 새 설치로 취급하고 보고에 ‘이전 모델 설정을 보존하지 못함’을 알린다.
 
-### 获取模型列表
+### 모델 목록 얻기
 
-优先在项目根执行 `opencode api model.list -H "x-opencode-directory:<项目根绝对路径>"`，输出 JSON：`data[]` 每项的 `providerID/id` 即模型 ID，`cost[]` 为每百万 token 的 input/output 单价（空数组即无成本数据），`limit.context` 为上下文长度；不可用或解析失败时回退到 `opencode models` 纯文本（每行 `provider/model`）。两者都用 60000ms（60 秒）超时，因为首次运行需加载 models.dev 缓存。
+프로젝트 루트에서 `opencode api model.list -H "x-opencode-directory:<项目根绝对路径>"`를 우선 실행한다. JSON의 `data[]` 항목 `providerID/id`가 모델 ID, `cost[]`는 백만 token당 input/output 단가(빈 배열이면 비용 자료 없음), `limit.context`는 맥락 길이다. 실행/해석 실패 시 줄마다 `provider/model`인 일반 텍스트 `opencode models`로 전환한다. 최초 models.dev 캐시 로딩 때문에 둘 다 제한 시간 60000ms(60초)를 쓴다.
 
-- 成功 → 进入「模型分级」
-- 超时 → 重试一次（缓存可能未预热）；仍然超时则按「保留已有模型配置」缓存回填已有 `model:`、跳过自动配置，在安装报告中输出手动配置指南
-- 失败（命令不存在、输出为空等）→ 同上：回填「保留已有模型配置」缓存、跳过自动配置、输出手动配置指南
+- 성공하면 모델 등급 구분으로 진행한다.
+- 시간 초과면 캐시가 준비되지 않았을 수 있으므로 한 번 재시도한다. 계속 초과하면 기존 모델 캐시를 `model:`에 복원하고 자동 설정을 건너뛴 뒤 수동 설정 안내를 보고한다.
+- 명령 없음·빈 출력 등 실패도 캐시 복원·자동 설정 생략·수동 설정 안내로 처리한다.
 
-### 模型分级
+### 모델 등급 구분
 
-**优先按成本分级（有 `model.list` 成本数据时）**：按每模型实际 cost 从低到高分档——低端取最便宜/免费档、中端取中价档、高端取最贵或上下文/能力最强档。免费模型按真实 cost=0 归低端，**不按名字里的营销词**（如 `nemotron-3-ultra-free` 名含 `ultra` 但 cost=0，应归低端）。无 cost 数据的模型也据此进入候选，不被丢弃。
+**비용 우선(`model.list` 비용 자료가 있을 때)**: 실제 cost 순서로 나눈다. 저급은 최저가/무료, 중급은 중간 가격, 고급은 최고가 또는 맥락/역량이 가장 강한 모델이다. 무료 모델은 실제 cost=0으로 저급이며 **이름의 마케팅 단어로 판단하지 않는다.** 예를 들어 `nemotron-3-ultra-free`는 이름에 `ultra`가 있어도 cost=0이므로 저급이다. 비용 자료가 없는 모델도 후보에 포함하고 버리지 않는다.
 
-**回退按关键词分级（只有 `opencode models` 或无 cost 时）**：按模型 ID 中最后一个 `/` 之后的模型名按 `-`、`.`、`_` 分割为段，逐段精确匹配关键词（不区分大小写）。例如 `minimax-m3` 拆为 `[minimax, m3]`，不匹配 `mini` 也不匹配 `max`；`claude-haiku-4.5` 拆为 `[claude, haiku, 4, 5]`，匹配 `haiku`。关键词分级是启发式，安装报告中标注 `分级依据：关键词（heuristic）`。
+**키워드 대체(`opencode models`만 있거나 cost가 없을 때)**: ID의 마지막 `/` 뒤 모델명을 `-`·`.`·`_`로 나누어 조각마다 대소문자 무시 완전 일치로 비교한다. `minimax-m3`는 `[minimax, m3]`라 `mini`·`max`에 맞지 않는다. `claude-haiku-4.5`는 `[claude, haiku, 4, 5]`로 `haiku`에 맞는다. 휴리스틱이므로 설치 보고에 `분류 근거: 키워드(heuristic)`를 표시한다.
 
-| 等级 | 匹配关键词 | 对应 Agent |
+| 등급 | 일치 키워드 | 에이전트 |
 |------|-----------|-----------|
-| 低端 | `haiku`, `flash`, `mini`, `nano`, `lite` | chapter-extractor, consistency-checker, story-explorer |
-| 中端 | `sonnet`, `plus` | story-researcher, character-designer |
-| 高端 | `opus`, `pro`, `ultra`, `max` | story-architect, narrative-writer |
+| 저급 | `haiku`, `flash`, `mini`, `nano`, `lite` | chapter-extractor, consistency-checker, story-explorer |
+| 중급 | `sonnet`, `plus` | story-researcher, character-designer |
+| 고급 | `opus`, `pro`, `ultra`, `max` | story-architect, narrative-writer |
 
-- 一个模型可能匹配多个等级的关键词，取最高等级
-- 关键词回退下未匹配任何关键词的模型仍列入候选附加建议（按成本分级则一律纳入），并在安装报告列出，提示"可通过自定义输入使用"
-- 同一等级内，如果包含多个模型供应商，优先列出知名供应商（anthropic、openai、google、deepseek）的模型
+- 여러 등급과 맞으면 가장 높은 등급을 취한다.
+- 키워드와 하나도 맞지 않는 모델도 추가 추천 후보로 남긴다(비용 분류에서는 모두 포함). 설치 보고에 목록과 ‘직접 입력으로 사용 가능’을 알린다.
+- 같은 등급에 여러 제공자가 있으면 anthropic·openai·google·deepseek 등 알려진 제공자의 모델을 먼저 제시한다.
 
-### 逐级交互选择
+### 등급별 대화 선택
 
-按 低端 → 中端 → 高端 顺序，每级用 AskUserQuestion 让用户选择。问题只用作者能懂的角色名；括号里的内部 agent 名只写在技术备注里，不放进问题。
+저급 → 중급 → 고급 순으로 각 등급마다 AskUserQuestion으로 선택을 받는다. 질문에는 작가가 이해하는 역할명만 쓰고 내부 에이전트명은 기술 비고에만 둔다.
 
-| 等级 | 问作者的话 | 技术备注：对应 agent |
+| 등급 | 작가에게 할 질문 | 기술 비고: 에이전트 |
 |------|-----------|---------------------|
-| 低端 | 「拆书助手、资料检索员和校对员做的是翻找和核对，给它们选哪个模型？便宜的就够用。」 | chapter-extractor（拆书助手）、story-explorer（资料检索员）、consistency-checker（校对员） |
-| 中端 | 「人物设计师和资料研究员整理设定与资料，给它们选哪个模型？」 | character-designer（人物设计师）、story-researcher（资料研究员） |
-| 高端 | 「写正文的写手和排大纲、统筹全书的总指挥直接决定正文质量，给它们选哪个模型？」 | narrative-writer（写手）、story-architect（总指挥） |
+| 저급 | ‘분석 보조·자료 검색·교정은 찾고 대조하는 작업입니다. 어떤 모델을 쓸까요? 저렴한 모델이면 충분합니다.’ | chapter-extractor(분석 보조), story-explorer(자료 검색), consistency-checker(교정) |
+| 중급 | ‘인물 설계자와 자료 연구자는 설정·자료를 정리합니다. 어떤 모델을 쓸까요?’ | character-designer(인물 설계), story-researcher(자료 연구) |
+| 고급 | ‘본문 작가와 개요·작품 전체를 총괄하는 지휘자는 본문 품질을 직접 결정합니다. 어떤 모델을 쓸까요?’ | narrative-writer(본문 작가), story-architect(총괄 지휘) |
 
-每级选项结构：
+등급별 선택지 구조:
 
 ```
-选项：
+선택지:
   - provider/model-id
   - provider/model-id
-  - 自定义输入（手动输入完整模型 ID，ID 拼写错误要到运行时才会暴露；高端提示请勿使用低端模型，会影响正文质量）
-  - 保留现有模型（有缓存时才显示）
-  - 跳过，用主模型（低端/高端说明「成本可能较高」；中端说明「主模型质量通常足够」）
+  - 직접 입력(전체 모델 ID. 오타는 실행 때 드러남. 고급은 저급 모델 사용 시 본문 품질 저하 안내)
+  - 기존 모델 유지(캐시가 있을 때만 표시)
+  - 건너뛰고 주 모델 사용(저급/고급: 비용이 높을 수 있음. 중급: 주 모델 품질은 보통 충분함)
 ```
 
-规则：
-- 候选最多显示 5 个，超过则截断并提示"更多模型请使用自定义输入"。**每一级无论候选数是否为 0 都用 AskUserQuestion 弹出**，选项至少含：候选模型（如有）、`自定义输入`、`保留现有模型`（「保留已有模型配置」缓存到该 agent 的 model，无则不显示此项）、`跳过，用主模型`。候选为 0 时仍弹窗，并在问题说明里给出对应警告 + 列出未分级/未入档模型供参考——不再静默跳过交互（否则用户够不到自定义输入）。
-- `自定义输入`：用户输入 `provider/model-id` 完整 ID；写入前校验为单行、无控制字符、匹配 `^[A-Za-z0-9._-]+/[A-Za-z0-9._:+-]+$`，不符则提示重输或改选跳过。
-- `保留现有模型`：写回「保留已有模型配置」缓存的该 agent model（重新部署时保住用户上次配置），不算"跳过"。写手的缓存模型按本次分级落在低端或中端时（旧版把写手按中端配），高端这级的问题说明加一句「写手上次配的是中档模型，写正文建议换高端的」，推荐重选。
-- `跳过，用主模型`：显式清除——不写该 agent 的 `model:`，agent 继承主模型。想保留上次配置请选 `保留现有模型`。
-- 各级候选为 0 时在问题说明里给出提示：
-  - 低端："没找到便宜的模型，拆书助手、资料检索员和校对员会用主模型，花费可能较高"
-  - 中端："没找到合适的中档模型，人物设计师和资料研究员会用主模型。主模型质量够的话这样没问题；想省钱可以自定义输入一个不比主模型差的中档模型，或从下面未分级的模型里选。"
-  - 高端："没找到高端模型，写手和总指挥会用主模型"
+규칙:
 
-### 写入 model 字段
+- 후보는 최대 5개이며 초과하면 잘라 내고 추가 모델은 직접 입력하도록 알린다. **후보가 0개여도 모든 등급에서 AskUserQuestion을 띄운다.** 후보(있으면)·직접 입력·기존 모델 유지(그 에이전트의 model 캐시가 있을 때만)·건너뛰고 주 모델 사용을 포함한다. 0개이면 해당 경고와 미분류/등급 밖 모델을 참고 목록으로 보여 준다. 대화를 조용히 건너뛰어 직접 입력 기회를 없애지 않는다.
+- `직접 입력`: 전체 `provider/model-id`를 받는다. 저장 전에 한 줄·제어 문자 없음·`^[A-Za-z0-9._-]+/[A-Za-z0-9._:+-]+$` 일치를 확인하고 아니면 재입력 또는 건너뛰기를 안내한다.
+- `기존 모델 유지`: 캐시된 해당 에이전트 model을 복원한다. 건너뛰기와 다르다. 본문 작가의 캐시 모델이 이번 분류에서 저급/중급이면(구버전에서 중급 배정) 고급 질문에 ‘지난번 본문 작가는 중급 모델이었습니다. 본문에는 고급 모델을 권합니다’라고 덧붙이고 다시 선택하도록 권한다.
+- `건너뛰고 주 모델 사용`: 명시적 삭제다. 해당 `model:`을 쓰지 않아 주 모델을 상속한다. 이전 설정을 유지하려면 기존 모델 유지를 선택해야 한다.
+- 등급별 후보가 0개이면 질문 설명에 다음을 알린다.
+  - 저급: ‘저렴한 모델을 찾지 못했습니다. 분석 보조·자료 검색·교정은 주 모델을 사용하므로 비용이 높을 수 있습니다.’
+  - 중급: ‘적절한 중급 모델을 찾지 못했습니다. 인물 설계·자료 연구는 주 모델을 씁니다. 품질이 충분하면 괜찮습니다. 비용을 줄이려면 주 모델보다 못하지 않은 중급 모델을 직접 입력하거나 아래 미분류 모델에서 고르세요.’
+  - 고급: ‘고급 모델을 찾지 못했습니다. 본문 작가와 총괄 지휘는 주 모델을 사용합니다.’
 
-对应用户选择的 agent 文件（`.opencode/agents/*.md`，由部署步骤第 2 步在此之前已部署），在 frontmatter 末尾、closing `---` 之前，以**零缩进的顶层字段**插入 `model:`（不要插进 `permissions:` 规则列表等多行块的缩进内部）。值含 YAML 特殊字符时加引号，确保不破坏 frontmatter：
+### model 필드 쓰기
+
+사용자가 고른 에이전트 파일(`.opencode/agents/*.md`, 앞의 배포 2단계에서 배포함)에서 frontmatter 끝의 닫는 `---` 앞에 **들여쓰기 없는 최상위 필드** `model:`을 넣는다. `permissions:` 규칙 목록 같은 여러 줄 블록 안에 넣지 않는다. YAML 특수 문자가 있는 값은 따옴표로 감싸 frontmatter를 보존한다.
 
 ```yaml
 ---
@@ -118,40 +119,40 @@ model: provider/model-id
 ---
 ```
 
-- 如果 agent 文件已有 `model:` 字段（重新部署场景），替换该顶层 `model:` 的值，不新增重复键
-- `保留现有模型`：写回「保留已有模型配置」缓存的该 agent model
-- `跳过，用主模型`：不写入 `model:` 字段
-- 检测失败/超时、没走到本步骤的等级：用「保留已有模型配置」缓存回填 `model:`，避免 replace 抹掉用户上次配置；回填的写手模型按关键词落在低端或中端时，在「你还需要做的事」里提醒作者给写手换高端模型
+- 이미 `model:`이 있으면 최상위 값을 바꾸고 중복 키를 추가하지 않는다.
+- 기존 모델 유지는 캐시된 model을 복원한다.
+- 건너뛰고 주 모델 사용은 `model:`을 쓰지 않는다.
+- 탐지 실패/시간 초과로 이 단계에 오지 못한 등급은 캐시를 복원하여 replace가 기존 설정을 지우지 않게 한다. 복원한 본문 작가 모델이 키워드상 저급/중급이면 ‘남은 할 일’에서 고급 모델로 바꾸도록 안내한다.
 
-## 验证
+## 검증
 
-- 检查 `.opencode/agents/` 下的 7 个 agent 定义文件是否存在，且 frontmatter 包含 `mode: subagent` 和 `permissions` 规则列表
-- 检查 `.opencode/plugins/story-hooks.ts` 是否存在
-- 检查 `.opencode/plugins/lib/story_hook_core.js` 存在且 `node --check` 通过（story-hooks.ts import 之，与 `.zcode` 副本字节一致的共享写正文守卫核；置于 `lib/` 子目录以避开 OpenCode 对 `.opencode/plugins/*.js` 的插件自动发现，`lib/` 里不得放 `index.*` / `server.*`）
-- 检查 `.opencode/commands/` 下的 14 个 command 文件是否存在
-- 按源目录相对路径核对 `skills/story-setup/references/agent-references/`，含子目录
-- 检查 `opencode.json` / `opencode.jsonc`（如有）的 `plugin`、`plugins` 数组不再含指向 story-hooks.ts 的项
-- `opencode` 可用时在项目根执行 `opencode api plugin.list -H "x-opencode-directory:<项目根绝对路径>"`，确认 `id` 为 `oh-story.story-hooks` 的条目 `state.status` 为 `active`（首次请求可能返回空列表，隔几秒重试）
-- 检查 `.git/hooks/pre-commit` 是否存在且有执行权限（Windows 上跳过执行权限检查）
-- 检查 `.opencode/agents/` 下 agent 文件 frontmatter 可被 YAML 解析、`model:`（如有配置）是合法顶层标量，而非仅 grep 到 `model:` 子串
+- `.opencode/agents/`에 정의 7개가 있고 frontmatter에 `mode: subagent`와 `permissions` 규칙 목록이 있는지 확인한다.
+- `.opencode/plugins/story-hooks.ts` 존재를 확인한다.
+- `.opencode/plugins/lib/story_hook_core.js` 존재와 `node --check` 통과를 확인한다. story-hooks.ts가 import하는 공유 본문 가드 코어이며 `.zcode` 사본과 바이트가 같다. `.opencode/plugins/*.js` 자동 발견을 피하려고 `lib/` 안에 둔다. `lib/`에 `index.*` / `server.*`는 두지 않는다.
+- `.opencode/commands/`에 명령 14개가 있는지 확인한다.
+- 하위 디렉터리를 포함하여 `skills/story-setup/references/agent-references/`를 소스 상대 경로와 대조한다.
+- `opencode.json` / `opencode.jsonc`가 있으면 `plugin`·`plugins` 배열에 story-hooks.ts 항목이 없는지 확인한다.
+- `opencode` 사용 가능 시 프로젝트 루트에서 `opencode api plugin.list -H "x-opencode-directory:<项目根绝对路径>"`를 실행하여 `id`가 `oh-story.story-hooks`인 항목의 `state.status`가 `active`인지 확인한다. 첫 요청이 빈 목록이면 몇 초 뒤 재시도한다.
+- `.git/hooks/pre-commit` 존재와 실행 권한을 확인한다. Windows에서는 권한 검사를 생략한다.
+- 에이전트 frontmatter를 YAML로 해석하고 설정한 `model:`이 유효한 최상위 스칼라인지 확인한다. `model:` 부분 문자열 grep만으로 대신하지 않는다.
 
-## 安装报告必须提示
+## 설치 보고 필수 안내
 
-- 部署后新开 OpenCode 会话，让 agents、commands 与插件生效。
-- 执行了「配置 Agent 模型」时，在「部署明细」里输出模型配置摘要（角色名在前，内部名放括号里）：
+- 배포 뒤 새 OpenCode 세션을 열어 에이전트·명령·플러그인을 활성화한다.
+- 모델 설정을 수행했다면 배포 상세에 역할명 먼저, 내부명은 괄호로 모델 요약을 쓴다.
   ```
-  Agent 模型配置：
-    总指挥（story-architect）         → <高端模型>（provider/model-id）
-    写手（narrative-writer）          → <高端模型>（provider/model-id）
-    人物设计师（character-designer）  → <中端模型>（provider/model-id）
-    资料研究员（story-researcher）    → <中端模型>（provider/model-id）
-    拆书助手（chapter-extractor）     → <低端模型>（provider/model-id）
-    校对员（consistency-checker）     → <低端模型>（provider/model-id）
-    资料检索员（story-explorer）      → <低端模型>（provider/model-id）
+  에이전트 모델 설정:
+    총괄 지휘(story-architect)         → <고급 모델>(provider/model-id)
+    본문 작가(narrative-writer)         → <고급 모델>(provider/model-id)
+    인물 설계(character-designer)       → <중급 모델>(provider/model-id)
+    자료 연구(story-researcher)         → <중급 모델>(provider/model-id)
+    분석 보조(chapter-extractor)        → <저급 모델>(provider/model-id)
+    교정(consistency-checker)          → <저급 모델>(provider/model-id)
+    자료 검색(story-explorer)           → <저급 모델>(provider/model-id)
   ```
-- 自动检测失败（读不到模型列表）时，在「你还需要做的事」里用白话写：
+- 자동 탐지 실패로 목록을 읽지 못했다면 ‘남은 할 일’에 쉽게 쓴다.
   <!-- author-report -->
   ```md
-  这次没能读到可用模型列表。已配过的助手沿用原模型，未配过的先用主模型，花费可能偏高。想省钱就告诉我一个便宜的模型名，我帮它们换上；写手和总指挥建议用你最好的模型。
+  이번에는 사용 가능한 모델 목록을 읽지 못했습니다. 이미 설정한 보조자는 이전 모델을 유지하고, 미설정 보조자는 주 모델을 써 비용이 높을 수 있습니다. 비용을 줄이고 싶으면 저렴한 모델명을 알려 주세요. 본문 작가와 총괄 지휘에는 가장 좋은 모델을 권합니다.
   ```
-  「部署明细」只留一行：模型写在 `.opencode/agents/{agent名}.md` frontmatter 的 `model:`，可用模型见 `opencode models`，定价见 https://models.dev/。
+  배포 상세에는 한 줄만 남긴다. 모델은 `.opencode/agents/{agent名}.md` frontmatter의 `model:`에 있으며 사용 가능한 모델은 `opencode models`, 가격은 https://models.dev/ 참조.

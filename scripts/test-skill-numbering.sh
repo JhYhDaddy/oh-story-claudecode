@@ -1,7 +1,7 @@
 #!/bin/bash
-# test-skill-numbering.sh — skill 工作流编号维护器的隔离回归。
+# test-skill-numbering.sh — 스킬 작업 흐름 번호 관리기의 격리 회귀 테스트.
 #
-# 所有 fixture 都在临时目录创建，不读取或改写仓库 skills/，因此可与内容迁移并行运行。
+# 모든 데이터를 임시 디렉터리에 만들며 저장소 skills/를 읽거나 수정하지 않아 콘텐츠 이전과 병렬 실행할 수 있다.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

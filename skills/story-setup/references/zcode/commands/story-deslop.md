@@ -1,8 +1,8 @@
 ---
-description: 网文去 AI 味。检测并清理模板化、解释腔和过度工整表达。
+description: 웹소설 AI 문체 제거. 틀에 박힌 표현·설명조·지나치게 정연한 표현을 탐지하고 정리한다.
 skills: story-deslop
 ---
 
-调用 `$story-deslop`，按用户指定的文本或文件执行去 AI 味处理。
+`$story-deslop`를 호출하여 사용자 지정 텍스트·파일의 AI 문체를 제거한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

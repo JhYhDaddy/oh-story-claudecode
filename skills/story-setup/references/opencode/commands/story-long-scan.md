@@ -1,7 +1,7 @@
 ---
-description: 长篇网文扫榜。分析起点、番茄、晋江等平台排行数据，提炼市场趋势。
+description: 장편 웹소설 순위 조사. 치뎬·판체·진장 등의 순위 자료를 분석하여 시장 추세를 추출한다.
 ---
 
-请使用 story-long-scan skill，帮助我扫描和分析长篇网文榜单数据。
+story-long-scan 스킬로 장편 웹소설 순위 자료 조사와 분석을 도와주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

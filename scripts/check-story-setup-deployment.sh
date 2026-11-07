@@ -1,7 +1,7 @@
 #!/bin/bash
-# check-story-setup-deployment.sh — story-setup deployment/runtime regression checks
-# Covers hook lib deployment, reference bundle integrity, root-aware hooks,
-# short-project non-mutation, commit-hook self-gating, and deployed-behavior anchors.
+# check-story-setup-deployment.sh — story-setup 배포/런타임 회귀 검사
+# 훅 라이브러리 배포, 참조 번들 무결성, 루트 인식 훅, 단편 프로젝트 무변경,
+# 커밋 훅 자체 실행 조건, 배포 동작의 기준점을 검사한다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -10,7 +10,7 @@ SKILL_DIR="$REPO_ROOT/skills/story-setup"
 HOOKS_DIR="$SKILL_DIR/references/templates/hooks"
 AGENT_REFS_DIR="$SKILL_DIR/references/agent-references"
 SKILL_FILE="$SKILL_DIR/SKILL.md"
-# 入口只留通用流程；各宿主专属部署清单/算法/验证在 references/deploy-<target_cli>.md，入口按宿主只读一份。
+# 진입점에는 공통 절차만 둔다. 호스트별 배포 목록/알고리즘/검증은 references/deploy-<target_cli>.md에 두고 하나만 읽는다.
 DEPLOY_HOSTS="claude-code opencode codex antigravity zcode openclaw reasonix generic"
 deploy_file() { printf '%s/references/deploy-%s.md' "$SKILL_DIR" "$1"; }
 DEPLOY_CLAUDE="$(deploy_file claude-code)"
@@ -38,7 +38,7 @@ fail() {
   exit 1
 }
 
-# 细纲须写了内容（不计 # 号和空白 ≥30 字）写正文守卫才放行；空文件会被当成空细纲拦下。
+# 상세 개요에 내용이 있어야(#과 공백 제외 30자 이상) 본문 쓰기를 허용한다. 빈 파일은 빈 상세 개요로 차단한다.
 write_outline() { printf '%s\n' '# 细纲' '江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。' > "$1"; }
 
 assert_file() {
@@ -122,14 +122,14 @@ assert_commit_warns() {
   local out
   out="$(run_commit_hook_command "$root" "$command_text")"
   echo "$out" | grep -q 'Story Commit Warnings' || fail "validate-story-commit did not warn for $label: $command_text"
-  echo "$out" | grep -q '正文硬编码角色属性' || fail "validate-story-commit did not inspect staged markdown for $label"
+  echo "$out" | grep -q '본문에 인물 속성을 직접 고정' || fail "validate-story-commit did not inspect staged markdown for $label"
 }
 
 echo "Story setup deployment check"
 echo "============================"
 echo "Repo: $REPO_ROOT"
 
-# TS1 — Hook dependency completeness
+# TS1 — 훅 의존성 완전성
 assert_file "$HOOKS_DIR/lib/common.sh"
 assert_file "$HOOKS_DIR/lib/sentinel.sh"
 runtime_artifacts="$(find "$HOOKS_DIR" -maxdepth 4 \( -path '*/.omc*' -o -name '.DS_Store' -o -name '*.tmp' -o -name '*.log' \) -print 2>/dev/null || true)"
@@ -147,19 +147,19 @@ while IFS= read -r src; do
       ;;
   esac
 done < <(grep -RhoE '^source[[:space:]]+"[^"]+"' "$HOOKS_DIR"/*.sh | sed -E 's/^source[[:space:]]+"//;s/"$//' | sort -u)
-# node 共享核 + CLI 桥：正文网/路径抽取/git commit 侦测/连续性的单一实现，被 bash hook 经
-# `node "$(dirname "$0")/story_hook_cli.js"` 调用。大纲阻断判定与 staged markdown warnings 未归核，
-# 仍是各端独立实现（Claude 纯 bash；codex↔core 由 test-prose-net-parity.sh Part C 锁 parity）。
-# 这两条不是 source 依赖，上面的 grep 抓不到，显式断言存在 + 语法有效，否则 hook 静默退化
-# （node 缺失时 hook 自身 exit 0、session-start.sh 会话起点提示一次，此处按开发机有 node 校验）。
+# node 공유 코어 + CLI 연결: 본문 검사망/경로 추출/git commit 감지/연속성의 단일 구현을 bash 훅이
+# `node "$(dirname "$0")/story_hook_cli.js"`로 호출한다. 개요 차단 판정과 스테이징된 Markdown 경고는 아직 코어에 통합하지 않아
+# 각 환경이 별도로 구현한다(Claude는 순수 bash, codex↔core 동등성은 test-prose-net-parity.sh C부에서 고정).
+# 이 두 항목은 source 의존성이 아니어서 위 grep이 찾지 못한다. 존재와 문법 유효성을 명시적으로 단언해야 조용한 기능 저하를 막는다.
+# (node가 없으면 훅은 exit 0, session-start.sh는 세션 시작에 한 번 안내한다. 여기서는 개발 기기에 node가 있다고 보고 검증한다.)
 assert_file "$HOOKS_DIR/story_hook_core.js"
 assert_file "$HOOKS_DIR/story_hook_cli.js"
 if command -v node >/dev/null 2>&1; then
   node --check "$HOOKS_DIR/story_hook_core.js" || fail "story_hook_core.js node syntax invalid"
   node --check "$HOOKS_DIR/story_hook_cli.js" || fail "story_hook_cli.js node syntax invalid"
 fi
-# 这是依赖方向的静态策略，不冒充行为测试：四个 bash hook 必须经 CLI 桥复用共享核，禁止
-# 重新内嵌第五份 Python 实现。运行行为另由 test-prose-net-parity / hook 回归覆盖。
+# 이는 의존성 방향의 정적 정책이며 동작 테스트가 아니다. bash 훅 4개는 CLI 연결을 통해 공유 코어를 재사용해야 하며
+# 다섯 번째 Python 구현을 다시 내장하면 안 된다. 실행 동작은 test-prose-net-parity와 훅 회귀 검사에서 다룬다.
 for hook in check-prose-after-write guard-outline-before-prose validate-story-commit detect-story-gaps; do
   if grep -q "<<'PY'" "$HOOKS_DIR/$hook.sh"; then
     fail "$hook.sh must not embed a duplicate Python implementation"
@@ -171,51 +171,51 @@ assert_grep 'lib/common\.sh' "$DEPLOY_CLAUDE" "Claude deploy file must mention h
 assert_grep 'lib/sentinel\.sh' "$DEPLOY_CLAUDE" "Claude deploy file must mention hooks/lib/sentinel.sh"
 echo "  OK TS1 hook dependency completeness"
 
-# TS1b — SessionStart 部署自检名单必须覆盖所有 hook 脚本（防新增 hook 漏登记，#195 review）。
-# *.js 一并枚举：story_hook_cli.js/story_hook_core.js 是承重共享核，被删时正文兜底/commit 侦测/
-# 连续性检查全部静默退化，同样必须登记进自检名单。
+# TS1b — SessionStart 배포 자체 점검 목록은 모든 훅 스크립트를 포함해야 한다(새 훅 누락 방지, #195 검토).
+# *.js도 열거한다. story_hook_cli.js/story_hook_core.js는 핵심 공유 코어로 삭제되면 본문 보완 검사/커밋 감지/
+# 연속성 검사가 모두 조용히 약화되므로 자체 점검 목록에 반드시 등록해야 한다.
 selfcheck_line="$(grep -E 'for hook in .*; do' "$HOOKS_DIR/session-start.sh" | head -1)"
 [ -n "$selfcheck_line" ] || fail "session-start.sh 缺少 hook 自检 for 循环"
-# 名单里最后一个 hook 后面紧跟的是 `;` 而不是空格（grep 命中行按 pattern 必然以 `; do` 收尾），
-# 直接拿原始行做 *" $base "* 会把「排在最后的、其实已登记」的 hook 误报成漏列。先把分号换成
-# 空格并两端补空格，让首位/末位都能被同一条 case 命中，而不是要求名单保持某种排序。
+# 목록의 마지막 훅 뒤는 공백이 아닌 `;`이다(grep 패턴상 줄은 `; do`로 끝난다).
+# 원래 줄에서 *" $base "*를 찾으면 실제 등록된 마지막 훅도 누락으로 오인한다. 먼저 세미콜론을
+# 공백으로 바꾸고 양끝에 공백을 넣어 정렬을 강요하지 않고 첫 항목과 마지막 항목을 같은 case로 찾는다.
 selfcheck_tokens=" ${selfcheck_line//;/ } "
 while IFS= read -r hookfile; do
   base="$(basename "$hookfile")"
   case "$selfcheck_tokens" in
     *" $base "*) : ;;
-    # ${base} 必须加花括号：macOS bash 3.2 在 UTF-8 区域会把全角「（」的首字节并进变量名，
-    # set -u 于是抛 base?: unbound variable，真正漏列时反而看不到是哪个 hook。
+    # ${base}의 중괄호는 필수다. macOS bash 3.2는 UTF-8 로캘에서 전각 ‘（’의 첫 바이트를 변수명에 포함해
+    # set -u가 base?: unbound variable을 내므로 실제 누락된 훅 이름을 알 수 없게 된다.
     *) fail "session-start.sh 部署自检名单漏列 hook：${base}（新增 hook 须同步加入该名单）" ;;
   esac
 done < <(find "$HOOKS_DIR" -maxdepth 1 \( -name '*.sh' -o -name '*.js' \) -type f)
 echo "  OK TS1b session-start self-check lists all hook scripts and node cores"
 
-# TS2a — 按宿主拆分：入口路由到每个宿主的部署文件，每份文件都有完整的清单/验证/报告提示。
-# 缺一份或入口漏路由，那个宿主的作者就拿不到部署步骤；缺一节就是该宿主的行为被拆丢了。
+# TS2a — 호스트별 분리: 진입점은 각 호스트 배포 파일로 연결하고 각 파일은 전체 목록/검증/보고 안내를 갖춘다.
+# 파일 또는 진입점 경로가 하나라도 없으면 해당 호스트 작가는 배포 절차를 받지 못한다. 절 누락은 동작 누락이다.
 for host in $DEPLOY_HOSTS; do
   host_file="$(deploy_file "$host")"
   assert_file "$host_file"
   assert_grep "references/deploy-$host\.md" "$SKILL_FILE" "story-setup entry must route target_cli $host to its deploy file"
   assert_grep "^# " "$host_file" "deploy file must have a title: $host"
-  assert_grep "\`target_cli\` 含 \`$host\`" "$host_file" "deploy file must state which target_cli reads it: $host"
-  for section in '^## 部署清单' '^## 验证' '^## 安装报告必须提示'; do
+  assert_grep "\`target_cli\`( 含 |에 )\`$host\`" "$host_file" "deploy file must state which target_cli reads it: $host"
+  for section in '^## (部署清单|배포 목록)' '^## (验证|검증)' '^## (安装报告必须提示|설치 보고 필수 안내)'; do
     assert_grep "$section" "$host_file" "deploy file $host missing section: $section"
   done
-  # 下方自复制探测器靠这两个表头认出部署清单表；表头改名会让清单行检查静默空转。
+  # 아래 자체 복사 탐지기는 이 두 머리글로 배포 목록 표를 식별하므로 이름을 바꾸면 행 검사가 조용히 무효화된다.
   for header in 'Source path' 'Target path'; do
     assert_grep "$header" "$host_file" "deployment manifest header the self-copy detector keys on is missing in $host: $header"
   done
 done
 extra_deploy_files="$(find "$SKILL_DIR/references" -maxdepth 1 -name 'deploy-*.md' | wc -l | tr -d ' ')"
 [ "$extra_deploy_files" = "8" ] || fail "story-setup must ship exactly 8 host deploy files, found $extra_deploy_files"
-# 能从运行环境判断宿主就不问作者；问也用白话，不再追问部署位置。
-assert_grep '能判断就不问作者' "$SKILL_FILE" "story-setup must detect the current host before asking the author"
-assert_no_grep '让用户选择目标环境' "$SKILL_FILE" "story-setup must not ask first-time authors to pick among all hosts when the host is detectable"
-assert_no_grep 'AskUserQuestion 确认部署位置' "$SKILL_FILE" "story-setup must not ask for the deploy location by default"
+# 실행 환경으로 호스트를 판단할 수 있으면 작가에게 묻지 않는다. 물어도 쉬운 표현을 쓰며 배포 위치를 다시 묻지 않는다.
+assert_grep '能判断就不问作者|판별 가능하면 작가에게 묻지 않음' "$SKILL_FILE" "story-setup must detect the current host before asking the author"
+assert_no_grep '让用户选择目标环境|사용자에게 대상 환경을 선택하게' "$SKILL_FILE" "story-setup must not ask first-time authors to pick among all hosts when the host is detectable"
+assert_no_grep 'AskUserQuestion 确认部署位置|AskUserQuestion으로 배포 위치를 확인' "$SKILL_FILE" "story-setup must not ask for the deploy location by default"
 echo "  OK TS2a host deploy files"
 
-# TS2 — Deployment checklist/manifest parseability
+# TS2 — 배포 점검 목록/매니페스트 파싱 가능 여부
 for group in 'templates/hooks/' 'templates/rules' 'templates/agents' 'agent-references' 'settings-hooks\.json' 'CLAUDE\.md' '\.story-deployed'; do
   assert_grep "$group" "$DEPLOY_CLAUDE" "deployment manifest missing asset group: $group"
 done
@@ -235,23 +235,23 @@ assert_file "$SKILL_DIR/references/antigravity/hooks/story_hook_core.js"
 assert_file "$SKILL_DIR/scripts/generate-antigravity-agents.mjs"
 assert_file "$SKILL_DIR/scripts/deploy-antigravity-skills.py"
 assert_file "$SKILL_DIR/scripts/merge-antigravity-hooks.py"
-# OpenCode shares the same prose-guard core (byte-identity guarded by check-opencode-adapter.sh);
-# it deploys alongside plugin.ts as .opencode/plugins/lib/story_hook_core.js (lib/ subdir so it
-# escapes OpenCode's single-level .opencode/plugins/*.js plugin auto-discovery).
+# OpenCode는 동일한 본문 보호 코어를 공유한다(바이트 일치는 check-opencode-adapter.sh가 검증).
+# plugin.ts와 함께 .opencode/plugins/lib/story_hook_core.js로 배포한다(lib/ 하위 디렉터리로 두어
+# OpenCode의 단일 수준 .opencode/plugins/*.js 플러그인 자동 탐색을 피한다).
 assert_file "$SKILL_DIR/references/opencode/story_hook_core.js"
 assert_grep 'opencode/story_hook_core\.js' "$DEPLOY_OPENCODE" "deployment manifest missing OpenCode shared prose-guard core"
 assert_grep 'references/openclaw/AGENTS\.md\.tmpl' "$DEPLOY_OPENCLAW" "deployment manifest missing OpenClaw AGENTS template"
 assert_grep 'OpenClaw skills-only' "$DEPLOY_OPENCLAW" "story-setup must document OpenClaw skills-only deployment"
 assert_grep 'references/generic/AGENTS\.md\.tmpl' "$DEPLOY_GENERIC" "deployment manifest missing generic AGENTS template"
-assert_grep '通用 Web AI / 其他 Agent' "$DEPLOY_GENERIC" "story-setup must document generic Web AI deployment"
+assert_grep '通用 Web AI / 其他 Agent|일반 Web AI / 기타 에이전트' "$DEPLOY_GENERIC" "story-setup must document generic Web AI deployment"
 assert_grep 'references/reasonix/AGENTS\.md\.tmpl' "$DEPLOY_REASONIX" "deployment manifest missing Reasonix AGENTS template"
 assert_grep 'Reasonix skills-only' "$DEPLOY_REASONIX" "story-setup must document Reasonix skills-only deployment"
 assert_grep '\.agents/skills → \.\./skills' "$DEPLOY_REASONIX" "Reasonix deploy must link .agents/skills to skills/"
 assert_grep 'references/zcode/AGENTS\.md\.tmpl' "$DEPLOY_ZCODE" "deployment manifest missing ZCode AGENTS template"
 assert_grep 'target_cli = zcode' "$SKILL_FILE" "story-setup must detect ZCode projects"
 assert_grep '\.zcode/config\.json' "$DEPLOY_ZCODE" "story-setup must document ZCode config merge"
-assert_grep '不部署.*\.zcode/agents|不创建.*\.zcode/agents' "$DEPLOY_ZCODE" "story-setup must document ZCode agent boundary"
-# 三条 skills-only 路径的 AGENTS 模板分别写在各自部署文件里，不能互相串用。
+assert_grep '不部署.*\.zcode/agents|不创建.*\.zcode/agents|\.zcode/agents.*만들거나.*수정하지 않는다|\.zcode/agents.*배포하지 않' "$DEPLOY_ZCODE" "story-setup must document ZCode agent boundary"
+# 스킬 전용 경로 세 곳의 AGENTS 템플릿은 각자 배포 파일에 있으며 서로 섞어 쓰면 안 된다.
 for pair in "openclaw:$DEPLOY_OPENCLAW" "reasonix:$DEPLOY_REASONIX" "generic:$DEPLOY_GENERIC"; do
   host="${pair%%:*}"; file="${pair#*:}"
   for other in openclaw reasonix generic zcode opencode codex; do
@@ -263,16 +263,16 @@ assert_grep 'references_dir' "$SKILL_FILE" "sentinel references_dir must be docu
 assert_grep 'resolver_strategy' "$SKILL_FILE" "sentinel resolver_strategy must be documented"
 assert_grep 'target_cli' "$SKILL_FILE" "sentinel target_cli must be documented"
 
-# 部署清单的 Source 相对 skill 包、Target 相对项目根，两个基准目录在 skills-only 端会重合。
-# 任何一行写成裸相同路径，执行方就会把目录复制进自身。
+# 배포 목록 Source는 스킬 패키지 기준, Target은 프로젝트 루트 기준이다. 스킬 전용 환경에서는 두 기준이 같을 수 있다.
+# 어느 행이든 같은 경로를 그대로 쓰면 실행자가 디렉터리를 자기 안으로 복사하게 된다.
 assert_grep 'copy-path-safety\.py' "$SKILL_FILE" "deployment must invoke the recursive-copy path safety helper"
 assert_grep 'Path\.resolve.*realpath' "$SKILL_FILE" "deployment must canonicalize copy paths through symlinks"
 assert_grep 'samefile' "$SKILL_FILE" "deployment must compare existing source/target filesystem identity"
 assert_grep 'target-descendant|目标位于源目录内' "$SKILL_FILE" "deployment must reject recursive-copy targets inside their source"
-assert_grep '清理自嵌套残留' "$SKILL_FILE" "story-setup must clean self-nested copies before deploying"
+assert_grep '清理自嵌套残留|자기 중첩 잔여물 정리' "$SKILL_FILE" "story-setup must clean self-nested copies before deploying"
 assert_file "$COPY_PATH_SAFETY"
 
-# 执行真实 helper 验证 symlink alias、同目录、子目录和安全 sibling；不能只锁 SKILL.md 措辞。
+# 실제 도우미를 실행해 심볼릭 링크 별칭, 동일 디렉터리, 하위 디렉터리, 안전한 형제 경로를 검증한다. SKILL.md 문구만 고정하면 안 된다.
 path_fixture="$TMP_DIR/copy-path-safety"
 mkdir -p "$path_fixture/project/skills/story-setup/references/agent-references" \
   "$path_fixture/project/.agents" "$path_fixture/source" "$path_fixture/sibling"
@@ -305,7 +305,7 @@ direct = project / "skills/story-setup/references/agent-references"
 try:
     (project / ".agents/skills").symlink_to("../skills", target_is_directory=True)
 except OSError as exc:
-    # Windows runners without symlink privileges still exercise the other real helper paths.
+    # 심볼릭 링크 권한 없는 Windows 실행 환경도 다른 실제 도우미 경로는 검사한다.
     print("SKIP: symlink alias fixture unavailable: {}".format(exc))
 else:
     code, payload = run(alias, direct)
@@ -341,7 +341,7 @@ assert payload["status"] == "filesystem_identity_error"
 assert payload["copy_allowed"] is False
 assert module.status_exit_code(payload["status"]) != 0
 PY
-# 探测器只写一份，先跑正负 fixture 自检，再扫真实 SKILL.md。
+# 탐지기는 하나만 작성하고 양성/음성 데이터로 자체 점검한 뒤 실제 SKILL.md를 검사한다.
 cat > "$TMP_DIR/detect-self-copy.py" <<'PY'
 import re
 import sys
@@ -375,16 +375,17 @@ for idx, line in enumerate(lines, 1):
         if len(cells) >= 2 and norm(cells[0]) == norm(cells[1]):
             bad.append((idx, f'manifest row copies {cells[0]} onto itself'))
         continue
-    if '复制' not in stripped and '拷贝' not in stripped:
+    if '复制' not in stripped and '拷贝' not in stripped and '복사' not in stripped:
         continue
     # 只看紧邻的一对反引号路径：中间只隔一个「到」而两侧同路径，就是复制进自身。
     # 两次出现之间夹着别的路径或大段叙述时不算——那是「从 A 复制到 B，A 是唯一来源」这类正常句子。
     spans = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r'`([^`]+)`', stripped)]
-    for (_, left_end, left), (right_start, _, right) in zip(spans, spans[1:]):
+    for (_, left_end, left), (right_start, right_end, right) in zip(spans, spans[1:]):
         gap = stripped[left_end:right_start]
         if '/' not in left or norm(left) != norm(right):
             continue
-        if '到' in gap and len(gap) <= MAX_GAP:
+        ko_copy = re.fullmatch(r'(?:를|을)\s*', gap.strip()) and re.match(r'(?:으)?로\s+(?:재귀\s+|동기화\s+)?복사', stripped[right_end:])
+        if ('到' in gap or ko_copy) and len(gap) <= MAX_GAP:
             bad.append((idx, f'copy instruction names `{left}` as both source and target'))
 
 for idx, msg in bad:
@@ -400,7 +401,7 @@ cat > "$TMP_DIR/self-copy-fixtures.md" <<'FIXTURE'
 - 复制 `a/b/` 到 `a/b`。
 - 将 `skills/story-setup/references/agent-references/` 下所有 `.md` 复制到项目内 `.claude/skills/story-setup/references/agent-references/`。
 - `a/b/` 与 `a/b/` 都要存在；提到复制但两者之间没有「到」。
-- 拆文结果被复制进 `对标/`，用户看到的就是对标内容和自己设定一样；只有外部作品才进 `对标/`。
+- 拆文结果被复制进 `비교작품/`，用户看到的就是对标内容和自己设定一样；只有外部作品才进 `비교작품/`。
 - 复制 `p/q/` 到 `r/s/`，`p/q/` 保留。
 - 复制章节时 `第N章` 到 `第N章` 的编号不变。
 
@@ -413,20 +414,24 @@ cat > "$TMP_DIR/self-copy-fixtures.md" <<'FIXTURE'
 | `a/b/` | `a/b` | story-setup managed | replace | resolves | 条件 |
 | repository `a/b/` | `a/b/` | story-setup managed | replace | resolves | 条件 |
 | `a/b/` | `.codex/a/b/` | story-setup managed | replace | resolves | 条件 |
+- `a/b/`를 `a/b/`로 복사한다.
+- `a/b/`를 `a/b`로 재귀 복사한다.
+- `a/b/`를 `c/d/`로 복사한다.
+- `a/b/`와 `a/b/`가 있어야 한다. 복사 전에 확인한다.
 FIXTURE
 
-# 探测器有发现时退出码为 1；`|| true` 必须在管道内，否则 pipefail 会让赋值直接中止脚本，
-# 连下面的 fail 消息都来不及打。
+# 탐지 결과가 있으면 종료 코드는 1이다. `|| true`는 파이프 안에 있어야 한다. 그렇지 않으면 pipefail로 할당 시 스크립트가 중단돼
+# 아래 fail 메시지조차 출력하지 못한다.
 fixture_hits="$({ python3 "$TMP_DIR/detect-self-copy.py" "$TMP_DIR/self-copy-fixtures.md" 2>&1 >/dev/null || true; } | sed 's/.*fixtures\.md:\([0-9]*\):.*/\1/' | tr '\n' ',')"
-[ "$fixture_hits" = "2,3,5,18," ] \
-  || fail "self-copy detector fixtures regressed: expected lines 2,3,5,18 got [$fixture_hits]"
+[ "$fixture_hits" = "2,3,5,18,21,22," ] \
+  || fail "self-copy detector fixtures regressed: expected lines 2,3,5,18,21,22 got [$fixture_hits]"
 
 for setup_doc in "$SKILL_FILE" "$SKILL_DIR"/references/deploy-*.md; do
   python3 "$TMP_DIR/detect-self-copy.py" "$setup_doc" \
     || fail "story-setup declares a copy whose source and target are the same path ($setup_doc)"
 done
 
-# Claude Code 的 Bash 正文写入必须进入同一 pre-guard；只注册 Write/Edit 会让 cat>/tee/cp 绕过。
+# Claude Code의 Bash 본문 쓰기도 같은 사전 보호를 거쳐야 한다. Write/Edit만 등록하면 cat>/tee/cp로 우회할 수 있다.
 python3 - "$SKILL_DIR/references/templates/settings-hooks.json" <<'PY' || fail "Claude Bash prose pre-guard is not registered"
 import json, sys
 from pathlib import Path
@@ -437,7 +442,7 @@ assert any(
     for block in hooks
 )
 PY
-# v24 → v25 实际迁移：同 command 不能让旧 matcher 留存；混在旧 block 的用户 hook 要保留，且复跑幂等。
+# v24 → v25 실제 이전: 같은 command라도 이전 matcher를 남기면 안 된다. 이전 블록의 사용자 훅은 보존하고 재실행은 멱등적이어야 한다.
 assert_file "$CLAUDE_MERGE"
 cat > "$TMP_DIR/claude-v24.json" <<'JSON'
 {
@@ -481,8 +486,8 @@ python3 "$CLAUDE_MERGE" --existing "$TMP_DIR/claude-v25.json" --template "$SETTI
 cmp -s "$TMP_DIR/claude-v25.json" "$TMP_DIR/claude-v25-again.json" \
   || fail "Claude settings merge is not idempotent"
 
-# 项目指令合并：每个宿主一个管理块。旧版无标记文件迁移一次，作者自己的节留在块外；
-# 重跑整块替换、字节幂等；名字常见但不带 oh-story 痕迹的作者节不能被当成旧部署删掉。
+# 프로젝트 지침 병합: 호스트마다 관리 블록 하나. 마커 없는 이전 파일은 한 번 이전하고 작가의 절은 블록 밖에 남긴다.
+# 재실행은 블록 전체를 교체하며 바이트 단위로 멱등적이다. 흔한 이름이어도 oh-story 흔적 없는 작가의 절은 이전 배포로 삭제하면 안 된다.
 INSTR_MERGE="$SKILL_DIR/scripts/merge-project-instructions.py"
 assert_file "$INSTR_MERGE"
 python3 - "$INSTR_MERGE" "$SKILL_DIR/references" "$TMP_DIR/instr-merge" <<'PY' || fail "project instruction managed-block merge regressed"
@@ -501,14 +506,14 @@ def run(host, path, name="我的书"):
                           capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return json.loads(proc.stdout)
-# 全新文件：每个宿主都能渲染出闭合的块，只替换 {项目名}，{书名} 通配原样保留。
+# 새 파일: 모든 호스트가 닫힌 블록을 렌더링하고 {项目名}만 바꾸며 {书名} 와일드카드는 유지한다.
 for host in templates:
     target = root / f"new-{host}.md"
     assert run(host, target)["status"] == "created"
     text = target.read_text(encoding="utf-8")
     assert text.startswith(f"<!-- oh-story:{host} 开始") and f"<!-- oh-story:{host} 结束 -->" in text, host
     assert "{项目名}" not in text and "我的书" in text and "{书名}" in text, host
-# 旧版无标记的多端文件：Codex + ZCode 各迁移一次，作者节保留，退役的「协作规则」清掉。
+# 마커 없는 이전 다중 호스트 파일: Codex + ZCode를 한 번씩 이전하고 작가 절은 보존하며 폐기된 협업 규칙 절은 제거한다.
 legacy = root / "AGENTS.md"
 legacy.write_text("""# 我的书 — 网文写作工具集（Codex）
 
@@ -542,21 +547,21 @@ assert text.count("<!-- oh-story:codex 开始") == 1 and text.count("<!-- oh-sto
 for host in ("zcode", "codex", "zcode"):
     assert run(host, legacy)["status"] == "replaced"
 assert legacy.read_bytes() == first, "redeploy must be byte-idempotent"
-# 作者自己的同名常见节（无 oh-story 痕迹）不是旧部署：只追加块，原文一字不动。
+# oh-story 흔적 없는 작가의 흔한 동명 절은 이전 배포가 아니다. 블록만 추가하고 원문은 그대로 둔다.
 user = root / "user-AGENTS.md"
 original = "# 我的项目\n\n## 文件结构\n\n- docs/ 放说明\n"
 user.write_text(original, encoding="utf-8")
 assert run("generic", user)["status"] == "appended"
 merged = user.read_text(encoding="utf-8")
 assert merged.startswith(original.rstrip("\n")) and "网文写作工具集（通用 Agent / Web AI）" in merged
-# 没有 oh-story 标题行的作者文件，节名和模板相同、正文带「拆文库」「细纲」也不是旧部署。
+# oh-story 제목 줄 없는 작가 파일은 절 이름이 템플릿과 같고 본문에 작품분석실/细纲이 있어도 이전 배포가 아니다.
 own = root / "own-CLAUDE.md"
-original = "# 我的小说项目\n\n## 文件结构\n\n- 拆文库/ 放我自己的拆书笔记\n- 细纲写在 notes/\n\n## 与作者协作\n\n- 先讨论再动笔\n"
+original = "# 我的小说项目\n\n## 文件结构\n\n- 작품분석실/ 放我自己的拆书笔记\n- 细纲写在 notes/\n\n## 与作者协作\n\n- 先讨论再动笔\n"
 own.write_text(original, encoding="utf-8")
 report = run("claude-code", own)
 assert report["status"] == "appended" and report["removed_legacy_sections"] == [], report
 assert own.read_text(encoding="utf-8").startswith(original.rstrip("\n"))
-# 已有别的宿主的块时，块外作者写的共有节名（如「与作者协作」）不算本宿主的旧部署。
+# 다른 호스트 블록이 있으면 블록 밖 작가의 공통 절 이름(작가와 협업 등)은 이 호스트 이전 배포로 보지 않는다.
 shared = root / "shared-AGENTS.md"
 assert run("codex", shared)["status"] == "created"
 shared.write_text(shared.read_text(encoding="utf-8") + "\n## 与作者协作\n\n- 先讨论再动笔\n", encoding="utf-8")
@@ -565,19 +570,19 @@ assert report["status"] == "appended" and report["removed_legacy_sections"] == [
 assert "先讨论再动笔" in shared.read_text(encoding="utf-8")
 PY
 
-# 重部署时 sentinel 的 target_cli 是权威：不认它就会每次重问，且 skills-only 三端根本无从探测。
-assert_grep '已部署项目以 sentinel 里的值为准' "$SKILL_FILE" "story-setup must reuse the deployed target_cli on redeploy"
-# 但沿用 sentinel 不能跳过当前宿主判断：作者换了软件再跑部署，新宿主必须有机会装上。
-assert_no_grep '跳过下面第 4-6 步的宿主判断' "$SKILL_FILE" "story-setup must still detect the current host when the sentinel already lists targets"
-assert_grep '第 4 步仍判断当前宿主' "$SKILL_FILE" "story-setup must detect the current host on redeploy"
-assert_grep '你现在用的是.*要一起装上吗' "$SKILL_FILE" "story-setup must offer to add a new current host missing from the sentinel"
-# 判断不出宿主时，项目里的宿主标记只是上次装给谁，不等于这次在哪个软件里。
-assert_no_grep '恰好只有一个宿主的标记就用它' "$SKILL_FILE" "story-setup must not silently treat a lone project marker as the current host"
-assert_grep '这次还是它吗' "$SKILL_FILE" "story-setup must confirm a lone project marker with the author"
-# metadata.openclaw 在 14 个 skill 上全都有，拿它判定会把 reasonix / generic 项目误认成 OpenClaw。
+# 재배포 시 sentinel의 target_cli가 기준이다. 이를 무시하면 매번 다시 묻게 되고 스킬 전용 환경 세 곳은 탐지할 방법도 없다.
+assert_grep '已部署项目以 sentinel 里的值为准|기존 배포 프로젝트는 sentinel의 값을 기준으로 합니다' "$SKILL_FILE" "story-setup must reuse the deployed target_cli on redeploy"
+# 다만 sentinel을 재사용해도 현재 호스트 판정은 생략하지 않는다. 작가가 프로그램을 바꿨다면 새 호스트에 설치할 기회가 있어야 한다.
+assert_no_grep '跳过下面第 4-6 步的宿主判断|4-6번째 단계의 호스트 판단을 건너뜁니다' "$SKILL_FILE" "story-setup must still detect the current host when the sentinel already lists targets"
+assert_grep '第 4 步仍判断当前宿主|4번째 단계에서 현재 호스트는 계속 판단합니다' "$SKILL_FILE" "story-setup must detect the current host on redeploy"
+assert_grep '你现在用的是.*要一起装上吗|지금 사용 중인.*함께 설치할까요' "$SKILL_FILE" "story-setup must offer to add a new current host missing from the sentinel"
+# 호스트를 판단할 수 없을 때 프로젝트의 호스트 마커는 지난 설치 대상일 뿐 현재 프로그램을 뜻하지 않는다.
+assert_no_grep '恰好只有一个宿主的标记就用它|호스트 표식이 정확히 하나면 그대로 사용' "$SKILL_FILE" "story-setup must not silently treat a lone project marker as the current host"
+assert_grep '这次还是它吗|이번에도 같은가요' "$SKILL_FILE" "story-setup must confirm a lone project marker with the author"
+# metadata.openclaw는 스킬 14개 모두에 있어 이것으로 판정하면 reasonix/generic 프로젝트를 OpenClaw로 오인한다.
 assert_no_grep '中的 `metadata\.openclaw`' "$SKILL_FILE" "story-setup must not detect OpenClaw from the skills bundle it deploys itself"
-assert_grep '不作 OpenClaw 信号' "$SKILL_FILE" "story-setup must explain why metadata.openclaw is not a detection signal"
-# skills-only 三端只能靠各自 AGENTS.md 的标题行区分；SKILL.md 引用的标记必须在模板里真的存在。
+assert_grep '不作 OpenClaw 信号|OpenClaw 신호가 아닙니다' "$SKILL_FILE" "story-setup must explain why metadata.openclaw is not a detection signal"
+# 스킬 전용 환경 세 곳은 AGENTS.md 제목 줄로만 구분한다. SKILL.md가 참조하는 마커는 템플릿에 실제 존재해야 한다.
 assert_grep '网文写作工具集（Reasonix）' "$SKILL_FILE" "story-setup must detect a deployed Reasonix project from AGENTS.md"
 assert_grep '网文写作工具集（通用 Agent / Web AI）' "$SKILL_FILE" "story-setup must detect a deployed generic project from AGENTS.md"
 assert_grep '网文写作工具集（Reasonix）' "$SKILL_DIR/references/reasonix/AGENTS.md.tmpl" "Reasonix AGENTS template must carry the marker story-setup detects"
@@ -585,7 +590,7 @@ assert_grep '网文写作工具集（通用 Agent / Web AI）' "$SKILL_DIR/refer
 assert_grep '网文写作工具集（OpenClaw）' "$SKILL_DIR/references/openclaw/AGENTS.md.tmpl" "OpenClaw AGENTS template must carry the marker story-setup detects"
 echo "  OK TS2 deployment manifest"
 
-# TS3 — Agent reference bundle integrity
+# TS3 — 에이전트 참조 번들 무결성
 refs_tmp="$TMP_DIR/deployed-reference-bundle"
 copy_agent_refs "$refs_tmp"
 while IFS= read -r ref; do
@@ -597,23 +602,23 @@ done < <(grep -RhoE 'story-setup/references/agent-references/[A-Za-z0-9_-]+\.md'
   | sed 's|.*/||' | sort -u)
 echo "  OK TS3 agent reference integrity"
 
-# TS4 — Hook root resolution from nested cwd
+# TS4 — 중첩 cwd에서 훅 루트 해석
 root="$TMP_DIR/root-aware"
-mkdir -p "$root/book/追踪" "$root/book/正文" "$root/book/设定" "$root/book/大纲" "$root/拆文库/sample"
+mkdir -p "$root/book/추적" "$root/book/본문" "$root/book/설정" "$root/book/개요" "$root/작품분석실/sample"
 setup_git_repo "$root"
 copy_hooks "$root"
 copy_agent_refs "$root"
 write_sentinel "$root"
 printf 'book\n' > "$root/.active-book"
-cat > "$root/book/追踪/上下文.md" <<'CTX'
+cat > "$root/book/추적/문맥.md" <<'CTX'
 # 写作进度
 ## 当前位置
 - 章: 第1章
 CTX
-touch "$root/拆文库/sample/_progress.md"
-# 负向 fixture：已拆完的书不得再被报成「未完成」（裸数 _progress.md 会永久误报）。
-mkdir -p "$root/拆文库/done"
-printf '# 深度拆解进度：done\n\n- 最终状态：completed\n- schema_version: 2\n' > "$root/拆文库/done/_progress.md"
+touch "$root/작품분석실/sample/_progress.md"
+# 음성 테스트 데이터: 분석 완료된 책을 미완료로 보고하면 안 된다(_progress.md 개수만 세면 영구 오탐).
+mkdir -p "$root/작품분석실/done"
+printf '# 深度拆解进度：done\n\n- 最终状态：completed\n- schema_version: 2\n' > "$root/작품분석실/done/_progress.md"
 
 out_start="$(run_from_nested "$root" session-start.sh || true)"
 echo "$out_start" | grep -q '当前位置' || fail "session-start did not resolve active book from project root"
@@ -624,35 +629,35 @@ if echo "$out_start" | grep -q '参考资料包缺失'; then
 fi
 
 out_pre="$(run_from_nested "$root" pre-compact.sh || true)"
-echo "$out_pre" | grep -q 'Writing context: book/追踪/上下文.md' || fail "pre-compact did not resolve context from project root"
+echo "$out_pre" | grep -q 'Writing context: book/추적/문맥.md' || fail "pre-compact did not resolve context from project root"
 
 out_post="$(run_from_nested "$root" post-compact.sh || true)"
-echo "$out_post" | grep -q 'Read book/追踪/上下文.md' || fail "post-compact did not resolve context from project root"
+echo "$out_post" | grep -q 'Read book/추적/문맥.md' || fail "post-compact did not resolve context from project root"
 
 out_gaps="$(run_from_nested "$root" detect-story-gaps.sh || true)"
 if [ -n "$out_gaps" ] && echo "$out_gaps" | grep -q "$root/nested"; then
   fail "detect-story-gaps leaked nested cwd paths"
 fi
-# 与 session-start 同口径：未完成的要报、已完成的不许报（两边各自读取 拆文库/，需各自钉死）。
-echo "$out_gaps" | grep -q '拆文未完成：拆文库/sample/_progress.md' || fail "detect-story-gaps missed unfinished 拆文"
-if echo "$out_gaps" | grep -q '拆文库/done/_progress.md'; then
+# session-start와 같은 기준으로 미완료는 보고하고 완료는 보고하지 않는다(양쪽이 작품분석실/를 각각 읽으므로 각각 고정).
+echo "$out_gaps" | grep -q '拆文未完成：작품분석실/sample/_progress.md' || fail "detect-story-gaps missed unfinished 拆文"
+if echo "$out_gaps" | grep -q '작품분석실/done/_progress.md'; then
   fail "detect-story-gaps counted completed 拆文 as unfinished"
 fi
 
 fallback_root="$TMP_DIR/git-fallback"
-mkdir -p "$fallback_root/book/追踪" "$fallback_root/book/正文" "$fallback_root/book/大纲"
+mkdir -p "$fallback_root/book/추적" "$fallback_root/book/본문" "$fallback_root/book/개요"
 setup_git_repo "$fallback_root"
 copy_hooks "$fallback_root"
 copy_agent_refs "$fallback_root"
 write_sentinel "$fallback_root"
 printf 'book\n' > "$fallback_root/.active-book"
-printf '# 写作进度\n' > "$fallback_root/book/追踪/上下文.md"
+printf '# 写作进度\n' > "$fallback_root/book/추적/문맥.md"
 out_fallback="$(run_from_nested_no_project_dir "$fallback_root" pre-compact.sh || true)"
-echo "$out_fallback" | grep -q 'Writing context: book/追踪/上下文.md' || fail "pre-compact did not resolve context via git root fallback without CLAUDE_PROJECT_DIR"
+echo "$out_fallback" | grep -q 'Writing context: book/추적/문맥.md' || fail "pre-compact did not resolve context via git root fallback without CLAUDE_PROJECT_DIR"
 
 echo "  OK TS4 hook root resolution"
 
-# TS5 — Sentinel / broken deployment diagnostics
+# TS5 — Sentinel / 불완전한 배포 진단
 broken_root="$TMP_DIR/broken-libs"
 mkdir -p "$broken_root"
 setup_git_repo "$broken_root"
@@ -722,7 +727,7 @@ resolver_strategy: project-local-skill-reference
 references_dir: .claude/skills/story-setup/references/agent-references
 SENTINEL
 mixed_version_out="$(run_from_nested "$mixed_version_root" session-start.sh 2>&1 || true)"
-# agents_version 是唯一运行时过期权威；setup_skill_version 落后不触发重部署（设计如此）
+# agents_version만 런타임 노후화 판단의 기준이다. setup_skill_version이 뒤처져도 재배포하지 않는다(의도된 설계).
 if echo "$mixed_version_out" | grep -q "低于 v$CURRENT_AGENTS_VERSION"; then
   fail "session-start incorrectly nagged '低于 v$CURRENT_AGENTS_VERSION' for current agents_version=$CURRENT_AGENTS_VERSION just because setup_skill_version lags"
 fi
@@ -730,8 +735,8 @@ if echo "$mixed_version_out" | grep -q '高于本 hook'; then
   fail "session-start incorrectly nagged '高于本 hook' for current agents_version=$CURRENT_AGENTS_VERSION just because setup_skill_version lags"
 fi
 
-# 多端部署的 references_dir 是逗号分隔多条路径。整串当一条路径查会每次开会话都误报缺失，
-# 且反过来漏掉真正缺的那一条——两个方向都要钉住。
+# 여러 환경 배포의 references_dir는 쉼표로 구분한 여러 경로다. 전체를 한 경로로 검사하면 매 세션 누락을 오탐하고
+# 반대로 실제 빠진 경로는 놓치므로 두 방향 모두 검증해야 한다.
 multi_end_root="$TMP_DIR/multi-end-refs"
 mkdir -p "$multi_end_root/.claude/skills/story-setup/references/agent-references"
 mkdir -p "$multi_end_root/.codex/skills/story-setup/references/agent-references"
@@ -764,37 +769,37 @@ fi
 
 echo "  OK TS5 sentinel diagnostics"
 
-# TS6 — Short project non-mutation
+# TS6 — 단편 프로젝트 무변경
 short_root="$TMP_DIR/short-project"
 mkdir -p "$short_root/story"
 setup_git_repo "$short_root"
 copy_hooks "$short_root"
 write_sentinel "$short_root"
 printf 'story\n' > "$short_root/.active-book"
-cat > "$short_root/story/正文.md" <<'TXT'
+cat > "$short_root/story/본문.md" <<'TXT'
 正文
 TXT
 run_from_nested "$short_root" session-end.sh >"$TMP_DIR/story-session-end.out" 2>&1 || true
-[ ! -d "$short_root/story/追踪" ] || fail "session-end created 追踪/ for short project without opt-in"
+[ ! -d "$short_root/story/추적" ] || fail "session-end created 추적/ for short project without opt-in"
 (cd "$short_root/nested/a/b" && CLAUDE_PROJECT_DIR="$short_root" STORY_SESSION_LOG=1 bash "$short_root/.claude/hooks/session-end.sh") >"$TMP_DIR/story-session-end-opt.out" 2>&1 || true
-[ ! -d "$short_root/story/追踪" ] || fail "session-end created 追踪/ for short project even with STORY_SESSION_LOG=1"
+[ ! -d "$short_root/story/추적" ] || fail "session-end created 추적/ for short project even with STORY_SESSION_LOG=1"
 echo "  OK TS6 short project non-mutation"
 
-# TS7 — Commit hook self-gating
+# TS7 — 커밋 훅 자체 실행 조건
 commit_root="$TMP_DIR/commit-hook"
-mkdir -p "$commit_root/book/正文" "$commit_root/book/设定" "$commit_root/short"
+mkdir -p "$commit_root/book/본문" "$commit_root/book/설정" "$commit_root/short"
 setup_git_repo "$commit_root"
 copy_hooks "$commit_root"
-cat > "$commit_root/book/正文/第1章.md" <<'TXT'
+cat > "$commit_root/book/본문/제1장.md" <<'TXT'
 年龄 ：18
 TXT
-cat > "$commit_root/short/正文.md" <<'TXT'
+cat > "$commit_root/short/본문.md" <<'TXT'
 身高: 180
 TXT
-cat > "$commit_root/book/设定/角色.md" <<'TXT'
+cat > "$commit_root/book/설정/인물.md" <<'TXT'
 角色设定
 TXT
-git -C "$commit_root" add "book/正文/第1章.md" "short/正文.md" "book/设定/角色.md"
+git -C "$commit_root" add "book/본문/제1장.md" "short/본문.md" "book/설정/인물.md"
 for cmd in \
   'git commit -m test' \
   'git -c user.name=x commit -m test' \
@@ -814,30 +819,30 @@ for cmd in 'echo git commit docs' 'grep "git commit" file'; do
 done
 stdin_out="$(cd "$commit_root" && unset STORY_COMMIT_COMMAND CLAUDE_TOOL_INPUT && printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git commit -m test"}}' | CLAUDE_PROJECT_DIR="$commit_root" bash .claude/hooks/validate-story-commit.sh 2>&1 || true)"
 echo "$stdin_out" | grep -q 'Story Commit Warnings' || fail "validate-story-commit did not read stdin hook payload"
-echo "$stdin_out" | grep -q 'short/正文.md' || fail "validate-story-commit did not inspect short-story 正文.md"
-echo "$stdin_out" | grep -q 'book/设定/角色.md' || fail "validate-story-commit did not inspect staged setting markdown"
+echo "$stdin_out" | grep -q 'short/본문.md' || fail "validate-story-commit did not inspect short-story 본문.md"
+echo "$stdin_out" | grep -q 'book/설정/인물.md' || fail "validate-story-commit did not inspect staged setting markdown"
 
 mono_root="$TMP_DIR/mono-root"
 project_root="$mono_root/story-project"
-mkdir -p "$project_root/book/正文"
+mkdir -p "$project_root/book/본문"
 setup_git_repo "$mono_root"
 copy_hooks "$project_root"
-cat > "$project_root/book/正文/第1章.md" <<'TXT'
+cat > "$project_root/book/본문/제1장.md" <<'TXT'
 身高:181
 TXT
-git -C "$mono_root" add "story-project/book/正文/第1章.md"
+git -C "$mono_root" add "story-project/book/본문/제1장.md"
 mono_out="$(cd "$project_root" && CLAUDE_PROJECT_DIR="$project_root" STORY_COMMIT_COMMAND='git commit -m test' bash .claude/hooks/validate-story-commit.sh 2>&1 || true)"
-echo "$mono_out" | grep -q '正文硬编码角色属性' || fail "validate-story-commit missed staged files when CLAUDE_PROJECT_DIR differs from git root"
+echo "$mono_out" | grep -q '본문에 인물 속성을 직접 고정' || fail "validate-story-commit missed staged files when CLAUDE_PROJECT_DIR differs from git root"
 echo "  OK TS7 commit hook self-gating"
 
-# TS8 — detect-story-gaps multi-book traversal
+# TS8 — detect-story-gaps의 여러 책 순회
 multi_root="$TMP_DIR/multi-book"
-mkdir -p "$multi_root/long/追踪" "$multi_root/long/正文" "$multi_root/short"
+mkdir -p "$multi_root/long/추적" "$multi_root/long/본문" "$multi_root/short"
 setup_git_repo "$multi_root"
 copy_hooks "$multi_root"
 printf 'long\n' > "$multi_root/.active-book"
-printf '长篇正文\n' > "$multi_root/long/正文/第1章.md"
-printf '短篇正文\n' > "$multi_root/short/正文.md"
+printf '长篇正文\n' > "$multi_root/long/본문/제1장.md"
+printf '短篇正文\n' > "$multi_root/short/본문.md"
 multi_out="$(run_from_nested "$multi_root" detect-story-gaps.sh || true)"
 echo "$multi_out" | grep -q '^检查：long$' || fail "detect-story-gaps did not inspect long project when .active-book is set"
 echo "$multi_out" | grep -q '^检查：short$' || fail "detect-story-gaps did not inspect short project alongside long project"
@@ -845,19 +850,19 @@ long_count="$(printf '%s\n' "$multi_out" | grep -c '^检查：long$' || true)"
 [ "$long_count" -eq 1 ] || fail "detect-story-gaps reported long project $long_count times; expected exactly once"
 echo "  OK TS8 multi-book gap detection"
 
-# TS10 — Version threshold + deployed-behavior anchors
-# 只锚定「跑起来会坏」的东西：agents_version 阈值要跨文件对齐，部署到用户手里的
-# agent 模板要带住关键行为规则。原先还夹着一批「UPGRADING.md/README 必须写到某句话」
-# 的文档完整性断言——那种改一个词就红、测的是措辞不是行为，已随 check-story-long-write-contract.sh
-# 一并去掉，发版是否补 UPGRADING 由发版清单和人把关，不靠 CI 钉死措辞。
-# session-start 的新旧版本分支由 TS5 真实执行覆盖；story-review 预检与 frontmatter version
-# 由 check-current-skill-contracts.py 守卫，这里不再重复 grep。
-assert_grep "agents_version.*小于 \`$CURRENT_AGENTS_VERSION\`|版本 < $CURRENT_AGENTS_VERSION" "$SKILL_DIR/SKILL.md" "story-setup redeploy branch must treat agents_version $PREVIOUS_AGENTS_VERSION as stale"
-assert_grep "agents_version.*大于 \`$CURRENT_AGENTS_VERSION\`" "$SKILL_DIR/SKILL.md" "story-setup must stop before downgrading a newer deployment"
+# TS10 — 버전 임계값 + 배포 동작 기준점
+# 실행 시 실제로 고장 나는 항목만 고정한다. agents_version 임계값은 파일 간 일치하고 사용자에게 배포되는
+# 에이전트 템플릿에는 핵심 동작 규칙이 있어야 한다. 이전에는 UPGRADING.md/README에 특정 문구가 있어야 한다는
+# 문서 완전성 단언도 있었지만 단어 하나만 바꿔도 실패하고 동작이 아닌 표현을 검사하므로 check-story-long-write-contract.sh와
+# 함께 제거했다. 릴리스 시 UPGRADING 보완 여부는 릴리스 목록과 사람이 판단하며 CI로 문구를 고정하지 않는다.
+# session-start의 신구 버전 분기는 TS5 실제 실행에서, story-review 사전 검사와 프런트매터 version은
+# check-current-skill-contracts.py에서 검증하므로 여기서 grep을 반복하지 않는다.
+assert_grep "agents_version.*小于 \`$CURRENT_AGENTS_VERSION\`|版本 < $CURRENT_AGENTS_VERSION|agents_version.*\`$CURRENT_AGENTS_VERSION\` 미만" "$SKILL_DIR/SKILL.md" "story-setup redeploy branch must treat agents_version $PREVIOUS_AGENTS_VERSION as stale"
+assert_grep "agents_version.*大于 \`$CURRENT_AGENTS_VERSION\`|agents_version.*\`$CURRENT_AGENTS_VERSION\`보다 큼" "$SKILL_DIR/SKILL.md" "story-setup must stop before downgrading a newer deployment"
 
-# Phase 1 自检的目录名单是硬编码的，必须与实际 references/ 子目录集合一致。
-# 漏写一个 → 半装的包检不出；名单里多出已删除的目录 → 完好的包被判残缺，fail-closed 卡死所有部署。
-selfcheck_line="$(grep -n '先自检参考目录' "$SKILL_FILE" | head -1 | cut -d: -f1)"
+# 1단계 자체 점검 디렉터리 목록은 하드코딩되어 실제 references/ 하위 디렉터리 집합과 일치해야 한다.
+# 하나 빠지면 불완전 설치를 놓치고, 삭제된 디렉터리가 남으면 정상 패키지를 불완전하다고 판단해 모든 배포를 차단한다.
+selfcheck_line="$(grep -nE '先自检参考目录|참고 디렉터리부터 자체 확인' "$SKILL_FILE" | head -1 | cut -d: -f1)"
 [ -n "$selfcheck_line" ] || fail "story-setup Phase 1 reference self-check paragraph not found"
 selfcheck_text="$(sed -n "${selfcheck_line}p" "$SKILL_FILE")"
 for ref_dir in "$SKILL_DIR"/references/*/; do
@@ -876,27 +881,27 @@ listed_ref_dirs="$(printf '%s\n' "$selfcheck_text" | grep -oE '`[a-z][a-z-]*`' |
 for ref_name in $listed_ref_dirs; do
   [ -d "$SKILL_DIR/references/$ref_name" ] || fail "story-setup Phase 1 self-check lists a reference dir that does not exist: $ref_name"
 done
-assert_grep '剧情/情绪模块\.md.*missing_primary_contract|missing_primary_contract.*剧情/情绪模块\.md' "$AGENT_REFS_DIR/benchmark-style-load.md" "story-explorer must require the current emotion-module artifact"
-assert_grep '剧情/节奏\.md.*missing_primary_contract|missing_primary_contract.*剧情/节奏\.md' "$AGENT_REFS_DIR/benchmark-style-load.md" "story-explorer must require the current rhythm artifact"
+assert_grep '플롯/감정모듈\.md.*missing_primary_contract|missing_primary_contract.*플롯/감정모듈\.md' "$AGENT_REFS_DIR/benchmark-style-load.md" "story-explorer must require the current emotion-module artifact"
+assert_grep '플롯/리듬\.md.*missing_primary_contract|missing_primary_contract.*플롯/리듬\.md' "$AGENT_REFS_DIR/benchmark-style-load.md" "story-explorer must require the current rhythm artifact"
 assert_grep 'missing_primary_contract: true|missing_primary_contract": true' "$AGENT_REFS_DIR/benchmark-style-load.md" "story-explorer must emit missing_primary_contract for broken canonical artifacts"
 assert_grep 'repair_action.*Stage 3|Stage 3.*repair_action|重跑 /story-long-analyze Stage 3' "$AGENT_REFS_DIR/benchmark-style-load.md" "story-explorer must provide a repair action instead of silent fallback"
-# 对标召回流程只在 benchmark_style_load 时读，模板里只留指针；context_load 已无调用方并删除。
+# 비교 기준 검색 절차는 benchmark_style_load에서만 읽으며 템플릿에는 참조만 둔다. context_load는 호출자가 없어 삭제했다.
 assert_grep 'agent-references/benchmark-style-load\.md' "$SKILL_DIR/references/templates/agents/story-explorer.md" "story-explorer must route benchmark_style_load to its agent reference"
 assert_no_grep 'missing_primary_contract|context_load' "$SKILL_DIR/references/templates/agents/story-explorer.md" "story-explorer template must not inline the benchmark recall flow or the removed context_load"
-# 交接只靠落盘文件：agent 不带跨任务的持久记忆（memory 还会隐性开 Write/Edit）。
+# 인계는 저장된 파일로만 한다. 에이전트는 작업 간 영구 기억을 갖지 않는다(memory는 Write/Edit를 암묵적으로 열기도 한다).
 for agent_template in "$SKILL_DIR"/references/templates/agents/*.md; do
   assert_no_grep '^memory:' "$agent_template" "agent templates must not enable persistent agent memory"
 done
 assert_grep 'missing_primary_contract' "$REPO_ROOT/skills/story-long-write/references/project-files.md" "story-long-write must not silently fallback for missing primary artifacts"
 assert_grep '内容概括（五段式）|情节安排（多线）|人物关系和出场顺序|结尾设定和钩子' "$SKILL_DIR/references/templates/agents/story-architect.md" "story-architect must output v13 chapter blueprint fields"
 assert_grep '逻辑线|人物关系变化|行动成本（可无）/收益归属|结尾设定' "$SKILL_DIR/references/templates/agents/consistency-checker.md" "consistency-checker must consume current outline blueprint fields"
-assert_grep '语气标点谱系' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must enforce v13 tone punctuation"
-assert_grep '不用.*……|不使用.*……|不保留.*……|不残留.*……' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must reject ellipsis pause punctuation"
-assert_grep '不用.*——|不使用.*——|不保留.*——|不残留.*——' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must reject dialogue dash exception"
-assert_grep '语气标点谱系' "$AGENT_REFS_DIR/format-and-structure.md" "agent references must include v13 tone punctuation format rules"
-assert_grep '不用.*……|不使用.*……|不保留.*……|不残留.*……' "$AGENT_REFS_DIR/format-and-structure.md" "agent references must forbid ellipsis pause punctuation"
-assert_grep '不用.*——|不使用.*——|不保留.*——|不残留.*——|正文和对话都禁止.*——' "$AGENT_REFS_DIR/format-and-structure.md" "agent references must forbid dialogue dash exception"
-# 去味方法按三层同源发布；行为判据由方法与真实改稿测评检查，部署守卫只验可读取的接口。
+assert_grep '语气标点谱系|말투별 문장부호 체계' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must enforce v13 tone punctuation"
+assert_grep '不用.*……|不使用.*……|不保留.*……|不残留.*……|…….*쓰지 않|…….*억지 멈춤을 만들지 않' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must reject ellipsis pause punctuation"
+assert_grep '不用.*——|不使用.*——|不保留.*——|不残留.*——|——.*쓰지 않' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must reject dialogue dash exception"
+assert_grep '语气标点谱系|말투별 문장부호 체계' "$AGENT_REFS_DIR/format-and-structure.md" "agent references must include v13 tone punctuation format rules"
+assert_grep '不用.*……|不使用.*……|不保留.*……|不残留.*……|…….*쓰지 않|…….*억지 멈춤을 만들지 않' "$AGENT_REFS_DIR/format-and-structure.md" "agent references must forbid ellipsis pause punctuation"
+assert_grep '不用.*——|不使用.*——|不保留.*——|不残留.*——|正文和对话都禁止.*——|——.*억지 멈춤을 만들지 않' "$AGENT_REFS_DIR/format-and-structure.md" "agent references must forbid dialogue dash exception"
+# AI 문체 제거 방법은 세 계층에서 같은 원본으로 배포한다. 동작 기준은 방법과 실제 수정 평가에서 검증하고 배포 검사는 읽기 가능한 인터페이스만 확인한다.
 for deslop_method in expression narrative-focus story-logic; do
   assert_grep "agent-references/$deslop_method\\.md" "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must load the $deslop_method method"
   assert_grep "$deslop_method\\.md" "$AGENT_REFS_DIR/deslop-gates.md" "deslop scope interface must route to $deslop_method"
@@ -904,34 +909,34 @@ for deslop_method in expression narrative-focus story-logic; do
 done
 assert_no_grep 'anti-ai-writing\.md' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must not load the removed deslop guide"
 assert_grep 'check-ai-patterns\.js --check' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must require detector rescan handoff"
-assert_grep '裸调用.*不得自动进入正文写作|不得自动进入正文写作.*裸调用' "$REPO_ROOT/skills/story-long-write/SKILL.md" "story-long-write bare invocation must not auto-write prose"
-assert_grep '不得把已有项目默认为日更 3 章|默认为日更 3 章' "$REPO_ROOT/skills/story-long-write/SKILL.md" "story-long-write must not default existing projects to daily 3 chapters on bare invocation"
-assert_grep '默认停在细纲交付|最远停在细纲交付|默认停靠.*Phase 1→3' "$REPO_ROOT/skills/story-long-write/SKILL.md" "story-long-write opening flow must stop after outline by default"
-assert_grep '本轮 K（最多 3 章）后必须进入 Step 3/4 收尾并停止|最多 3 章.*收尾并停止' "$REPO_ROOT/skills/story-long-write/references/workflow-daily.md" "daily workflow must stop after bounded batch"
-assert_grep '细纲边界|不得自造剧情' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must enforce the outline boundary"
-# 锚在源模板；OpenCode/Codex 生成副本由 sync-opencode.py --check 与 Codex 生成器确定性检查保持一致。
-assert_grep '`under` 不补.*`over`.*`compress-once`' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must keep asymmetric wordcount handling"
-assert_grep 'over 单次压缩.*净删.*不增语义' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must keep one-pass semantic-preserving compression"
-assert_grep '导入续写入口顺序|推荐顺序.*story-setup' "$REPO_ROOT/skills/story-import/SKILL.md" "story-import must answer setup-vs-import order before asking for source"
-# 导入按作者时刻分文件：流程答疑细节与旧追踪重建挪进 import-special-cases.md，作者决定落盘到导入记录。
-assert_grep '推荐顺序.*story-setup' "$REPO_ROOT/skills/story-import/references/import-special-cases.md" "story-import special cases must keep the setup-vs-import answer"
-assert_grep '只需重建 `追踪/`' "$REPO_ROOT/skills/story-import/references/import-special-cases.md" "story-import must rebuild legacy tracking without re-analyzing the book"
-assert_grep '\.story/work/导入记录\.md' "$REPO_ROOT/skills/story-import/SKILL.md" "story-import must persist author decisions to the import record"
-assert_grep '超过约 25K 字时脚本自动少排几章' "$REPO_ROOT/skills/story-import/references/outline-reverse.md" "story-import must reverse outlines in bounded batches"
+assert_grep '裸调用.*不得自动进入正文写作|不得自动进入正文写作.*裸调用|인수 없이 호출.*본문 집필에 자동 진입.*안 됩니다' "$REPO_ROOT/skills/story-long-write/SKILL.md" "story-long-write bare invocation must not auto-write prose"
+assert_grep '不得把已有项目默认为日更 3 章|默认为日更 3 章|기존 프로젝트를 기본 일일 연재 3장으로 간주하면 안 됩니다' "$REPO_ROOT/skills/story-long-write/SKILL.md" "story-long-write must not default existing projects to daily 3 chapters on bare invocation"
+assert_grep '默认停在细纲交付|最远停在细纲交付|默认停靠.*Phase 1→3|상세 개요 전달까지만 진행하며 본문을 자동 작성하지 않음' "$REPO_ROOT/skills/story-long-write/SKILL.md" "story-long-write opening flow must stop after outline by default"
+assert_grep '本轮 K（最多 3 章）后必须进入 Step 3/4 收尾并停止|最多 3 章.*收尾并停止|최대 3장.*반드시 Step 3/4로 마무리하고 멈추' "$REPO_ROOT/skills/story-long-write/references/workflow-daily.md" "daily workflow must stop after bounded batch"
+assert_grep '细纲边界|不得自造剧情|상세 개요가 유일한 줄거리 설계도' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must enforce the outline boundary"
+# 원본 템플릿을 기준으로 한다. OpenCode/Codex 생성본은 sync-opencode.py --check와 Codex 생성기 결정론적 검사로 일치시킨다.
+assert_grep '`under` 不补.*`over`.*`compress-once`|`under`는 보충하지 않고.*`over`.*`compress-once`' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must keep asymmetric wordcount handling"
+assert_grep 'over 单次压缩.*净删.*不增语义|`over`.*한 차례 압축.*의미를 늘리지 않고 순수 삭제' "$SKILL_DIR/references/templates/agents/narrative-writer.md" "narrative-writer must keep one-pass semantic-preserving compression"
+assert_grep '导入续写入口顺序|推荐顺序.*story-setup|가져온 뒤 이어 쓰는 순서.*story-setup' "$REPO_ROOT/skills/story-import/SKILL.md" "story-import must answer setup-vs-import order before asking for source"
+# 가져오기는 작가의 작업 시점별로 파일을 나눈다. 절차 질의응답과 이전 추적 재구축은 import-special-cases.md로 옮기고 작가 결정은 가져오기 기록에 저장한다.
+assert_grep '推荐顺序.*story-setup|권장 순서.*story-setup' "$REPO_ROOT/skills/story-import/references/import-special-cases.md" "story-import special cases must keep the setup-vs-import answer"
+assert_grep '只需重建 `추적/`|`추적/`만 재구축' "$REPO_ROOT/skills/story-import/references/import-special-cases.md" "story-import must rebuild legacy tracking without re-analyzing the book"
+assert_grep '\.story/work/가져오기기록\.md' "$REPO_ROOT/skills/story-import/SKILL.md" "story-import must persist author decisions to the import record"
+assert_grep '超过约 25K 字时脚本自动少排几章|약 25K자를 넘으면 장 수를 자동으로 줄이며' "$REPO_ROOT/skills/story-import/references/outline-reverse.md" "story-import must reverse outlines in bounded batches"
 echo "  OK TS10 version + behavior anchors"
 
-# TS11 — Outline-before-prose write guard (BLOCKING PreToolUse hook)
+# TS11 — 본문 전에 개요를 요구하는 쓰기 보호(차단형 PreToolUse 훅)
 guard_root="$TMP_DIR/outline-guard"
-mkdir -p "$guard_root/book/正文" "$guard_root/book/大纲" "$guard_root/book/设定" \
+mkdir -p "$guard_root/book/본문" "$guard_root/book/개요" "$guard_root/book/설정" \
          "$guard_root/short" "$guard_root/docs" \
-         "$guard_root/impbook/正文" "$guard_root/拆文库/impbook" \
-         "$guard_root/impshort" "$guard_root/拆文库/impshort"
+         "$guard_root/impbook/본문" "$guard_root/작품분석실/impbook" \
+         "$guard_root/impshort" "$guard_root/작품분석실/impshort"
 setup_git_repo "$guard_root"
 copy_hooks "$guard_root"
 assert_file "$guard_root/.claude/hooks/guard-outline-before-prose.sh"
 
 run_guard() {
-  # $1 = file_path ; prints the hook exit code (0 allow, 2 block)
+  # $1 = file_path; 훅 종료 코드를 출력한다(0 허용, 2 차단).
   local fp="$1" ec=0
   printf '{"tool_name":"Write","tool_input":{"file_path":"%s","content":"x"}}' "$fp" \
     | CLAUDE_PROJECT_DIR="$guard_root" bash "$guard_root/.claude/hooks/guard-outline-before-prose.sh" >/dev/null 2>&1 || ec=$?
@@ -939,7 +944,7 @@ run_guard() {
 }
 
 run_bash_guard() {
-  # $1 = Bash command ; prints the hook exit code (0 allow, 2 block)
+  # $1 = Bash 명령; 훅 종료 코드를 출력한다(0 허용, 2 차단).
   local command_text="$1" ec=0 payload
   payload="$(python3 - "$command_text" <<'PY'
 import json, sys
@@ -951,67 +956,67 @@ PY
   printf '%s' "$ec"
 }
 
-# 长篇授权流：缺细纲拦截 / 有细纲放行 / 章号补零容忍
-[ "$(run_guard 'book/正文/第1章_开端.md')" = "2" ] || fail "guard did not BLOCK long prose when 细纲 missing"
-write_outline "$guard_root/book/大纲/细纲_第1章.md"
-# 细纲齐了还要过追踪检查点（issue #305 起 Claude 侧也有这道门，与另三端同序）。
-# 本节测的是细纲门与路径分类，不是追踪门，所以先落一份有效 state 把追踪这一维固定住。
-# last_committed 取一个大于本节所有用例章号的值：章号已在追踪范围内即跳过顺序校验，
-# 于是 第1/7/123/124 章都只被细纲门判定。顺序校验本身由 test-prose-net-parity.sh Part D
-# 的场景矩阵覆盖，不在这里重复。
-mkdir -p "$guard_root/book/追踪"
-printf '{"schema_version":4,"state_revision":0,"last_committed_chapter":200}\n' > "$guard_root/book/追踪/_tracking-state.json"
-printf '> 状态修订：0。\n' > "$guard_root/book/追踪/上下文.md"
-[ "$(run_guard 'book/正文/第1章_开端.md')" = "0" ] || fail "guard wrongly blocked long prose when 细纲 present"
-# 追踪门本身：state 移走即拦（Claude 端此前静默放行，写出无追踪正文）
-mv "$guard_root/book/追踪/_tracking-state.json" "$guard_root/book/追踪/_state.bak"
-[ "$(run_guard 'book/正文/第1章_开端.md')" = "2" ] || fail "guard did not BLOCK long prose when tracking state missing"
-mv "$guard_root/book/追踪/_state.bak" "$guard_root/book/追踪/_tracking-state.json"
-[ "$(run_guard 'book/正文/第001章_开端.md')" = "0" ] || fail "guard did not tolerate chapter-number zero padding (第001章 vs 细纲_第1章)"
-write_outline "$guard_root/book/大纲/细纲_第7章_惊变.md"
-[ "$(run_guard 'book/正文/第7章_x.md')" = "0" ] || fail "guard did not tolerate title-suffixed 细纲 (细纲_第7章_惊变.md)"
-# 短篇授权流：有 设定.md 信号 + 缺小节大纲 -> 拦截；补小节大纲 -> 放行
-: > "$guard_root/short/设定.md"
-[ "$(run_guard 'short/正文.md')" = "2" ] || fail "guard did not BLOCK short prose when 小节大纲.md missing"
-: > "$guard_root/short/小节大纲.md"
-[ "$(run_guard 'short/正文.md')" = "0" ] || fail "guard wrongly blocked short prose when 小节大纲.md present"
-# 非作品文件 / 无短篇工程信号 -> 放行（宁可漏拦不可误伤）
-[ "$(run_guard 'book/设定/角色.md')" = "0" ] || fail "guard wrongly blocked a non-prose file"
-[ "$(run_guard 'docs/正文.md')" = "0" ] || fail "guard wrongly blocked a non-story 正文.md (no 设定.md signal)"
-# 已存在正文 -> 放行（续写/改稿/去AI味）
-: > "$guard_root/book/正文/第9章_x.md"
-[ "$(run_guard 'book/正文/第9章_x.md')" = "0" ] || fail "guard wrongly blocked rewrite of an existing prose file"
-# story-import 迁移流：存在 拆文库/{书名}/ 源 -> 正文先于大纲/小节大纲迁移，放行
-[ "$(run_guard 'impbook/正文/第1章_x.md')" = "0" ] || fail "guard wrongly blocked story-import LONG prose migration (拆文库 source present)"
-: > "$guard_root/impshort/设定.md"
-[ "$(run_guard 'impshort/正文.md')" = "0" ] || fail "guard wrongly blocked story-import SHORT prose migration (拆文库 source present)"
-# Bash 命令面：真正写正文才拦；只提及正文路径不得误伤。第8章无细纲，故写入应阻断。
+# 장편 허용 흐름: 상세 개요 없음 → 차단 / 있음 → 허용 / 장 번호 앞자리 0 허용
+[ "$(run_guard 'book/본문/제1장_开端.md')" = "2" ] || fail "guard did not BLOCK long prose when 细纲 missing"
+write_outline "$guard_root/book/개요/상세개요_제1장.md"
+# 상세 개요가 갖춰져도 추적 점검을 통과해야 한다(이슈 #305부터 Claude에도 다른 세 환경과 같은 순서로 적용).
+# 이 절은 상세 개요와 경로 분류를 검사하므로 유효한 state를 먼저 저장해 추적 조건을 고정한다.
+# last_committed는 이 절의 모든 사례 장 번호보다 큰 값으로 둔다. 추적 범위 안의 장은 순서 검사를 건너뛰므로
+# 1/7/123/124장은 상세 개요 조건으로만 판정된다. 순서 검사 자체는 test-prose-net-parity.sh D부의
+# 시나리오 행렬에서 다루며 여기서 반복하지 않는다.
+mkdir -p "$guard_root/book/추적"
+printf '{"schema_version":4,"state_revision":0,"last_committed_chapter":200}\n' > "$guard_root/book/추적/_tracking-state.json"
+printf '> 状态修订：0。\n' > "$guard_root/book/추적/문맥.md"
+[ "$(run_guard 'book/본문/제1장_开端.md')" = "0" ] || fail "guard wrongly blocked long prose when 细纲 present"
+# 추적 조건 자체: state를 옮기면 차단한다(이전 Claude는 조용히 허용해 추적 없는 본문을 작성했다).
+mv "$guard_root/book/추적/_tracking-state.json" "$guard_root/book/추적/_state.bak"
+[ "$(run_guard 'book/본문/제1장_开端.md')" = "2" ] || fail "guard did not BLOCK long prose when tracking state missing"
+mv "$guard_root/book/추적/_state.bak" "$guard_root/book/추적/_tracking-state.json"
+[ "$(run_guard 'book/본문/제001장_开端.md')" = "0" ] || fail "guard did not tolerate chapter-number zero padding (제001장 vs 상세개요_제1장)"
+write_outline "$guard_root/book/개요/상세개요_제7장_惊变.md"
+[ "$(run_guard 'book/본문/제7장_x.md')" = "0" ] || fail "guard did not tolerate title-suffixed 细纲 (상세개요_제7장_惊变.md)"
+# 단편 허용 흐름: 설정.md 신호 + 절 개요 없음 → 차단; 절 개요 추가 → 허용
+: > "$guard_root/short/설정.md"
+[ "$(run_guard 'short/본문.md')" = "2" ] || fail "guard did not BLOCK short prose when 구간개요.md missing"
+: > "$guard_root/short/구간개요.md"
+[ "$(run_guard 'short/본문.md')" = "0" ] || fail "guard wrongly blocked short prose when 구간개요.md present"
+# 작품 외 파일 / 단편 프로젝트 신호 없음 → 허용(오차단보다 차단 누락을 택함)
+[ "$(run_guard 'book/설정/인물.md')" = "0" ] || fail "guard wrongly blocked a non-prose file"
+[ "$(run_guard 'docs/본문.md')" = "0" ] || fail "guard wrongly blocked a non-story 본문.md (no 설정.md signal)"
+# 기존 본문 있음 → 허용(이어 쓰기/수정/AI 문체 제거)
+: > "$guard_root/book/본문/제9장_x.md"
+[ "$(run_guard 'book/본문/제9장_x.md')" = "0" ] || fail "guard wrongly blocked rewrite of an existing prose file"
+# story-import 이전 흐름: 작품분석실/{书名}/ 원본이 있으면 본문을 전체/절 개요보다 먼저 이전하도록 허용한다.
+[ "$(run_guard 'impbook/본문/제1장_x.md')" = "0" ] || fail "guard wrongly blocked story-import LONG prose migration (拆文库 source present)"
+: > "$guard_root/impshort/설정.md"
+[ "$(run_guard 'impshort/본문.md')" = "0" ] || fail "guard wrongly blocked story-import SHORT prose migration (拆文库 source present)"
+# Bash 명령: 실제 본문 쓰기만 차단하며 경로 언급만으로 오차단하지 않는다. 8장은 상세 개요가 없어 쓰기를 차단해야 한다.
 if command -v node >/dev/null 2>&1; then
-  [ "$(run_bash_guard 'cat draft.md > book/正文/第8章_x.md')" = "2" ] \
+  [ "$(run_bash_guard 'cat draft.md > book/본문/제8장_x.md')" = "2" ] \
     || fail "Claude Bash write bypassed prose pre-guard"
-  [ "$(run_bash_guard 'grep -n book/正文/第8章_x.md notes.md')" = "0" ] \
+  [ "$(run_bash_guard 'grep -n book/본문/제8장_x.md notes.md')" = "0" ] \
     || fail "Claude Bash read-only mention was wrongly blocked"
-  # 缺细纲文案给补零的规范名；目标含未展开 shell 变量时仍拦，但说路径没解析出来、不谎报缺细纲。
-  pad_err="$(printf '{"tool_name":"Write","tool_input":{"file_path":"book/正文/第8章_x.md","content":"x"}}' \
+  # 상세 개요 누락 안내는 앞자리 0을 채운 표준 이름을 쓴다. 대상에 미확장 셸 변수가 있어도 차단하되 경로 해석 실패라고 설명한다.
+  pad_err="$(printf '{"tool_name":"Write","tool_input":{"file_path":"book/본문/제8장_x.md","content":"x"}}' \
     | CLAUDE_PROJECT_DIR="$guard_root" bash "$guard_root/.claude/hooks/guard-outline-before-prose.sh" 2>&1 >/dev/null || true)"
-  printf '%s' "$pad_err" | grep -q '细纲_第008章\.md' || fail "missing-outline block must name the zero-padded outline file: $pad_err"
+  printf '%s' "$pad_err" | grep -q '상세개요_제008장\.md' || fail "missing-outline block must name the zero-padded outline file: $pad_err"
   var_payload="$(python3 - <<'PY'
 import json
-print(json.dumps({"tool_name": "Bash", "tool_input": {"command": 'PROJ=$PWD/book; cat draft.md > "$PROJ/正文/第8章_x.md"'}}, ensure_ascii=False))
+print(json.dumps({"tool_name": "Bash", "tool_input": {"command": 'PROJ=$PWD/book; cat draft.md > "$PROJ/본문/제8장_x.md"'}}, ensure_ascii=False))
 PY
 )"
   var_ec=0
   var_err="$(printf '%s' "$var_payload" \
     | CLAUDE_PROJECT_DIR="$guard_root" bash "$guard_root/.claude/hooks/guard-outline-before-prose.sh" 2>&1 >/dev/null)" || var_ec=$?
   [ "$var_ec" = "2" ] || fail "Claude Bash write behind an unexpanded shell variable must stay blocked"
-  printf '%s' "$var_err" | grep -q '未展开的 shell 变量' || fail "shell-variable target block must say the path was not resolved: $var_err"
+  printf '%s' "$var_err" | grep -q '치환되지 않은 셸 변수' || fail "shell-variable target block must say the path was not resolved: $var_err"
 
-  # 相对 Bash 目标必须按 hook cwd 解，不得总按项目根；根 book 有第8章细纲，nested/book 没有。
-  write_outline "$guard_root/book/大纲/细纲_第8章.md"
-  mkdir -p "$guard_root/nested/book/正文"
+  # Bash 상대 대상은 항상 프로젝트 루트가 아닌 훅 cwd 기준으로 해석한다. 루트 book에는 8장 상세 개요가 있고 nested/book에는 없다.
+  write_outline "$guard_root/book/개요/상세개요_제8장.md"
+  mkdir -p "$guard_root/nested/book/본문"
   cwd_payload="$(python3 - "$guard_root/nested" <<'PY'
 import json, sys
-print(json.dumps({"cwd": sys.argv[1], "tool_name": "Bash", "tool_input": {"command": "cat > book/正文/第8章_x.md"}}, ensure_ascii=False))
+print(json.dumps({"cwd": sys.argv[1], "tool_name": "Bash", "tool_input": {"command": "cat > book/본문/제8장_x.md"}}, ensure_ascii=False))
 PY
 )"
   cwd_ec=0
@@ -1019,12 +1024,12 @@ PY
     | CLAUDE_PROJECT_DIR="$guard_root" bash "$guard_root/.claude/hooks/guard-outline-before-prose.sh" >/dev/null 2>&1 || cwd_ec=$?
   [ "$cwd_ec" = "2" ] || fail "Claude Bash relative target ignored hook cwd"
 
-  # 共享核损坏时保持 fail-open，但必须显式告警，不能把运行时错误伪装成“无写入目标”。
+  # 공유 코어가 손상되면 허용 상태를 유지하되 명시적으로 경고한다. 런타임 오류를 쓰기 대상 없음으로 위장하면 안 된다.
   cp "$guard_root/.claude/hooks/story_hook_core.js" "$guard_root/.claude/hooks/story_hook_core.js.bak"
   printf '%s\n' 'throw new Error("broken core fixture")' > "$guard_root/.claude/hooks/story_hook_core.js"
   broken_payload="$(python3 - <<'PY'
 import json
-print(json.dumps({"tool_name": "Bash", "tool_input": {"command": "cat > book/正文/第8章_x.md"}}, ensure_ascii=False))
+print(json.dumps({"tool_name": "Bash", "tool_input": {"command": "cat > book/본문/제8장_x.md"}}, ensure_ascii=False))
 PY
 )"
   broken_ec=0
@@ -1032,16 +1037,16 @@ PY
     | CLAUDE_PROJECT_DIR="$guard_root" bash "$guard_root/.claude/hooks/guard-outline-before-prose.sh" 2>&1 >/dev/null)" || broken_ec=$?
   mv "$guard_root/.claude/hooks/story_hook_core.js.bak" "$guard_root/.claude/hooks/story_hook_core.js"
   [ "$broken_ec" = "0" ] || fail "broken Bash guard core must preserve documented fail-open behavior"
-  printf '%s' "$broken_err" | grep -q '守卫解析失败' \
+  printf '%s' "$broken_err" | grep -q '보호 검사에서 해석에 실패했습니다' \
     || fail "broken Bash guard core was silently ignored: $broken_err"
 fi
 echo "  OK TS11 outline-before-prose guard"
 
-# TS11b — 阻断守卫在无 node 时必须回落纯 bash 抽取、仍然 exit 2（不得 fail-open）。
-# 官方现推荐原生二进制装 Claude Code（不带 Node），只有 npm 装法才有 node；原实现只探测 node、
-# 探不到就放行，会让"缺细纲写正文"被静默放过（#243 回归）。用一个恒退非零的假 node 垫片模拟
-# "node 不可用"，其余工具(sed/grep/bash)仍在 PATH。垫片若未能遮蔽真 node（个别 Windows 主机）
-# 则跳过，避免环境导致假失败。
+# TS11b — node가 없으면 차단 보호는 순수 bash 추출로 대체해 여전히 exit 2여야 한다(실패 시 허용 금지).
+# 공식 권장은 Node 없는 네이티브 바이너리 Claude Code 설치이며 npm 설치에만 node가 있다. 이전 구현은 node만 탐지해
+# 없으면 허용하므로 상세 개요 없는 본문 쓰기가 조용히 통과했다(#243 회귀). 항상 0이 아닌 값을 반환하는 가짜 node로
+# node 사용 불가를 재현하고 나머지 도구(sed/grep/bash)는 PATH에 둔다. 일부 Windows에서 가짜 도구가 실제 node를 가리지 못하면
+# 환경 때문에 거짓 실패하지 않도록 건너뛴다.
 nonode_shim="$TMP_DIR/nonode-shim"
 mkdir -p "$nonode_shim"
 printf '#!/bin/sh\nexit 1\n' > "$nonode_shim/node"
@@ -1054,29 +1059,29 @@ run_guard_nonode() {
   printf '%s' "$ec"
 }
 if ! PATH="$nonode_shim:$PATH" node -e "" >/dev/null 2>&1; then
-  # 缺细纲 -> 仍须拦截（bash 兜底解析出目标路径，照常 exit 2）
-  [ "$(run_guard_nonode 'book/正文/第123章_无纲.md')" = "2" ] \
+  # 상세 개요 없음 → 여전히 차단(bash 대체 경로가 대상 경로를 추출하고 정상적으로 exit 2)
+  [ "$(run_guard_nonode 'book/본문/제123장_无纲.md')" = "2" ] \
     || fail "guard fail-OPEN without node (regression #243): 缺细纲写正文必须仍拦截（bash 兜底）"
-  # 空细纲 -> 仍须拦截（空细纲门是纯 bash 字节计数，不依赖 node）
-  : > "$guard_root/book/大纲/细纲_第123章.md"
-  [ "$(run_guard_nonode 'book/正文/第123章_无纲.md')" = "2" ] \
+  # 빈 상세 개요 → 여전히 차단(빈 개요 검사는 순수 bash 바이트 수 계산으로 node에 의존하지 않음)
+  : > "$guard_root/book/개요/상세개요_제123장.md"
+  [ "$(run_guard_nonode 'book/본문/제123장_无纲.md')" = "2" ] \
     || fail "guard(no-node) must block long prose when 细纲 is empty (纯 bash 空细纲门)"
-  write_outline "$guard_root/book/大纲/细纲_第123章.md"
-  # 有细纲 -> 放行（bash 兜底不误伤）
-  [ "$(run_guard_nonode 'book/正文/第123章_无纲.md')" = "0" ] \
+  write_outline "$guard_root/book/개요/상세개요_제123장.md"
+  # 상세 개요 있음 → 허용(bash 대체 경로가 오차단하지 않음)
+  [ "$(run_guard_nonode 'book/본문/제123장_无纲.md')" = "0" ] \
     || fail "guard(no-node) wrongly blocked long prose when 细纲 present (bash 兜底)"
-  # 非正文目标 -> 放行
-  [ "$(run_guard_nonode 'book/设定/角色.md')" = "0" ] \
+  # 본문이 아닌 대상 → 허용
+  [ "$(run_guard_nonode 'book/설정/인물.md')" = "0" ] \
     || fail "guard(no-node) wrongly blocked a non-prose file (bash 兜底)"
   echo "  OK TS11b outline guard fail-closed without node"
 else
   echo "  SKIP TS11b (假 node 垫片未能遮蔽真 node，跳过 no-node 回归)"
 fi
 
-# TS11c — node 在场但抽取失败（旧 node 不识 node: 前缀 / 部署核损坏时探测通过、跑脚本抛错）时，
-# 阻断守卫必须回落纯 bash、仍 exit 2。原实现用 if/else：node 探测一过就只走 node 分支，抽空即放行，
-# 正是 #243 复盘发现的第二个 fail-open 面。垫片「node -e '' 退 0、跑真实脚本退非零」模拟坏 node；
-# 只有确认解析到的 node 就是垫片时才跑（否则真 node 会让断言因错误原因通过）。
+# TS11c — node가 있어도 추출에 실패하면(이전 node가 node: 접두어를 모르거나 배포 코어 손상으로 탐색 통과 후 실행 오류)
+# 차단 보호는 순수 bash로 대체해 exit 2여야 한다. 이전 if/else는 node 탐색만 통과하면 node 분기로만 가서 추출이 비면 허용했다.
+# #243 재검토에서 발견한 두 번째 실패 시 허용 경로다. 가짜 도구가 node -e 빈 문자열에는 0, 실제 스크립트에는 비0을 반환하게 한다.
+# 해석된 node가 실제로 가짜 도구임을 확인한 경우만 실행한다(실제 node라면 잘못된 이유로 단언이 통과할 수 있음).
 brokennode_shim="$TMP_DIR/brokennode-shim"
 mkdir -p "$brokennode_shim"
 printf '#!/bin/sh\n[ "$1" = "-e" ] && exit 0\nexit 1\n' > "$brokennode_shim/node"
@@ -1090,19 +1095,19 @@ run_guard_brokennode() {
 }
 resolved_node="$(PATH="$brokennode_shim:$PATH" bash -c 'command -v node' 2>/dev/null || true)"
 if [ "$resolved_node" = "$brokennode_shim/node" ]; then
-  # node 探测通过但 CLI 抽取抛错 -> 缺细纲仍须拦截（bash 兜底解析目标路径）
-  [ "$(run_guard_brokennode 'book/正文/第124章_坏node.md')" = "2" ] \
+  # node 탐색 통과 후 CLI 추출 오류 → 상세 개요가 없으면 여전히 차단(bash 대체 경로로 대상 해석)
+  [ "$(run_guard_brokennode 'book/본문/제124장_坏node.md')" = "2" ] \
     || fail "guard fail-OPEN with broken node (regression #243): node 在但抽取失败时必须回落 bash 仍拦截"
-  write_outline "$guard_root/book/大纲/细纲_第124章.md"
-  # 有细纲 -> 放行（bash 兜底不误伤）
-  [ "$(run_guard_brokennode 'book/正文/第124章_坏node.md')" = "0" ] \
+  write_outline "$guard_root/book/개요/상세개요_제124장.md"
+  # 상세 개요 있음 → 허용(bash 대체 경로가 오차단하지 않음)
+  [ "$(run_guard_brokennode 'book/본문/제124장_坏node.md')" = "0" ] \
     || fail "guard(broken-node) wrongly blocked long prose when 细纲 present (bash 兜底)"
   echo "  OK TS11c outline guard fail-closed when node present-but-broken"
 else
   echo "  SKIP TS11c (假 node 垫片未能遮蔽真 node，跳过 broken-node 回归)"
 fi
 
-# TS12 — Agents-pending-restart one-shot confirmation
+# TS12 — 에이전트 재시작 대기 상태의 일회성 확인
 restart_root="$TMP_DIR/restart-flag"
 mkdir -p "$restart_root/.claude"
 setup_git_repo "$restart_root"

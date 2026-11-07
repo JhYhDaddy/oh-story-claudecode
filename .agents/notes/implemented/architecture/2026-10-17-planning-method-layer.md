@@ -1,37 +1,37 @@
-# Agent Note: 规划时刻分出方法层，任务包只截排纲方法
+# Agent Note: 기획 시점에 방법 계층을 분리하고 작업 패키지는 개요 작성법만 추출
 
 Status: implemented
 Date: 2026-10-17
-Related: [开书按作者确认点分段加载](2026-09-26-opening-by-author-moments.md)、[长短篇写作 references 按作者时刻和读者重组](2026-10-17-write-references-by-moment.md)、[35K 加载上限](2026-09-26-per-call-load-ceiling-35k.md)
+Related: [작가 확인 지점별 새 책 시작](2026-09-26-opening-by-author-moments.md), [작가 시점과 독자별 장단편 references 재구성](2026-10-17-write-references-by-moment.md), [35K 로드 상한](2026-09-26-per-call-load-ceiling-35k.md)
 
 ## Problem
 
-长篇排卷纲、排细纲的方法散在 9 份主流程从不加载的文件里：style-craft、plot-frameworks、commercial-core-methods、outline-structure-theory、plot-emotion-system、plot-special-topics、outline-conflict、outline-rhythm、character-design-methods。同一件事有多处说法，例如剧情单元体量三种口径、感情线阶段五张表，卷结构方法分在四份文件里互相引用。
+장편 권별·상세 개요 작성법은 주 절차가 읽지 않는 9개 파일에 흩어져 있었다. style-craft, plot-frameworks, commercial-core-methods, outline-structure-theory, plot-emotion-system, plot-special-topics, outline-conflict, outline-rhythm, character-design-methods다. 사건 단위 분량 기준 세 종류, 감정선 단계 표 다섯 개처럼 같은 내용을 여러 곳에서 다르게 설명했고 권 구조 작성법도 네 파일에 나뉘어 상호 참조했다.
 
-9 月 26 日按作者确认点拆时刻时定下的几项做法，在这次重组里成了问题：
+9월 26일 작가 확인 지점별 분리 때 정한 방식 중 일부가 이번 재구성에서 문제가 됐다.
 
-- 任务包整份带 workflow-volume、workflow-outline，主会话的读取清单、分工说明和作者汇报模板也进了 story-architect 的上下文，两种读者混在一份包里。
-- workflow-volume 要求卷纲时刻填「全书体量与阶段总览」：全书章号、阶段占比、各阶段节奏公式。全书只精排当前卷，这些数字在出第一卷时填不出可信的值。
-- 卷纲包总是带 outline-methods 的八节点和 emotional-methods 的「长篇单元情绪引擎」，有主对标的书也要多读八节点；情绪引擎和卷结构方法分在两份文件里。
-- story-architect 模板在没有任务包时逐项写「执行时按 profile 读取」，照字面会把题材目录、钩子、悬念、反转、弧线全读一遍，约 55K。
+- 작업 패키지가 workflow-volume·workflow-outline 전체를 담아 주 세션 읽기 목록·역할 분담·작가 보고 템플릿까지 story-architect 컨텍스트에 들어갔다. 독자가 둘인 내용을 한 패키지에 섞었다.
+- workflow-volume은 권별 개요 단계에서 전권 장 번호·단계 비율·단계별 리듬 공식의 “전권 분량·단계 개요”를 채우게 했다. 현재 권만 정밀 설계하는데 첫 권 단계에서 믿을 만한 전권 수치를 낼 수 없다.
+- 권별 패키지는 항상 outline-methods의 여덟 지점과 emotional-methods의 “장편 단위 감정 엔진”을 포함해 주 비교 작품이 있어도 여덟 지점을 추가로 읽었다. 감정 엔진과 권 구조 방법도 두 파일에 갈라져 있었다.
+- 작업 패키지 없는 story-architect 템플릿은 항목마다 “실행 시 profile에 따라 읽기”라고 해 문구대로라면 장르 목록·훅·서스펜스·반전·인물 궤적 전체 약 55K를 읽게 됐다.
 
 ## Decision
 
-- **方法文件按时刻定唯一出处**：outline-methods 管卷结构与节奏（「卷纲排法」每次出卷纲都读，八节点、情绪模块公式、换地图三节按条件读）；plot-core-methods 管细纲与章级方法（目标情绪与主角选择、爽点六类、高潮构建、过渡章、开篇噱头）；long-genre-mechanics 管核心梗与金手指；character-relations「感情线阶段」是全书唯一一张感情线阶段表；genre-readers 管读者、平台、书名简介与对标；opening-design 只留「开篇规划」（细纲时刻）和「开篇落笔」（写第 1-3 章）。新建 revision-diagnosis，作者只说「拖、憋屈、变味、追读掉了」时先按症状找原因。9 份旧文件的独有内容迁入上述文件后删除，3 份 agent-references 副本一并删除。
-- **流程文件内分两节**：workflow-volume、workflow-outline 都分「主会话」（读取清单、分工、作者汇报）和「排纲方法」两节。build_architect_brief 的卷纲包只截 workflow-volume「排纲方法」、artifact-protocols、outline-methods「卷纲排法」、reader-contract；细纲包只截 workflow-outline「排纲方法」，加 plot-core-methods（首批整份，之后不含开篇噱头一节）、首批的 opening-design「开篇规划」。八节点、情绪模块公式、换地图、感情线阶段都列在包末「按条件可读」。
-- **卷纲时刻不填全书章号**：`大纲/大纲.md` 改为全书概况加分卷表，每卷一行（字数区间、所属阶段、功能、核心事件、起止状态、卷契约与终局储备）；目标字数按卷数 × 卷字数估，不预排全书章号，不定阶段占比。刻度只在 workflow-volume「排纲刻度」一处定义，artifact-protocols、部署规则 story-outline 都指向它。story-import 反推的大纲.md 同形。
-- **情绪引擎并入卷纲排法**：emotional-methods 删掉「长篇单元情绪引擎」，五问与强度原则进 outline-methods「剧情单元设计」，引擎因果链仍在卷纲剧情单元卡字段里。emotional-arc-design 删掉期待管理、赌注与短篇字数分配，只留「六种弧线速查」；短篇的弧线与转折位置迁回短篇 emotional-methods。
-- **story-architect 无任务包时只按 profile 表读**：模板删掉逐项读取句，改为逐行判定 agent-reference-profiles、只读和本次任务类型对得上的行、点名小节只读那一节。profile 表同步：emotional-arc-design 从 Common 移到 Long，新增 female-audience-writing 的 agent-references 副本（题材目录与核心梗都指向它），outline-conflict、outline-rhythm 两行删除。agents_version 35 → 36。
-- **预算按实测登记**：卷纲包 24024 → 23228，卷纲包最坏叠加 31944 → 31557；卷纲主会话最坏叠加 32141 → 33701（多了卷纲排法与三个条件节）；细纲包首批 19273 → 15532；定设定主会话最坏叠加 31827 → 32743（金手指与感情线阶段）；单章、日更 direct/solo 加「前三章：开篇落笔」叠加槽，最坏 34519、34512；大修 direct/solo 加「作者只说症状」槽，最坏 34026。story-architect 无任务包登记为题材定位（男频/女频）、卷结构、新书开篇、结构审查五个互斥分支，最重 19187。全部 ≤35000，没有豁免。
+- **시점별 방법의 출처를 하나로 지정**: outline-methods는 권 구조·리듬을 담당한다. “권별 개요 작성법”은 매번 읽고 여덟 지점·감정 모듈 공식·무대 변경 세 절은 조건부로 읽는다. plot-core-methods는 상세 개요·장 수준 방법(목표 감정·주인공 선택, 쾌감 포인트 여섯 유형, 절정 구성, 전환 장, 도입 장치)을 담당한다. long-genre-mechanics는 핵심 소재·특수 능력, character-relations의 “감정선 단계”는 유일한 전권 감정선 표, genre-readers는 독자·플랫폼·작품명·소개·비교 작품을 담당한다. opening-design은 상세 개요 시점의 “도입 기획”과 제1–3장 집필의 “도입 집필”만 남긴다. 작가가 “늘어짐, 답답함, 성격 변화, 추독 하락” 같은 증상만 말할 때 원인을 찾는 revision-diagnosis를 새로 만든다. 기존 9개 파일의 고유 내용을 옮긴 뒤 파일과 agent-references 복사본 3개를 삭제한다.
+- **절차 파일 내부를 두 절로 분리**: workflow-volume·workflow-outline을 “주 세션”(읽기 목록, 분업, 작가 보고)과 “개요 작성법”으로 나눈다. build_architect_brief의 권별 패키지는 workflow-volume의 작성법, artifact-protocols, outline-methods의 권별 작성법, reader-contract만 담는다. 상세 개요 패키지는 workflow-outline의 작성법과 plot-core-methods(첫 묶음은 전체, 이후 도입 장치 절 제외), 첫 묶음의 opening-design “도입 기획”을 담는다. 여덟 지점·감정 모듈 공식·무대 변경·감정선 단계는 끝의 조건부 읽기에 나열한다.
+- **권별 개요 때 전권 장 번호를 정하지 않음**: `大纲/大纲.md`는 전권 개요와 권별 표로 바꾼다. 권마다 글자 수 범위·단계·기능·핵심 사건·시작/종료 상태·권 계약·결말 비축을 한 행에 쓴다. 목표 글자 수는 권 수×권별 글자 수로 추정하고 전권 장 번호·단계 비율은 미리 정하지 않는다. 척도는 workflow-volume의 “개요 척도” 한 곳에서 정의하며 artifact-protocols·배포 규칙 story-outline은 이를 가리킨다. story-import가 역추론한 大纲.md도 같은 형태다.
+- **감정 엔진을 권별 개요 작성법에 통합**: emotional-methods에서 “장편 단위 감정 엔진”을 없애고 다섯 질문·강도 원칙을 outline-methods의 “사건 단위 설계”로 옮긴다. 인과 사슬은 권별 사건 단위 카드 필드에 남긴다. emotional-arc-design은 기대 관리·위험 부담·단편 글자 수 배분을 제거하고 “여섯 궤적 빠른 참조”만 남긴다. 단편 곡선·전환 위치는 단편 emotional-methods로 돌린다.
+- **작업 패키지 없으면 profile 표만 따라 읽기**: story-architect 템플릿의 항목별 읽기 문장을 없애고 agent-reference-profiles를 행별로 판단해 작업 유형에 맞는 행만 읽으며 지정 절이 있으면 그 절만 읽는다. profile의 emotional-arc-design은 Common에서 Long으로 옮기고 female-audience-writing의 agent-references 복사본을 추가한다(장르 목록·핵심 소재 모두 연결). outline-conflict·outline-rhythm 행은 삭제한다. agents_version은 35 → 36이다.
+- **실측 예산 등록**: 권별 패키지 24024 → 23228, 최악 중첩 31944 → 31557. 권별 주 세션 최악 중첩은 권별 작성법·조건부 세 절 추가로 32141 → 33701. 첫 상세 개요 패키지 19273 → 15532. 설정 확정 주 세션 최악은 특수 능력·감정선 단계 추가로 31827 → 32743. 단일 장·일일 집필 direct/solo에 “첫 세 장: 도입 집필” 중첩을 추가해 최악 34519, 34512다. 대규모 수정 direct/solo의 “작가가 증상만 말함”은 최악 34026이다. 패키지 없는 story-architect는 장르 포지셔닝(남성향/여성향), 권 구조, 새 책 도입, 구조 검토의 상호 배타적 다섯 분기로 등록하며 최대 19187이다. 모두 ≤35000이며 예외는 없다.
 
 ## Alternatives considered
 
-- **任务包继续整份带流程文件**：最强理由是 story-architect 看得到主会话怎么验收、怎么汇报，交付时更贴合。不采用：包头已写明交付后只回哪几项，汇报模板留在包里只会让子代理照作者汇报的格式回话；整份带还多付约 1.3K 的读取清单和汇报说明。
-- **主会话层与方法层拆成新文件**：读者分得最干净。不采用：workflow-volume、workflow-outline 的文件名被作者汇报守卫、契约清单、参考门禁和 story-import 副本钉住，文件内分节加按小节截取就能达到同样效果。
-- **卷纲时刻保留全书体量与阶段总览，只删百分比**：最强理由是作者开书时想看全书大概多长、分几段。不采用：全书章号在第一卷时填不准，写下来又会被后续卷当成约束；分卷表的字数区间和所属阶段已经回答「多长、分几段」。
-- **outline-structure-theory 等旧文件改为冷库，不再路由但保留**：保留原文备查。不采用：留着的文件仍会被检索到，其中互相冲突的口径还会被模型读到；原文在 git 历史里可查。
+- **패키지에 절차 전체 유지**: story-architect가 주 세션의 검수·보고 방식을 보면 전달이 더 잘 맞을 수 있다. 그러나 머리말에 반환할 항목을 이미 명시했고 작가 보고 템플릿은 하위 에이전트가 그 형식으로 답하게 할 뿐이다. 읽기 목록·보고 설명 약 1.3K도 추가된다.
+- **주 세션 계층·방법 계층을 새 파일로 분리**: 독자가 가장 깔끔히 나뉜다. 그러나 workflow-volume·workflow-outline 이름은 작가 보고 검사, 계약 목록, 참조 관문, story-import 복사본에 고정돼 있다. 파일 내부 절과 절별 추출로 같은 효과를 낼 수 있다.
+- **전권 분량·단계 개요를 유지하고 비율만 삭제**: 작가는 시작 때 전체 길이·단계 수를 보고 싶다. 그러나 첫 권에서 전권 장 번호를 정확히 정할 수 없고 적어 놓으면 후속 권을 제약한다. 권별 표의 글자 수 범위·단계가 이미 길이와 구성을 답한다.
+- **예전 파일을 연결하지 않는 보관소로 유지**: 원문을 참조할 수 있다. 그러나 검색으로 발견돼 충돌하는 기준을 모델이 다시 읽을 수 있다. 원문은 git 이력에서 확인할 수 있으므로 남기지 않는다.
 
 ## Consequences
 
-- 收益：卷纲、细纲每个时刻读到的方法和要填的模板字段对得上，同一件事只有一处说法；任务包只装方法，作者汇报模板不再进子代理上下文；有主对标的书不再多读八节点；story-architect 无任务包时的加载从照字面约 55K 降到最重约 19K。
-- 代价：卷纲主会话最坏叠加从 32141 涨到 33701，单章、日更 direct/solo 最坏叠加贴近 34.5K，后续给这几条路径加规则要先腾字数。删减时压掉了一批低价值条目（写长三种办法、救赎文八法、高潮分类等），以 git 历史为准。agents_version 递增到 36，已部署项目要重跑 story-setup 才能拿到新的 agent 模板和参考资料包；只装 skills 的宿主在升级前仍运行项目里的旧副本。结构改动没有重跑卷纲与前 10 章细纲的盲评，合入前按 2026-09-26 的协议补跑玄幻、女频各一本。
+- 이점: 시점별로 읽는 권별·상세 개요 방법이 채울 템플릿 필드와 맞고 같은 일은 한 곳에서 설명한다. 패키지에는 방법만 들어가 작가 보고 템플릿이 하위 에이전트 컨텍스트에 들어가지 않는다. 주 비교 작품이 있으면 여덟 지점을 추가로 읽지 않는다. 패키지 없는 story-architect의 문자상 약 55K 로드는 최대 약 19K로 줄었다.
+- 비용: 권별 주 세션 최악 중첩은 32141→33701로 늘고 단일 장·일일 집필 direct/solo는 약 34.5K에 가까워 후속 규칙 추가 전 공간을 확보해야 한다. 축소 과정에서 길게 쓰는 세 방법, 구원물 여덟 방법, 절정 분류 등 낮은 가치 항목을 제거했으며 git 이력을 기준으로 한다. agents_version 36의 새 템플릿·자료를 받으려면 기존 프로젝트에서 story-setup을 다시 실행해야 한다. skills-only 호스트는 업그레이드 전까지 프로젝트의 구복사본을 실행한다. 구조 변경 후 권별·첫 10장 상세 개요 블라인드 평가는 다시 실행하지 않았다. 병합 전에 2026-09-26 프로토콜로 현환·여성향 각 한 권을 추가 실행한다.

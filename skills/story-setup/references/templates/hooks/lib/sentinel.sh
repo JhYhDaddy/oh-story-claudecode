@@ -1,7 +1,7 @@
 #!/bin/bash
-# sentinel.sh — 读取 .story-deployed sentinel 字段的工具函数
-# .story-deployed 是 YAML key: value 格式（不依赖 yq，用 awk 单进程解析）
-# 注意：不加 set -euo pipefail，避免 source 时覆盖调用方的 shell options
+# sentinel.sh — .story-deployed 표식 필드를 읽는 유틸리티 함수
+# .story-deployed는 YAML key: value 형식(yq 없이 awk 단일 프로세스로 파싱)
+# source 시 호출자의 셸 옵션을 덮지 않도록 set -euo pipefail을 넣지 않는다.
 
 sentinel_file() {
   if [ -n "${SENTINEL_FILE:-}" ]; then
@@ -14,8 +14,8 @@ sentinel_file() {
 }
 
 # read_sentinel_field <field_name> [file]
-# 输出字段值（已去除前后空格和成对引号）；文件或字段缺失时输出空串。
-# 调用方安全：始终 return 0，不会因 pipefail / set -e 导致 caller 退出。
+# 앞뒤 공백과 짝 맞는 따옴표를 제거한 필드값을 출력한다. 파일/필드가 없으면 빈 문자열.
+# 항상 return 0으로 pipefail / set -e가 호출자를 종료시키지 않게 한다.
 read_sentinel_field() {
   local field="$1"
   local file="${2:-$(sentinel_file)}"
@@ -42,7 +42,7 @@ read_sentinel_field() {
   return 0
 }
 
-# sentinel_exists [file] — exit 0 / 1
+# sentinel_exists [file] — 종료 0 / 1
 sentinel_exists() {
   [ -f "${1:-$(sentinel_file)}" ]
 }

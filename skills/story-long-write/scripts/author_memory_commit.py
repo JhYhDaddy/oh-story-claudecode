@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
-"""Maintain evidence-backed author preferences and deterministic Markdown views.
-
-The language model supplies compact semantic transactions. This tool validates
-and applies them in memory, renders every derived view, and writes the JSON state
-last as the commit point. Author memory lives in two kinds of store: the
-project-level store under the workspace holds global / genre / workflow items
-(`AP` ids); each book keeps its own book-level store under the book directory
-(`BP` ids) so memory travels with the book. Both stay separate from each book's
-story-continuity tracking. When the book root is the workspace itself, the
-book-level store moves into a `书级/` subdirectory so the two never share a file.
+"""근거 있는 작가 선호와 결정적 Markdown 뷰를 관리한다.
+언어 모델이 간결한 의미 트랜잭션을 공급하면 메모리에서 검증·적용하고 모든 파생 뷰를 렌더링한 뒤 JSON state를 마지막 커밋 지점으로 쓴다.
+작가 기억은 작업 공간의 프로젝트 store(global/genre/workflow, `AP` ID)와 작품 디렉터리의 작품 store(`BP` ID)로 나뉘어 작품과 함께 이동한다.
+둘 다 이야기 연속성 추적과는 별개다. 작품 루트가 작업 공간이면 작품 store를 `书级/`로 옮겨 같은 파일을 공유하지 않게 한다.
 """
 
 from __future__ import annotations
@@ -33,27 +27,27 @@ PROFILE_MAX_BYTES = 12288
 PENDING_MAX_BYTES = 12288
 JOURNAL_MAX_BYTES = 24576
 QUERY_MAX_BYTES = 2048
-ASSERTION_MAX_BYTES = 120  # 新建条目的断言限一句话；解释进 reason（不进 query 载荷）。
-LEGACY_ASSERTION_MAX_BYTES = 768  # 存量条目的读取上限；强化老条目不受新上限约束。
+ASSERTION_MAX_BYTES = 120  # 새 항목의 단정은 한 문장으로 제한하며 설명은 query 내용에 넣지 않는 reason에 쓴다.
+LEGACY_ASSERTION_MAX_BYTES = 768  # 기존 항목의 읽기 상한. 기존 항목 강화에는 새 상한을 적용하지 않는다.
 
-# query 输出里的 lines（每条一行「- 断言（编号）」）是交给执行 agent 的注入
-# 载荷，QUERY_MAX_BYTES 是它在 prompt 里的注意力预算，不该放大；量的是执行者
-# 真正读到的这几行，不是 JSON 外壳（编号、kind、scope 只给主会话和脚本看）。
-# 防「作者以为载入了、实际被静默挤掉」靠三层：①新建条目的断言限
-# ASSERTION_MAX_BYTES，从源头短（强化已有条目不受限，否则存量长断言再也无法
-# 被确认，只会派生重复条目）；②写入端按下列任务组合（与
-# references/author-memory-maintenance.md 的映射表同包跟版）估算最坏查询情形——
-# 全局条目＋各 scope 维度上最重的单一切片（一次查询只带一个 book/genre/workflow，
-# 不同书的条目不会同现；切片按 casefold 归并，与 same_scope_value 同一口径，
-# 轻重按渲染后的行字节算，与真实载荷同一把尺），装不下时在返回的 warnings 里
-# 点名将被略过的条目、指向「整理作者记忆」，写入本身永不因注入预算失败；
-# ③查询按 重要度→本书例外→最近更新 排序装填，被略过的恒是重要度较低的条目，
-# 漏下的 ID 按同一优先级全数报进 omitted_ids，首句报进 omitted_summaries，
-# 供主会话用原话告诉作者哪几条没带上。
+# query 출력 lines는 항목마다 ‘- 단정(번호)’ 한 행으로 실행 agent에 주입하는
+# 내용이다. QUERY_MAX_BYTES는 프롬프트 주의력 예산이므로 늘리면 안 된다. 실행자가
+# 실제 읽는 행만 재며 주 세션·스크립트용 번호·kind·scope의 JSON 외곽 구조는 제외한다.
+# 작가는 불러온 줄 알지만 실제로는 조용히 밀려나는 일을 세 단계로 막는다. ① 새 단정은
+# ASSERTION_MAX_BYTES로 원천 제한한다. 기존 강화에는 적용하지 않아 긴 단정을 다시 확인하지 못하고
+# 중복 항목만 파생시키는 일을 피한다. ② 쓰기 측은 아래 작업 조합을
+# 같은 패키지 버전의 references/author-memory-maintenance.md 매핑과 맞춰 최악의 조회를 추정한다.
+# 전역 항목 + scope 차원별 가장 무거운 단일 구간이다. 조회마다 book/genre/workflow 하나씩만 있어
+# 다른 작품 항목이 함께 나오지 않는다. 구간은 same_scope_value처럼 casefold로 합치며
+# 무게는 실제 내용과 같은 렌더링 행 바이트로 잰다. 다 담지 못하면 warnings에
+# 빠질 항목을 명시하고 작가 기억 정리를 안내한다. 쓰기 자체는 주입 예산 때문에 실패하지 않는다.
+# ③ 조회는 중요도→현재 작품 예외→최근 갱신 순으로 채워 낮은 중요도부터 빠진다.
+# 누락 ID 전체를 같은 우선순위로 omitted_ids에, 첫 문장을 omitted_summaries에 넣어
+# 주 세션이 작가에게 어떤 항목이 빠졌는지 원문으로 알릴 수 있게 한다.
 QUERY_COMBOS: dict[str, tuple[str, ...]] = {
     "正文初稿/续写": ("prose_style", "story_design"),
     "去AI味/改写": ("prose_style",),
-    "设定/大纲": ("story_design", "workflow", "interaction"),
+    "설정/개요": ("story_design", "workflow", "interaction"),
     "审稿": ("delivery", "interaction", "prose_style"),
 }
 
@@ -69,11 +63,11 @@ SCOPE_LEVELS = ("global", "genre", "book", "workflow")
 STATUSES = ("active", "pending", "conflict", "rejected", "superseded")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
 IMPORTANCE_LEVELS = ("low", "medium", "high")
-# 作者记忆只记作者明确表达的偏好。repeated_correction / inferred_pattern 两条
-# 由 agent 主动推断写入的管道已经移除（#436）：它们只在攒待确认清单的审阅负
-# 担，不是记忆质量；文档也明说不装全量消息 hook，隐式捕获本就承诺不了完整
-# 性。SOURCES 里保留这两个值只为存量 state 仍能通过校验、仍能 decide/forget，
-# 新写入一律按 WRITE_SOURCES 校验。
+# 작가 기억은 명시적으로 표현한 선호만 기록한다. agent가 능동 추론해 쓰던 repeated_correction / inferred_pattern
+# 경로는 제거했다(#436). 이들은 기억 품질을 높이는 대신 확인 대기 목록의 검토 부담만
+# 쌓았다. 문서도 전체 메시지 훅을 설치하지 않는다고 명시하므로 암묵 수집의 완전성을 원래 보장할 수 없다.
+# SOURCES에 두 값을 남기는 것은 기존 state의 검증과 decide/forget을 허용하기 위해서다.
+# 새 쓰기는 모두 WRITE_SOURCES로 검증한다.
 SOURCES = (
     "explicit_user",
     "accepted_suggestion",
@@ -84,21 +78,21 @@ SOURCES = (
 WRITE_SOURCES = ("explicit_user", "accepted_suggestion", "manual")
 RANK = {"low": 0, "medium": 1, "high": 2}
 
-# 两级 store（#435）：项目级存 global/genre/workflow，ID 前缀 AP，位于
-# {工作区}/.story/作者记忆/；书级只存该书的 book 条目，ID 前缀 BP，位于
-# {书}/.story/作者记忆/，书归档、迁移时记忆随书走。ID 前缀就是路由键——
-# decide/forget 看 item_id 前缀，remember/replace 看 scope.level，一份事务
-# 只写一个 store。项目级 store 里升级前写入的存量 book 条目不再参与查询与估算，
-# 用 migrate 搬进书目录后才回来——不做双读，双读会让迁移永远没人做。
+# 2단계 store(#435): 프로젝트는 global/genre/workflow를 AP 접두사로 저장하며 위치는
+# {작업공간}/.story/작가기억/이다. 작품은 해당 book 항목만 BP 접두사로 저장하고 위치는
+# {작품}/.story/작가기억/로 보관·이동 시 작품을 따른다. ID 접두사가 라우팅 키다.
+# decide/forget은 item_id 접두사, remember/replace는 scope.level을 보며 트랜잭션 하나는
+# store 하나만 쓴다. 업그레이드 전 프로젝트 store의 book 항목은 조회·추정에서 제외하고
+# migrate로 작품 디렉터리에 옮긴 뒤에야 포함한다. 이중 읽기는 영원히 이전하지 않게 만들므로 사용하지 않는다.
 STORE_PREFIX = {"project": "AP", "book": "BP"}
 ID_PREFIXES = tuple(STORE_PREFIX.values())
-# 单书布局（书根就是工作区）下书级 store 的子目录：两级 store 的默认落点在这种
-# 布局里是同一个 state 文件，书级改住 {工作区}/.story/作者记忆/书级/。
+# 작품 루트가 작업 공간인 단일 작품 구조에서는 두 store 기본 위치가 같은 state 파일이므로
+# 작품 store는 {작업공간}/.story/작가기억/书级/ 하위 디렉터리로 옮긴다.
 SINGLE_ROOT_BOOK_DIR = "书级"
 
 
 class AuthorMemoryError(ValueError):
-    """Expected validation or state error."""
+    """예상 가능한 검증 또는 상태 오류."""
 
 
 def require(condition: bool, message: str) -> None:
@@ -222,12 +216,12 @@ def write_if_changed(path: Path, payload: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stores
+# 저장소
 # ---------------------------------------------------------------------------
 
 
 class Store:
-    """一个 state 文件的落点：项目级（工作区）或书级（书目录）。"""
+    """state 파일 위치: 프로젝트(작업 공간) 또는 작품(작품 디렉터리)."""
 
     __slots__ = ("kind", "root", "book")
 
@@ -250,12 +244,11 @@ class Store:
 
 
 def project_store(workspace: Path) -> Store:
-    return Store("project", workspace.resolve() / ".story" / "作者记忆", None)
+    return Store("project", workspace.resolve() / ".story" / "작가기억", None)
 
 
 def peek_book_name(state_path: Path) -> str | None:
-    """不校验整份 state，只取书名——书级 store 一旦建立，书名以 state 为准，
-    书目录改名不影响。"""
+    """state 전체를 검증하지 않고 작품명만 얻는다. 작품 store를 만든 뒤에는 state의 작품명이 기준이므로 디렉터리 이름 변경의 영향을 받지 않는다."""
     if not state_path.exists():
         return None
     document = read_json(state_path)
@@ -264,15 +257,12 @@ def peek_book_name(state_path: Path) -> str | None:
 
 
 def enclosing_workspace(workspace: Path) -> Path | None:
-    """--workspace 指到的其实是多书工作区里的一本书时，返回真正的创作工作区。
-
-    认三种迹象，任一成立即是：①工作区的上一层目录叫 长篇 / 短篇（story-setup 的书
-    目录约定，返回再上一层）；②某个祖先目录有 .active-book；③某个祖先目录有项目级
-    store（不带 book 字段的 state）——但工作区自己已有项目级 store 时不认这一条，最
-    近的项目级 store 就是它自己，免得主目录里一份误建的 store 挡住正常的单书工作区。
-    读不出来的祖先 state 不算迹象。"""
+    """--workspace가 다중 작품 공간 안의 작품을 가리키면 실제 창작 작업 공간을 반환한다.
+    세 단서 중 하나를 인정한다. ① 부모 이름이 장편/短篇이면 그 위를 반환(story-setup 규약). ② 상위에 .active-book 존재.
+    ③ 상위에 book 없는 프로젝트 state 존재. 다만 현재 공간 자체에 프로젝트 store가 있으면 이것이 가장 가까우므로 ③은 적용하지 않는다.
+    홈에 잘못 만든 store가 정상 단일 작품 공간을 방해하지 않게 한다. 읽지 못한 상위 state는 단서가 아니다."""
     resolved = workspace.resolve()
-    if resolved.parent.name in {"长篇", "短篇"}:
+    if resolved.parent.name in {"장편", "단편"}:
         return resolved.parent.parent
     own = project_store(resolved).state_path
     owns_project_store = own.exists() and peek_book_name(own) is None
@@ -292,18 +282,16 @@ def enclosing_workspace(workspace: Path) -> Path | None:
 
 
 def same_directory(first: Path, second: Path) -> bool:
-    # samefile 认得大小写不敏感文件系统（macOS APFS 默认）上只差大小写的同一目录。
+    # samefile은 macOS APFS 기본처럼 대소문자를 구별하지 않는 파일시스템의 동일 디렉터리를 인식한다.
     if first.exists() and second.exists():
         return os.path.samefile(first, second)
     return first.resolve() == second.resolve()
 
 
 def is_single_root(workspace: Path, book_root: Path | None) -> bool:
-    """单书布局：书根就是工作区（正文/、大纲/、追踪/ 直接在工作区根）。
-
-    同一目录还可能是多书工作区里的一本书被误传成了 --workspace（书目录自己也含
-    .story/作者记忆/）。那时按单书布局处理会把书级 state 挪进 书级/、在原处补一份
-    空的项目级 state，此后正确的调用全部失败，所以一律报错、零写入。"""
+    """단일 작품 구조: 본문/, 개요/, 추적/이 작업 공간 루트에 있어 작품 루트가 작업 공간이다.
+    다중 작품 공간의 작품을 실수로 --workspace로 넘겨도 같은 구조일 수 있다. 이때 단일 작품으로 처리하면 작품 state를 书级/로 옮기고
+    원래 위치에 빈 프로젝트 state를 만들어 이후 정상 호출이 모두 실패하므로 오류를 내고 아무것도 쓰지 않는다."""
     if book_root is None or not same_directory(book_root, workspace):
         return False
     outer = enclosing_workspace(workspace)
@@ -316,14 +304,14 @@ def is_single_root(workspace: Path, book_root: Path | None) -> bool:
 
 
 def book_memory_root(workspace: Path, book_root: Path) -> Path:
-    root = book_root.resolve() / ".story" / "作者记忆"
-    # 单书布局下两级 store 的默认落点是同一个 state 文件；书级改住子目录，
-    # 两份 state、两套派生视图、两条修订线仍各自独立。
+    root = book_root.resolve() / ".story" / "작가기억"
+    # 단일 작품 구조에서 두 store 기본 위치가 같으면 작품 store를 하위 디렉터리로 옮긴다.
+    # 두 state·파생 뷰·리비전 흐름은 여전히 독립적이다.
     return root / SINGLE_ROOT_BOOK_DIR if is_single_root(workspace, book_root) else root
 
 
 def sole_legacy_book_name(project: Store) -> str | None:
-    """项目级 store 里存量 book 条目只指向一本书时返回该书名（单书布局的升级默认）。"""
+    """프로젝트의 기존 book 항목이 한 작품만 가리키면 그 이름을 반환한다(단일 작품 업그레이드 기본값)."""
     if not project.state_path.exists():
         return None
     document = read_json(project.state_path)
@@ -354,8 +342,8 @@ def book_store(workspace: Path, book_root: Path, book: str | None) -> Store:
             f"--book「{name}」与 {root} 里记录的书「{stored}」不一致",
         )
     if name is None and is_single_root(workspace, book_root):
-        # 单书工作区的目录名常常不是书名；升级前的本书条目只指向一本书时，以它为准，
-        # 否则 migrate 会按目录名找不到存量、静默迁移零条。
+        # 단일 작품 작업 공간의 디렉터리명은 작품명과 다를 때가 많다. 이전 작품 항목이 한 작품만 가리키면 그것을 기준으로 한다.
+        # 그렇지 않으면 migrate가 디렉터리명으로 기존 항목을 못 찾아 0개를 조용히 이전한다.
         name = sole_legacy_book_name(project_store(workspace))
     if name is None:
         name = clean_text(resolved.name, "book root name", max_bytes=180)
@@ -363,9 +351,9 @@ def book_store(workspace: Path, book_root: Path, book: str | None) -> Store:
 
 
 def relocate_misplaced_book_state(workspace: Path, book_root: Path | None) -> None:
-    """单书布局的自愈：旧版把书级 state（带 state.book）写在了项目级位置，此后项目级
-    读写一律失败。带 --book-root {工作区} 运行任一命令时，把它原子移进书级子目录，
-    再在项目级位置补一份空 state 重建视图。state 内容不变，不推进任何修订。"""
+    """단일 작품 구조 자체 복구: 구형 버전이 state.book 있는 작품 state를 프로젝트 위치에 써서 프로젝트 읽기·쓰기가 모두 실패한 경우.
+    --book-root {작업공간}으로 명령을 실행하면 작품 하위 디렉터리로 원자 이동하고 프로젝트 위치에 빈 state와 뷰를 만든다.
+    기존 state 내용과 리비전은 바꾸지 않는다."""
     if not is_single_root(workspace, book_root):
         return
     project = project_store(workspace)
@@ -390,7 +378,7 @@ def resolve_target_store(kind: str, workspace: Path, book_root: Path | None, boo
         return project_store(workspace)
     require(
         book_root is not None,
-        "book 级条目须传 --book-root {书目录}——记忆随书存放在 {书}/.story/作者记忆/，不再写进工作区的项目级 store",
+        "book 级条目须传 --book-root {书目录}——记忆随书存放在 {书}/.story/작가기억/，不再写进工作区的项目级 store",
     )
     return book_store(workspace, book_root, book)
 
@@ -410,7 +398,7 @@ def empty_state(book: str | None = None) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Validation
+# 검증
 # ---------------------------------------------------------------------------
 
 
@@ -474,7 +462,7 @@ def normalize_item(value: object, label: str) -> dict[str, Any]:
 
 def scope_fits_store(scope: dict[str, str | None], book: str | None) -> bool:
     if book is None:
-        return True  # 项目级：存量 book 条目仍合法，只为老库能通过校验并被 migrate 搬走
+        return True  # 프로젝트의 기존 book 항목은 구형 저장소 검증과 migrate 이동을 위해 여전히 유효하다.
     return scope["level"] == "book" and (scope["value"] or "").casefold() == book.casefold()
 
 
@@ -490,8 +478,8 @@ def validate_state(value: object, *, store: Store) -> dict[str, Any]:
         require(
             "book" not in state,
             "project-level state must not carry state.book：这份其实是书级 state。--workspace 指到了"
-            "长篇/、短篇/ 下的书目录时，改传创作工作区根、书目录放 --book-root；只有书根就是工作区"
-            "（单书布局）时，带 --book-root {工作区} 重跑任一命令即自动移进 .story/作者记忆/书级/",
+            "장편/、단편/ 下的书目录时，改传创作工作区根、书目录放 --book-root；只有书根就是工作区"
+            "（单书布局）时，带 --book-root {工作区} 重跑任一命令即自动移进 .story/작가기억/书级/",
         )
         book = None
     revision = as_int(state.get("state_revision"), "state.state_revision")
@@ -594,8 +582,8 @@ def normalize_preference(value: object, label: str, *, allow_status: bool) -> di
     return {
         "kind": choice(preference.get("kind"), KINDS, f"{label}.kind"),
         "scope": normalize_scope(preference.get("scope"), f"{label}.scope"),
-        # 这里按存量上限收；ASSERTION_MAX_BYTES 只在真正新建条目时校验
-        # （require_new_item_assertion），好让存量长断言仍能被强化。
+        # 여기서는 기존 상한을 적용하고 ASSERTION_MAX_BYTES는 실제 새 항목 생성 시에만
+        # require_new_item_assertion으로 검사해 기존 긴 단정을 강화할 수 있게 한다.
         "assertion": clean_text(preference.get("assertion"), f"{label}.assertion", max_bytes=LEGACY_ASSERTION_MAX_BYTES),
         "quote": clean_text(preference.get("quote"), f"{label}.quote", max_bytes=768),
         "source_ref": optional_text(preference.get("source_ref"), f"{label}.source_ref", max_bytes=240),
@@ -670,7 +658,7 @@ def normalize_record_event(value: object) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Routing: which store does an operation belong to?
+# 라우팅: 작업이 어느 store에 속하는가?
 # ---------------------------------------------------------------------------
 
 
@@ -718,7 +706,7 @@ def transaction_store_kind(transaction: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Transactions
+# 트랜잭션
 # ---------------------------------------------------------------------------
 
 
@@ -728,8 +716,8 @@ def transaction_digest(transaction: dict[str, Any]) -> str:
 
 
 def fingerprint(preference: dict[str, Any]) -> str:
-    """同一条偏好的身份：kind＋scope＋断言，scope.value 与 same_scope_value 同样按
-    casefold 比——否则「Urban」「urban」会各建一条，两条同断言一起挤进 prompt。"""
+    """같은 선호의 식별 기준은 kind+scope+단정이다. scope.value는 same_scope_value처럼 casefold로 비교한다.
+    아니면 Urban과 urban을 각각 만들어 동일 단정 둘이 프롬프트에 들어간다."""
     scope = preference["scope"]
     value = {
         "kind": preference["kind"],
@@ -740,8 +728,8 @@ def fingerprint(preference: dict[str, Any]) -> str:
 
 
 def require_new_item_assertion(preference: dict[str, Any]) -> None:
-    """新建条目的断言限一句话。强化已有条目走不到这里——存量长断言必须还能
-    被确认，否则作者重申老偏好只会派生一条重复条目，库反而更挤。"""
+    """새 단정은 한 문장으로 제한한다. 기존 강화는 이 경로를 거치지 않아 긴 기존 단정도 다시 확인할 수 있다.
+    그렇지 않으면 작가가 선호를 재확인할 때 중복 항목만 생겨 저장소가 더 붐빈다."""
     size = len(preference["assertion"].encode("utf-8"))
     require(
         size <= ASSERTION_MAX_BYTES,
@@ -757,7 +745,7 @@ def require_scope_fits_store(state: dict[str, Any], scope: dict[str, str | None]
     if book is None:
         require(
             scope["level"] != "book",
-            "book 级条目须传 --book-root {书目录}——记忆随书存放在 {书}/.story/作者记忆/，不再写进工作区的项目级 store",
+            "book 级条目须传 --book-root {书目录}——记忆随书存放在 {书}/.story/작가기억/，不再写进工作区的项目级 store",
         )
     else:
         require(
@@ -857,7 +845,7 @@ def apply_decide(state: dict[str, Any], operation: dict[str, Any], revision: int
 
 
 def release_conflicts(state: dict[str, Any], removed_ids: set[str], revision: int) -> int:
-    """被撤下的 active 条目不再是任何候选的冲突对象；冲突对象清空的候选退回 pending。"""
+    """내린 active 항목은 더 이상 후보의 충돌 대상이 아니다. 충돌 대상이 빈 후보는 pending으로 돌린다."""
     released = 0
     for candidate in state["items"].values():
         if candidate["status"] != "conflict":
@@ -916,7 +904,7 @@ def seal_transaction(
     *,
     store: Store,
 ) -> dict[str, Any]:
-    """把本次修订写进 journal / applied_transactions，并整份校验。"""
+    """이번 리비전을 journal / applied_transactions에 쓰고 전체 검증한다."""
     revision = updated["state_revision"] + 1
     updated["state_revision"] = revision
     updated["journal"].append({
@@ -960,7 +948,7 @@ def apply_transaction(state: dict[str, Any], transaction: dict[str, Any], digest
 
 
 # ---------------------------------------------------------------------------
-# Derived views
+# 파생 뷰
 # ---------------------------------------------------------------------------
 
 
@@ -974,8 +962,8 @@ def scope_label(scope: dict[str, str | None]) -> str:
 def store_caption(state: dict[str, Any]) -> str:
     book = state.get("book")
     if book is None:
-        return "项目级记忆（全局、题材、流程）；各书的书级记忆住在各自书目录的 .story/作者记忆/。"
-    return f"本书「{book}」的书级记忆；全局、题材、流程记忆住在工作区的 .story/作者记忆/。"
+        return "项目级记忆（全局、题材、流程）；各书的书级记忆住在各自书目录的 .story/작가기억/。"
+    return f"本书「{book}」的书级记忆；全局、题材、流程记忆住在工作区的 .story/작가기억/。"
 
 
 def render_profile(state: dict[str, Any]) -> str:
@@ -995,8 +983,8 @@ def render_profile(state: dict[str, Any]) -> str:
             lines.extend(["- 暂无", ""])
             continue
         for item in items:
-            # 必须显示 importance：它决定超编时谁留在 prompt 里，而「整理作者
-            # 记忆」只以本文件为输入——不显示就无从判断该退役哪条。
+            # importance는 초과 시 프롬프트에 남을 항목을 결정하므로 반드시 표시한다. 작가 기억 정리는
+            # 이 파일만 입력으로 쓰기 때문에 표시하지 않으면 무엇을 퇴역시킬지 판단할 수 없다.
             lines.append(
                 f"- **{item['id']}**〔{scope_label(item['scope'])}｜重要 {item['importance']}"
                 f"｜把握 {item['confidence']}｜确认 {item['confirmation_count']} 次〕{item['assertion']}"
@@ -1053,11 +1041,11 @@ def render_journal(state: dict[str, Any]) -> str:
 
 def render_views(state: dict[str, Any]) -> dict[str, str]:
     views = {
-        "作者画像.md": render_profile(state),
-        "待确认.md": render_pending(state),
-        "变更记录.md": render_journal(state),
+        "작가프로필.md": render_profile(state),
+        "확인대기.md": render_pending(state),
+        "변경기록.md": render_journal(state),
     }
-    limits = {"作者画像.md": PROFILE_MAX_BYTES, "待确认.md": PENDING_MAX_BYTES, "变更记录.md": JOURNAL_MAX_BYTES}
+    limits = {"작가프로필.md": PROFILE_MAX_BYTES, "확인대기.md": PENDING_MAX_BYTES, "변경기록.md": JOURNAL_MAX_BYTES}
     for name, payload in views.items():
         require(len(payload.encode("utf-8")) <= limits[name], f"{name} exceeds {limits[name]} bytes; consolidate old memory first")
     return views
@@ -1069,12 +1057,12 @@ def write_snapshot(store: Store, state: dict[str, Any]) -> None:
     require(len(state_payload.encode("utf-8")) <= STATE_MAX_BYTES, f"_author-memory-state.json exceeds {STATE_MAX_BYTES} bytes")
     for name, payload in views.items():
         write_if_changed(store.root / name, payload)
-    # State is the authority and therefore the last commit point.
+    # state가 기준이므로 마지막 커밋 지점이다.
     write_if_changed(store.state_path, state_payload)
 
 
 # ---------------------------------------------------------------------------
-# Query & budget
+# 조회와 예산
 # ---------------------------------------------------------------------------
 
 
@@ -1087,18 +1075,17 @@ def summarize_assertion(assertion: str, *, limit: int = 14) -> str:
 
 
 def compact_item(item: dict[str, Any]) -> dict[str, Any]:
-    """query 的 items 只带这四个字段，给主会话和脚本按 kind/scope 判断用；
-    reason、evidence 等一律不出 store。"""
+    """query items는 주 세션·스크립트의 kind/scope 판단용 네 필드만 포함한다. reason·evidence 등은 store 밖으로 내보내지 않는다."""
     return {"id": item["id"], "kind": item["kind"], "scope": item["scope"], "assertion": item["assertion"]}
 
 
 def render_line(item: dict[str, Any]) -> str:
-    """执行者读到的一行：断言原文＋编号。注入预算量的就是这几行。"""
+    """실행자가 읽는 한 행은 단정 원문+번호다. 주입 예산은 이 행들만 잰다."""
     return f"- {item['assertion']}（{item['id']}）"
 
 
 def line_bytes(item: dict[str, Any]) -> int:
-    """一行在注入载荷里的占位，含行尾换行——估算与真实装填只用这一把尺。"""
+    """줄바꿈을 포함한 행의 주입 크기. 추정과 실제 채우기에서 같은 기준만 쓴다."""
     return len((render_line(item) + "\n").encode("utf-8"))
 
 
@@ -1106,13 +1093,10 @@ SCOPE_RANK = {"book": 0, "genre": 1, "workflow": 2, "global": 3}
 
 
 def query_sort_key(item: dict[str, Any]) -> tuple[int, int, int, int, int]:
-    """重要度→本书例外→最近更新→确认次数→编号。
-
-    重要度必须排在 scope 之前：超编时先丢的应当是不重要的条目，而不是「凡
-    全局一律先丢」。scope 在前会让任意数量的 low 本书琐事挤掉 high 的全局
-    铁律——那恰恰是作者最不愿意丢的那一类。同重要度之内才按本书例外优先。
-    两个 store 的修订号互不可比，但 book 条目只来自书级 store、其余只来自项目
-    级，同 scope 必同 store，所以按修订号比「最近更新」在合并后仍成立。
+    """중요도→작품 예외→최근 갱신→확인 횟수→번호.
+    중요도를 scope보다 먼저 정렬해야 초과 시 중요하지 않은 항목부터 빠진다. scope가 먼저면 low 작품 잡사항이 high 전역 원칙을 밀어낼 수 있다.
+    같은 중요도 안에서만 작품 예외를 우선한다. 두 store의 리비전은 비교할 수 없지만 같은 scope는 항상 같은 store이므로
+    합친 후에도 리비전으로 최근 갱신을 비교할 수 있다.
     """
     return (
         -RANK[item["importance"]],
@@ -1129,12 +1113,9 @@ def fit_items(
     *,
     extra: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
-    """按渲染后的行把条目装进 QUERY_MAX_BYTES：装不下的跳过而不中断（一条长的
-    不挡后面的短条）。返回 (结果文档, 全部漏下 ID)。
-
-    只有 lines 计入预算；items、漏项清单和 `extra`（book_revision 等）是给主会话
-    和脚本看的，不进执行者 prompt，所以漏项全数列出、不封顶，并按候选优先级
-    排序——排在前面的就是作者最该知道没带上的那几条。
+    """렌더링 행을 QUERY_MAX_BYTES에 채운다. 안 들어가는 항목은 중단하지 않고 건너뛰어 뒤 짧은 항목을 막지 않는다. (결과 문서, 모든 누락 ID)를 반환한다.
+    예산에는 lines만 센다. items·누락 목록·`extra`(book_revision 등)는 주 세션·스크립트용으로 실행자 프롬프트에 들어가지 않는다.
+    따라서 누락은 상한 없이 전부 후보 우선순위로 열거하며 앞 항목일수록 작가에게 알려야 할 중요 누락이다.
     """
     kept: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
@@ -1156,7 +1137,7 @@ def fit_items(
         "omitted": len(dropped),
         "omitted_ids": [item["id"] for item in dropped],
         "omitted_summaries": {item["id"]: summarize_assertion(item["assertion"]) for item in dropped},
-        # 组装脚本按题材×流程查好几次再合并，合并后只能按重要度重排漏项，所以把它带出来。
+        # 조립 스크립트가 장르×절차로 여러 번 조회·병합한 뒤 누락 항목을 중요도로 재정렬할 수 있도록 중요도를 포함한다.
         "omitted_importance": {item["id"]: item["importance"] for item in dropped},
     }
     result.update(extra or {})
@@ -1168,9 +1149,8 @@ def build_query_result(
     project_state: dict[str, Any] | None,
     book_state: dict[str, Any] | None,
 ) -> tuple[dict[str, Any], list[str]]:
-    """真实查询与写入端估算共用的唯一装填入口：候选已按优先级排好，这里补上
-    book_revision 等附加字段再装填。两处装填口径一旦分叉就是假阴性——回执
-    说没事、query 照样丢条。"""
+    """실제 조회와 쓰기 측 추정이 공유하는 유일한 채우기 진입점. 정렬된 후보에 book_revision 등을 보충해 채운다.
+    기준이 갈라지면 응답에는 문제가 없다면서 실제 query에서 항목이 빠지는 거짓 음성이 된다."""
     extra: dict[str, Any] = {}
     if book_state is not None:
         extra["book_revision"] = book_state["state_revision"]
@@ -1184,9 +1164,8 @@ def merged_query(
     kinds: set[str],
     requested_scopes: dict[str, str | None],
 ) -> tuple[dict[str, Any], list[str]]:
-    """真实查询的纯函数部分：项目级按 kind／scope 过滤（存量 book 条目不参与，
-    migrate 后才回来），书级整个 store 就是这本书的，只按 status／kind 过滤；
-    合并后按 重要度→本书例外→最近更新 装填。"""
+    """실제 조회의 순수 함수 부분. 프로젝트는 kind/scope로 필터링하며 기존 book 항목은 migrate 전까지 제외한다.
+    작품 store 전체가 해당 작품이므로 status/kind만 필터링한다. 합친 뒤 중요도→작품 예외→최근 갱신으로 채운다."""
 
     def relevant(item: dict[str, Any]) -> bool:
         if item["status"] != "active" or item["kind"] not in kinds:
@@ -1206,11 +1185,9 @@ def merged_query(
 
 
 def slice_weight(items: list[dict[str, Any]]) -> int:
-    """切片在真实载荷里的占位：按渲染后的行（含换行）计。
-
-    必须与 fit_items 同一把尺。按 JSON 字节挑会挑错切片——scope 取值长、断言
-    短的切片 JSON 更重，渲染出的行却更轻，于是估算判「装得下」而真实查询溢出
-    （warnings 假阴性）。
+    """실제 내용에서 구간이 차지하는 크기를 렌더링 행과 줄바꿈으로 잰다.
+    fit_items와 같아야 한다. JSON 바이트를 쓰면 scope가 길고 단정이 짧은 구간을 무겁게 잘못 선택해
+    렌더링 행은 가벼워 추정은 들어간다고 하면서 실제 조회는 넘치는 warnings 거짓 음성이 생긴다.
     """
     return sum(line_bytes(item) for item in items)
 
@@ -1226,17 +1203,11 @@ def worst_case_items(
     book_state: dict[str, Any] | None,
     kinds: tuple[str, ...],
 ) -> list[dict[str, Any]]:
-    """某个任务组合的最坏查询候选：全局条目＋各 scope 维度上最重的单一切片。
-
-    一次查询只带一个 book/genre/workflow，不同书的条目不会同现，所以按切片
-    取最重而不是全加起来，多书工作区才不会被粗算误伤。切片按 casefold 归并，
-    与 same_scope_value 同一口径——否则只差大小写的同名书在这里算两个切片、
-    在真实查询里却合成一个，估算就成了下界。
-
-    book 维度就是当前可见的书级 store（整个 store 是这本书的一片），所以写书级
-    条目时「本书＋全局」是精确的；写项目级条目而没传 --book-root 时看不到任何
-    书级 store，估算只覆盖项目级。项目级里的存量 book 条目不参与查询，也不参与
-    估算。
+    """작업 조합의 최악 후보: 전역 항목+scope 차원별 가장 무거운 단일 구간.
+    조회는 book/genre/workflow 하나씩만 포함해 다른 작품이 함께 나오지 않으므로 전체 합계 대신 가장 무거운 구간을 쓴다.
+    same_scope_value처럼 casefold로 합쳐 대소문자만 다른 작품을 별개로 추정하는 하한 오류를 피한다.
+    book 차원은 현재 보이는 작품 store 전체이므로 작품 쓰기에서 ‘현재 작품+전역’은 정확하다.
+    프로젝트 쓰기에 --book-root가 없으면 작품 store가 보이지 않아 프로젝트만 추정한다. 이전 프로젝트 book 항목은 조회·추정에서 제외한다.
     """
     pool = [item for item in active_of_kinds(project_state, kinds) if item["scope"]["level"] != "book"]
     worst = [item for item in pool if item["scope"]["level"] == "global"]
@@ -1254,7 +1225,7 @@ def worst_case_items(
 
 
 def legacy_book_items(project_state: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """项目级 store 里升级前写入、还活着的 book 条目——只有 migrate 会碰它们。"""
+    """업그레이드 전에 프로젝트 store에 쓴 활성 book 항목. migrate만 처리한다."""
     if project_state is None:
         return []
     return [
@@ -1264,10 +1235,8 @@ def legacy_book_items(project_state: dict[str, Any] | None) -> list[dict[str, An
 
 
 def query_budget_warnings(project_state: dict[str, Any] | None, book_state: dict[str, Any] | None) -> list[str]:
-    """写入回执的预算提醒：每个任务组合按最坏查询情形试装，装不下的点名。
-
-    写入永不因注入预算失败；提醒指向「整理作者记忆」。点名带断言首句——只给
-    编号的话，作者不打开 作者画像.md 就无从判断丢的是什么。
+    """쓰기 응답의 예산 안내: 작업 조합별 최악 조회로 채워 보고 못 담은 항목을 명시한다.
+    쓰기는 주입 예산 때문에 실패하지 않으며 작가 기억 정리를 안내한다. 번호만으로는 작가프로필.md를 열어야 알 수 있으므로 단정 첫 문장도 보여 준다.
     """
     warnings: list[str] = []
     for task, kinds in QUERY_COMBOS.items():
@@ -1293,11 +1262,9 @@ def visible_states(
     book_root: Path | None,
     book: str | None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
-    """写入后可见的两级状态：刚写的那份用内存里的，另一份只读加载（没有就 None）。
-
-    此时写入已经落盘，另一份读不出来（书目录不存在、--book 与书级记录不符、state
-    损坏）只能降级为提醒：若在这里报错，调用方会告诉作者「没记住」，换个 event_id
-    重试就派生重复条目。"""
+    """쓰기 후 보이는 두 단계 상태. 방금 쓴 것은 메모리에서, 다른 것은 읽기 전용으로 얻으며 없으면 None이다.
+    이미 저장했으므로 다른 store의 디렉터리 부재·작품명 불일치·손상은 안내로만 낮춘다. 오류를 내면 호출자가 기억 실패로 알리고
+    다른 event_id로 재시도해 중복 항목을 만들 수 있다."""
     try:
         if store.kind == "project":
             other = load_state(book_store(workspace, book_root, book)) if book_root is not None else None
@@ -1310,13 +1277,13 @@ def visible_states(
 
 
 # ---------------------------------------------------------------------------
-# Commands
+# 명령
 # ---------------------------------------------------------------------------
 
 
 def prepare_workspace(workspace: Path, book_root: Path | None = None) -> None:
-    """每个命令的入口：校验工作区，并在单书布局下先把误放的书级 state 归位——
-    归位之前项目级 store 读不出来，放在任何读取之前才能让只读查询也自愈。"""
+    """각 명령 진입점에서 작업 공간을 검증하고 단일 작품 구조의 잘못 놓인 state를 먼저 복구한다.
+    복구 전에는 프로젝트를 읽지 못하므로 모든 읽기 앞에 두어 읽기 전용 조회도 자체 복구하게 한다."""
     require(workspace.exists() and workspace.is_dir(), f"workspace does not exist: {workspace}")
     relocate_misplaced_book_state(workspace, book_root)
 
@@ -1347,7 +1314,7 @@ def command_commit(workspace: Path, book_root: Path | None, book: str | None, in
     digest = transaction_digest(transaction)
     updated, summaries = apply_transaction(state, transaction, digest, store=store)
     replayed = updated is state
-    # 幂等重放时也重写快照，修复缺失或过期的派生视图。
+    # 멱등 재실행에서도 스냅샷을 다시 써 누락·만료된 파생 뷰를 복구한다.
     write_snapshot(store, updated)
     project_state, book_state, load_warnings = visible_states(store, updated, workspace, book_root, book)
     return {
@@ -1424,9 +1391,9 @@ def command_query(
         "genre": optional_text(genre, "query.genre", max_bytes=180),
         "workflow": optional_text(workflow, "query.workflow", max_bytes=180),
     }
-    # 装不下的**跳过而不中断**（一条长的不挡后面的短条），漏下的 ID 报进
-    # omitted_ids：非空＝记忆超编该整理了，不是「没有更多了」。写入端的
-    # warnings 与这里共用 build_query_result 同一把尺，估算即实况。
+    # 담지 못한 항목은 중단 대신 건너뛴다. 긴 항목 하나가 뒤의 짧은 항목을 막지 않는다. 누락 ID는
+    # omitted_ids로 보고한다. 비어 있지 않으면 더 없음이 아니라 기억 예산 초과로 정리가 필요하다는 뜻이다. 쓰기 측의
+    # warnings도 같은 build_query_result 기준을 쓰므로 추정이 실제 결과와 일치한다.
     result, _ = merged_query(project_state, book_state, set(kinds), requested_scopes)
     require(
         sum(len((line + "\n").encode("utf-8")) for line in result["lines"]) <= QUERY_MAX_BYTES,
@@ -1458,7 +1425,7 @@ def command_check(workspace: Path, book_root: Path | None, book: str | None) -> 
             result["project"] = {"root": str(project.root), **check_store(project)}
     else:
         result["project"] = {"root": str(project.root), **check_store(project)}
-    # 兼容旧调用：顶层 revision / counts 指项目级 store。
+    # 이전 호출 호환: 최상위 revision / counts는 프로젝트 store를 가리킨다.
     primary = result.get("project") or result["book"]
     result["revision"] = primary["revision"]
     result["counts"] = primary["counts"]
@@ -1469,17 +1436,15 @@ MIGRATE_PREFIX = "migrate:"
 
 
 def migration_digest(item: dict[str, Any]) -> str:
-    """迁移事务的摘要只看条目不可变的身份：编号、类型、范围、断言。证据会随强化
-    增长、状态会随 decide/forget 变化，它们若进摘要，中途失败后作者动过条目就会
-    永远「already used with different content」。"""
+    """이전 트랜잭션의 해시는 불변 식별 정보인 번호·유형·범위·단정만 본다. 증거·상태는 강화나 decide/forget으로 바뀐다.
+    이를 넣으면 중간 실패 후 작가가 수정했을 때 영구적으로 already used with different content가 된다."""
     return transaction_digest({"id": item["id"], "kind": item["kind"], "scope": item["scope"], "assertion": item["assertion"]})
 
 
 def migrated_item(source: dict[str, Any], new_id: str, revision: int, id_map: dict[str, str]) -> dict[str, Any]:
-    """把项目级的存量 book 条目原样搬进书级 store：断言、证据、确认次数、重要度
-    全部保留，只换编号与修订。冲突对象只保留同书已迁移的（重映射为 BP），
-    引用全局条目的冲突关系不再成立——本书例外按优先级覆盖全局，不算冲突——
-    对象清空的候选退回 pending。"""
+    """프로젝트의 기존 book 항목을 작품 store로 옮기며 단정·증거·확인 횟수·중요도는 보존하고 번호·리비전만 바꾼다.
+    충돌 대상은 같은 작품의 이미 이전한 항목만 BP로 재매핑한다. 작품 예외는 전역보다 우선하므로 전역과의 충돌은 제거한다.
+    대상이 빈 후보는 pending으로 돌린다."""
     item = copy.deepcopy(source)
     item["id"] = new_id
     item["created_revision"] = revision
@@ -1492,7 +1457,7 @@ def migrated_item(source: dict[str, Any], new_id: str, revision: int, id_map: di
 
 
 def migration_records(state: dict[str, Any]) -> dict[str, str]:
-    """书级 store 里「源 AP 编号 → 已建 BP 编号」；每个源条目一笔 migrate:APxxx 事务。"""
+    """작품 store의 원본 AP→생성된 BP 번호. 원본 항목마다 migrate:APxxx 트랜잭션 하나다."""
     records: dict[str, str] = {}
     for transaction_id, record in state["applied_transactions"].items():
         if transaction_id.startswith(MIGRATE_PREFIX) and is_item_id(transaction_id[len(MIGRATE_PREFIX):]):
@@ -1507,12 +1472,10 @@ def apply_single(state: dict[str, Any], transaction_id: str, digest: str, mutate
 
 
 def command_migrate(workspace: Path, book_root: Path | None, book: str | None) -> dict[str, Any]:
-    """把项目级 store 里某本书的存量 book 条目搬进该书目录的书级 store。
-
-    书级每个源条目一笔事务（migrate:APxxx，摘要只看不可变字段），所以每个源条目
-    至多迁一次，与本次批次里还有哪些条目无关、源条目状态怎么变都不会锁死；项目级
-    随后一笔事务把这批源条目标 superseded 并注明去向。先写书级再写项目级，中途
-    失败直接重跑：书级已有记录的直接复用编号，只补项目级。
+    """프로젝트의 특정 작품 기존 book 항목을 해당 작품 store로 옮긴다.
+    원본별 migrate:APxxx 트랜잭션은 불변 필드 해시만 써 배치 구성·원본 상태 변화와 무관하게 최대 한 번 이전한다.
+    이후 프로젝트 트랜잭션 하나로 원본을 superseded 처리하고 목적지를 적는다. 작품을 먼저 쓰고 프로젝트를 나중에 쓴다.
+    중간 실패 후 재시도하면 작품의 기존 번호를 재사용하고 프로젝트만 보충한다.
     """
     prepare_workspace(workspace, book_root)
     require(book_root is not None, "migrate 须传 --book-root {书目录}：书名到书目录的映射由调用方给出")
@@ -1545,7 +1508,7 @@ def command_migrate(workspace: Path, book_root: Path | None, book: str | None) -
         book_state = empty_state(store.book)
     id_map = migration_records(book_state)
 
-    # 1) 书级：还没迁的源条目各建一条 BP；已迁的复用编号。
+    # 1) 작품 측: 미이전 원본마다 BP를 만들고 이미 이전했으면 번호를 재사용한다.
     for item in legacy:
         if item["id"] in id_map:
             continue
@@ -1564,10 +1527,10 @@ def command_migrate(workspace: Path, book_root: Path | None, book: str | None) -
             store=store,
         )
         id_map[item["id"]] = new_id
-    # 幂等重跑也重写快照，修复缺失或过期的派生视图。
+    # 멱등 재실행에서도 스냅샷을 다시 써 누락·만료된 파생 뷰를 복구한다.
     write_snapshot(store, book_state)
 
-    # 2) 项目级：这批源条目标 superseded 并注明去向。
+    # 2) 프로젝트 측: 이번 원본 항목을 superseded로 표시하고 목적지를 적는다.
     migrated = [{"from": item["id"], "to": id_map[item["id"]]} for item in legacy]
     if legacy:
         transaction_id = f"{MIGRATE_PREFIX}{store.book.casefold()}:r{project_state['state_revision'] + 1}"

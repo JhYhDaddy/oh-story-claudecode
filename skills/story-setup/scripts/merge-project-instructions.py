@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""Merge one host's oh-story block into a project instruction file.
+"""프로젝트 지침 파일에 호스트 하나의 oh-story 블록을 병합한다.
 
-CLAUDE.md and the shared root AGENTS.md carry one managed block per host:
+CLAUDE.md와 공유 루트 AGENTS.md에는 호스트별 관리 블록이 하나씩 있다.
 
     <!-- oh-story:codex 开始：重新部署时整块替换，自己的内容写在块外 -->
-    ...rendered template...
+    ...렌더링한 템플릿...
     <!-- oh-story:codex 结束 -->
 
-Redeploying replaces only this host's block; text outside every block and
-other hosts' blocks stay byte-identical.  Files written before blocks existed
-are migrated once: the oh-story title line, its intro and the sections whose
-headings the current template owns are removed and the block takes their place.
-A file counts as an old deployment only when an oh-story title line sits
-outside every block; once another host's block exists, only the headings unique
-to this host are still treated as leftovers.  Anything else is the author's own
-file and the block is appended.
+재배포는 이 호스트 블록만 교체한다. 모든 블록 밖의 텍스트와 다른 호스트
+블록은 바이트 단위로 보존한다. 블록 도입 전 파일은 한 번 이전한다.
+oh-story 제목 줄, 소개, 현재 템플릿이 소유한 제목의 절을 제거하고 블록으로
+대체한다. 모든 블록 밖에 oh-story 제목 줄이 있을 때만 이전 배포로 간주한다.
+다른 호스트 블록이 이미 있으면 이 호스트 고유 제목만 이전 잔여물로 취급한다.
+그 밖의 파일은 작가 소유이므로 블록을 뒤에 추가한다.
+위 중국어 마커 예시는 실제 인식 구문이므로 원형을 유지한다.
 """
 
 from __future__ import annotations
@@ -29,12 +28,12 @@ from pathlib import Path
 
 
 HOSTS = ("claude-code", "opencode", "codex", "zcode", "openclaw", "reasonix", "generic")
-# 旧模板里有、现模板已删的受管节；迁移旧文件时一并清掉。
+# 이전 템플릿에는 있었지만 현재 템플릿에서 삭제된 관리 대상 절도 이전 파일 이전 시 함께 제거한다.
 RETIRED_HEADINGS = frozenset({"协作规则"})
-# 名字太常见的节，旧文件里只有带 oh-story 痕迹才算受管，避免误删作者自己的同名节。
+# 흔한 이름의 절은 oh-story 흔적이 있을 때만 관리 대상으로 간주해 작가의 동명 절을 잘못 삭제하지 않는다.
 GENERIC_HEADINGS = frozenset({"Skill 路由表", "文件结构", "写作约束"})
-LEGACY_SIGNALS = ("story-", "拆文库", "追踪/", "细纲", "作者记忆", "oh-story")
-# 各宿主模板共有的节；文件里已有别的宿主的块、块外又没有旧标题时，这些节归作者。
+LEGACY_SIGNALS = ("story-", "작품분석실", "추적/", "细纲", "작가기억", "oh-story")
+# 호스트 템플릿 공통 절: 다른 호스트 블록이 있고 블록 밖에 이전 제목이 없으면 작가 소유다.
 SHARED_HEADINGS = frozenset({"Skill 路由表", "文件结构", "写作约束", "与作者协作", "Compact 后恢复上下文"})
 TITLE_SIGNAL = "网文写作工具集"
 LEGACY_MARKER = "<!-- managed-by: story-setup -->"
@@ -77,7 +76,7 @@ def managed_headings(template: str) -> set[str]:
 
 
 def protected_spans(text: str) -> list[tuple[int, int]]:
-    """Character spans of every existing oh-story block (any host)."""
+    """모든 기존 oh-story 블록(호스트 무관)의 문자 범위."""
     spans = []
     for match in ANY_BEGIN_RE.finditer(text):
         host = match.group(1)
@@ -89,7 +88,7 @@ def protected_spans(text: str) -> list[tuple[int, int]]:
 
 
 def title_re(template: str) -> re.Pattern[str] | None:
-    """The template's own H1, with the project name as a wildcard."""
+    """프로젝트 이름을 와일드카드로 처리한 템플릿 자체 H1."""
     first = next((line for line in template.splitlines() if line.startswith("# ")), "")
     if TITLE_SIGNAL not in first:
         return None
@@ -98,10 +97,9 @@ def title_re(template: str) -> re.Pattern[str] | None:
 
 
 def strip_legacy(text: str, template: str) -> tuple[str, int | None, list[str]]:
-    """Remove unmarked oh-story content owned by this template.
+    """이 템플릿이 소유한 마커 없는 oh-story 콘텐츠를 제거한다.
 
-    Returns the new text, the offset where the block should go (None when
-    nothing legacy was found) and the removed section titles.
+    새 텍스트, 블록 삽입 오프셋(이전 콘텐츠가 없으면 None), 제거한 절 제목을 반환한다.
     """
     headings = managed_headings(template)
     own_title = title_re(template)
@@ -116,7 +114,7 @@ def strip_legacy(text: str, template: str) -> tuple[str, int | None, list[str]]:
     def inside_block(index: int) -> bool:
         return any(start <= offsets[index] < end for start, end in spans)
 
-    # 旧部署的凭据：块外有 oh-story 标题行（任一宿主）或旧版托管标记。
+    # 이전 배포의 증거: 블록 밖의 oh-story 제목 줄(어느 호스트든) 또는 이전 관리 마커.
     outside = [line for i, line in enumerate(lines) if not inside_block(i)]
     legacy_deploy = any(
         (line.startswith("# ") and TITLE_SIGNAL in line) or line.strip() == LEGACY_MARKER for line in outside
@@ -124,11 +122,11 @@ def strip_legacy(text: str, template: str) -> tuple[str, int | None, list[str]]:
     if not legacy_deploy:
         if not spans:
             return text, None, []
-        # 已有别的宿主的块：共有节在先迁移的宿主那里清过了，剩下的只可能是本宿主独有的节。
+        # 다른 호스트 블록이 이미 있으면 공통 절은 먼저 이전한 호스트가 정리했으므로 이 호스트 고유 절만 남는다.
         headings = headings - SHARED_HEADINGS - RETIRED_HEADINGS
 
-    # 把块外的行切成「本宿主标题行 + 引言」与「## 节」两类片段。
-    pieces: list[tuple[str, int, int]] = []  # (title, start_line, end_line_exclusive)
+    # 블록 밖의 줄을 ‘이 호스트의 제목 줄 + 소개’와 ‘## 절’ 두 종류 조각으로 나눈다.
+    pieces: list[tuple[str, int, int]] = []  # (제목, 시작 줄, 끝 줄[미포함])
     index = 0
     while index < len(lines):
         if inside_block(index):
@@ -192,7 +190,7 @@ def merge(existing: str, template: str, host: str, project_name: str) -> tuple[s
         report["status"] = "created"
         merged = block + "\n"
     else:
-        protected_spans(text)  # 先校验已有块都闭合
+        protected_spans(text)  # 먼저 기존 블록이 모두 닫혔는지 검증한다.
         pattern = block_re(host)
         matches = list(pattern.finditer(text))
         if len(matches) > 1:
@@ -252,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, UnicodeDecodeError, MergeError) as error:
         print(json.dumps({"status": "error", "error": str(error)}))
         return 1
-    # 只输出 ASCII（中文转义），避免 Windows 控制台编码把报告打成乱码。
+    # Windows 콘솔 인코딩으로 보고서가 깨지지 않도록 ASCII만 출력한다(중국어는 이스케이프).
     print(json.dumps(report))
     return 0
 

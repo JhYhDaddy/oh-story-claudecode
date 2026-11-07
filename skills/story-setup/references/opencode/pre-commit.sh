@@ -1,33 +1,33 @@
 #!/bin/sh
 ### story-hooks: BEGIN ###
-# story project commit validation
-# Managed by story-setup -- do not edit this block manually
-# Checks for hardcoded character attributes in story files (advisory only, never blocks)
+# story 프로젝트 커밋 검증
+# story-setup 관리 블록 — 수동 편집 금지
+# 이야기 파일의 하드코딩된 인물 속성을 검사한다(안내만 하며 절대 차단하지 않음).
 #
-# 本块按 SKILL.md 的部署规则会被原样插进用户已有的 .git/hooks/pre-commit，块自身不带
-# shebang、跟着宿主解释器跑。宿主 shebang 常见 #!/bin/sh（git 自带样例、lefthook、husky 都是），
-# Debian/Ubuntu 下 /bin/sh 就是 dash。所以整块只用 POSIX sh 语法：不用 set -o pipefail、
-# read -r -d ''、进程替换 `< <(...)`、$'\n'——dash 下第一项报错、后两项直接是语法错误，
-# 会让此后每次 git commit 都失败（退 1、不产生提交），与本块「advisory only, never blocks」
-# 的契约正好相反。文件自身的 shebang 也用 /bin/sh：create 模式下整文件被拷成 hook，
-# 无 /bin/bash 的宿主（Alpine/busybox、NixOS）上 git 会直接 fatal 而不是跳过。
-# 收尾的 `|| true` 是最后一道保险：宿主开着 set -e 时也绝不会因为本块挡掉提交。
+# 이 블록은 SKILL.md 배포 규칙에 따라 사용자의 기존 .git/hooks/pre-commit에 그대로 삽입된다. 자체
+# shebang 없이 호스트 인터프리터를 따른다. 호스트는 흔히 #!/bin/sh(git 기본 예제/lefthook/husky)이며
+# Debian/Ubuntu의 /bin/sh는 dash다. 따라서 블록 전체는 POSIX sh 구문만 사용하고 set -o pipefail,
+# read -r -d 빈 문자열, 프로세스 치환 `< <(...)`, 달러 따옴표 줄바꿈 구문은 쓰지 않는다. dash에서 첫 항목은 오류, 뒤 구문들은 문법 오류를 내어
+# 이후 모든 git commit이 종료 1로 실패해 커밋을 만들지 못한다. 이는 안내만 하고 절대 차단하지 않는다는
+# 계약에 반한다. create 모드에서는 파일 전체를 훅으로 복사하므로 파일 자체 shebang도 /bin/sh를 쓴다.
+# /bin/bash 없는 호스트(Alpine/busybox, NixOS)에서는 git이 건너뛰지 않고 치명적 오류를 내기 때문이다.
+# 마지막 `|| true`는 호스트가 set -e여도 이 블록 때문에 커밋을 막지 않는 최종 안전장치다.
 (
 set -eu
-# LC_ALL=C：模式里的全角「　」「：」是多字节 UTF-8，GBK 区域下 grep 会判无效序列
-# 退 2，! 取反后对每个设定文件误报缺字段。强制 C 区域按字节匹配（同
-# validate-story-commit.sh，issue #164 约定：LC_ALL=C + 交替代替字符组）。
+# LC_ALL=C: 패턴의 전각 ‘　’ ‘：’는 멀티바이트 UTF-8이다. GBK에서 grep은 잘못된 시퀀스로 판단해
+# 종료 2를 내고 !로 뒤집으면 모든 설정 파일의 필드 누락을 오탐한다. C 로캘로 강제해 바이트 일치한다.
+# validate-story-commit.sh와 동일하며 이슈 #164 규칙은 LC_ALL=C + 문자 집합 대신 선택식이다.
 export LC_ALL=C
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 WARNINGS=""
-# POSIX sh 没有 $'\n'，换行常量只能这么写。
+# POSIX sh에는 달러 따옴표 줄바꿈 구문이 없어 줄바꿈 상수는 이렇게 작성한다.
 NL='
 '
 
-# 暂存的 md 列表一次性取回：POSIX sh 无 read -d ''，接不了 -z 的 NUL 流，改用换行分隔
-# （只有文件名自带换行才会错行，极罕见且仅影响 advisory 文案）。也不能写成
-# `git … | while`：管道会把 while 放进子 shell，攒好的 WARNINGS 出不来。先存变量，
-# 再用 here-doc 喂 while，循环仍跑在当前 shell 里。
+# 스테이징 md 목록을 한 번에 가져온다. POSIX sh는 read -d가 없어 -z NUL 스트림을 받지 못하므로 줄바꿈으로 구분한다.
+# 파일명 자체에 줄바꿈이 있는 매우 드문 경우만 어긋나며 안내 문구에만 영향이 있다. 다음 방식도 안 된다.
+# `git … | while`은 while을 자식 셸에서 실행해 모은 WARNINGS를 꺼낼 수 없다. 변수에 먼저 저장하고
+# here-doc으로 while에 전달해 현재 셸에서 반복한다.
 STAGED=$(git -c core.quotepath=false diff --cached --relative --name-only --diff-filter=ACM -- . 2>/dev/null || true)
 
 while IFS= read -r file; do
@@ -40,11 +40,11 @@ while IFS= read -r file; do
   FULL_PATH="$ROOT/$file"
   [ -f "$FULL_PATH" ] || continue
 
-  # 匹配语义与警告文案对齐 JS core（story_hook_core.js stagedMarkdownWarnings）：冒号/空白用
-  # 交替而非含全角字符的方括号字符组（C/GBK 区域下字符组会被拆成单字节、漏匹配）；name 字段
-  # grep -i 大小写不敏感。
+  # 일치 의미와 경고 문구는 JS 코어(story_hook_core.js stagedMarkdownWarnings)에 맞춘다. 콜론/공백은
+  # 전각 문자를 넣은 대괄호 집합 대신 선택식을 쓴다(C/GBK에서는 집합이 단일 바이트로 나뉘어 누락). name 필드는
+  # grep -i로 대소문자를 구분하지 않는다.
   case "$file" in
-    正文.md|*/正文.md|正文/*|*/正文/*)
+    본문.md|*/본문.md|본문/*|*/본문/*)
       HARDCODED=$(grep -nE "(身高|体重|年龄)([[:space:]]|　)*(：|:)([[:space:]]|　)*[0-9]+" "$FULL_PATH" 2>/dev/null || true)
       if [ -n "$HARDCODED" ]; then
         WARNINGS="$WARNINGS$NL⚠ $file: 正文硬编码角色属性，应引用设定文件：$NL$HARDCODED"
@@ -52,20 +52,20 @@ while IFS= read -r file; do
       ;;
   esac
 
-  # 只查角色卡：设定/ 下还住着 关系.md、题材定位.md、文风.md、世界观/*、势力/* 这类项目级
-  # 设定件，它们本来就没有 名字/姓名 字段，整棵目录一刀切会每次提交刷一屏假警告、把上面的
-  # 硬编码真警告埋掉（判定口径同 validate-story-commit.sh）。
+  # 인물 카드만 검사한다. 설정/에는 관계.md、소재방향.md、문체.md、세계관/*、세력/* 같은 프로젝트 설정도 있으며
+  # 원래 名字/姓名 필드가 없어 전체를 검사하면 매 커밋마다 거짓 경고가 화면을 채우고 위의
+  # 실제 하드코딩 경고를 묻어 버린다(validate-story-commit.sh와 같은 판정 기준).
   IS_CHARACTER_SHEET=false
   case "$file" in
-    设定/角色/*|*/设定/角色/*|设定/人物/*|*/设定/人物/*)
+    설정/인물/*|*/설정/인물/*|설정/인물/*|*/설정/인물/*)
       IS_CHARACTER_SHEET=true
       ;;
-    设定/*/*|*/设定/*/*)
-      # 世界观/势力/报告/原理/人物关系 等非角色子目录：整目录跳过
+    설정/*/*|*/설정/*/*)
+      # 세계관/세력/보고서/원리/인물 관계 등 인물 카드 외 하위 디렉터리는 통째로 건너뛴다.
       ;;
-    设定/*|*/设定/*)
+    설정/*|*/설정/*)
       case "${file##*/}" in
-        关系.md|题材定位.md|题材正文提示卡.md|文风.md|世界规则.md|世界观.md|金手指.md|背景设定.md) ;;
+        관계.md|소재방향.md|소재본문안내.md|문체.md|세계규칙.md|세계관.md|특전.md|배경설정.md) ;;
         *) IS_CHARACTER_SHEET=true ;;
       esac
       ;;
@@ -80,8 +80,8 @@ STORY_STAGED_EOF
 
 if [ -n "$WARNINGS" ]; then
   echo "=== Story Commit Warnings（advisory only）==="
-  # printf '%s' 而非 '%b'/echo -e：$WARNINGS 里嵌着 grep -n 抓出的作者正文原文，
-  # 里面的 `\c`（Windows 路径 C:\code 就带）会终止输出、把后面的警告全吞掉。
+  # printf의 %s를 쓴다(%b나 echo -e 금지). $WARNINGS에는 grep -n이 추출한 작가 원문이 들어 있으며
+  # 그 안의 `\c`(Windows 경로 C:\code에도 포함)가 출력을 종료해 이후 경고를 모두 삼킬 수 있다.
   printf '%s\n' "$WARNINGS"
   echo "=== End Warnings ==="
 fi

@@ -5,8 +5,8 @@
   "topic_decision_phase": 5,
   "progress_schema_version": 2,
   "primary_benchmark_artifacts": [
-    "剧情/情绪模块.md",
-    "剧情/节奏.md"
+    "플롯/감정모듈.md",
+    "플롯/리듬.md"
   ],
   "required_outline_sections": [
     {

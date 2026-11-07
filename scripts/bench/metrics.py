@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""从一次或多次基准运行里算效率与正文指标，输出 JSON（--table 另打一张对照表）。
+"""한 번 이상의 벤치마크 실행에서 효율과 본문 지표를 계산해 JSON으로 출력한다(--table은 별도 비교 표도 출력).
 
-用法：
+사용법:
   metrics.py <run目录>... [--table] [--tell <tell仓库>]
 
-效率（按提交章数平均）：墙钟、主会话回合、工具调用、子 agent 次数、累计输入/输出 token、
-主会话单次上下文峰值、自动压缩次数、每章提交时刻。
-正文：每章可见字数与目标、第一次 chapter check 的长度结论、是否接受当前长度、
-check-ai-patterns 的 blocking/advisory 计数；给了 --tell 时加人类区间越界项数。
+효율(커밋한 장 수로 평균): 실제 경과 시간, 주 세션 회차, 도구 호출, 하위 에이전트 횟수, 누적 입력/출력 토큰,
+주 세션의 단일 문맥 최대 크기, 자동 압축 횟수, 각 장의 커밋 시각.
+본문: 장별 가시 글자 수와 목표, 첫 chapter check의 분량 판정, 현재 분량 수락 여부,
+check-ai-patterns의 blocking/advisory 개수. --tell을 주면 사람 기준 구간을 벗어난 항목 수도 추가한다.
 """
 import argparse
 import json
@@ -41,7 +41,7 @@ def usage_add(tot, u):
 
 
 def check_status(text):
-    """chapter check 输出是一行 JSON；逐行找 story-chapter-check 的那行取 length.status。"""
+    """chapter check는 한 줄 JSON을 출력한다. story-chapter-check 행을 찾아 length.status를 얻는다."""
     for line in (text or '').splitlines():
         line = line.strip()
         if 'story-chapter-check' in line and line.startswith('{'):
@@ -110,7 +110,7 @@ def claude_efficiency(run, meta):
             if d.get('type') == 'assistant' and msg.get('id') and msg['id'] not in seen_sub:
                 seen_sub.add(msg['id'])
                 usage_add(eff['sub'], msg.get('usage') or {})
-    # 部分兼容端点在转录里不报 output_tokens；以每轮 result 事件的汇总为准（取较大者）
+    # 일부 호환 엔드포인트의 기록에는 output_tokens가 없다. 매 회차 result 이벤트 집계와 비교해 큰 값을 사용한다.
     res = {}
     for t in meta['turns']:
         for d in jl(run / t['log']):
@@ -143,9 +143,9 @@ def codex_efficiency(run, meta):
                 m = COMMIT_RE.search(cmd)
                 if m and item.get('exit_code') == 0:
                     eff['commits'].append({'chapter': int(m.group(2)), 'action': m.group(1), 'at': None})
-    # codex 的 input_tokens 已含 cached 部分
+    # codex의 input_tokens에는 cached 부분이 이미 포함된다.
     eff['main']['input_tokens'] = eff['main'].get('input_tokens', 0) - eff['main'].get('cache_read_input_tokens', 0)
-    # --json 只有主线程；子 agent 线程的 token 与次数从 CODEX_HOME/sessions 的 rollout 里按 cwd 归到本次运行
+    # --json에는 주 스레드만 있다. 하위 agent의 토큰·횟수는 CODEX_HOME/sessions의 rollout에서 cwd로 이번 실행에 귀속시킨다.
     eff['spawns'], eff['agents'] = 0, Counter()
     for rollout in codex_rollouts(run):
         first, last = None, None
@@ -192,12 +192,12 @@ def codex_rollouts(run):
 def prose(run, meta, tell):
     book = run / 'proj' / meta['case']['book_dir']
     scripts = run / 'proj' / ('.claude/skills' if meta['host'] == 'claude-code' else '.agents/skills') / 'story-long-write/scripts'
-    state_path = book / '追踪/_tracking-state.json'
+    state_path = book / '추적/_tracking-state.json'
     state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.is_file() else {}
     records = state.get('wordcount_records') or {}
     out = []
     for n in range(meta['start_committed'] + 1, meta.get('end_committed', meta['start_committed']) + 1):
-        files = sorted((book / '正文').glob(f'第{n:03d}章*.md'))
+        files = sorted((book / '본문').glob(f'제{n:03d}장*.md'))
         if not files:
             out.append({'chapter': n, 'missing': True})
             continue

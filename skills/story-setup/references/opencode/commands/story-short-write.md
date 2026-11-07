@@ -1,7 +1,7 @@
 ---
-description: 短篇网文写作。辅助短篇小说创作，从构思到成稿。
+description: 단편 웹소설 집필. 구상부터 완성 원고까지 단편 창작을 돕는다.
 ---
 
-请使用 story-short-write skill，帮助我进行短篇网文写作。
+story-short-write 스킬로 단편 웹소설 집필을 도와주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

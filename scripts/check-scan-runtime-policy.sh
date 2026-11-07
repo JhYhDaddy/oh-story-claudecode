@@ -1,5 +1,5 @@
 #!/bin/bash
-# Static dependency policies that isolated helper tests cannot prove.
+# 격리된 도우미 테스트로 증명할 수 없는 정적 의존성 정책.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -53,7 +53,7 @@ if (httpCalls.length !== 1) {
   failures.push("setup-cdp-chrome.js: CDP probes must disable the keep-alive agent")
 }
 const listenerStart = setup.indexOf("function listPortListenerPids(port)")
-const listenerEnd = setup.indexOf("/** 全机", listenerStart)
+const listenerEnd = setup.indexOf("function listProcessParents()", listenerStart)
 const listener = listenerStart >= 0 && listenerEnd > listenerStart
   ? setup.slice(listenerStart, listenerEnd)
   : ""

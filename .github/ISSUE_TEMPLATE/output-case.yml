@@ -1,5 +1,5 @@
-name: 输出质量 Case
-description: 提交文风、人物、节奏、逻辑或 AI 味不符合预期的具体生成案例
+name: "출력 품질 사례"
+description: "문체·인물·전개 속도·논리·AI 문체가 기대에 맞지 않는 구체적인 생성 사례를 제출합니다"
 title: "[Output Case] "
 labels:
   - output-case
@@ -8,16 +8,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        这里收集真实生成案例。请给出必要上下文、实际输出和具体问题。
+        실제 생성 사례를 수집합니다. 필요한 맥락, 실제 출력, 구체적인 문제를 제공해 주세요.
 
-        Issue 是公开的。只提交你有权公开的内容，不要粘贴完整书稿、API Key、Token 或个人信息。
+        Issue는 공개됩니다. 공개할 권한이 있는 내용만 제출하고, 원고 전체·API 키·토큰·개인정보를 붙여 넣지 마세요.
 
   - type: input
     id: version
     attributes:
-      label: Oh Story 版本
-      description: 可查看 `skills/story/VERSION`；若使用 main，请填写 commit SHA。
-      placeholder: 例如 0.7.7 或 a03f0a8
+      label: "Oh Story 버전"
+      description: "`skills/story/VERSION`에서 확인할 수 있습니다. main을 사용한다면 커밋 SHA를 적어 주세요."
+      placeholder: "예: 0.7.7 또는 a03f0a8"
     validations:
       required: true
 
@@ -33,23 +33,23 @@ body:
         - OpenClaw
         - Reasonix
         - Google Antigravity
-        - 通用 Agent / Web AI
-        - 其他
+        - 범용 에이전트 / 웹 AI
+        - 기타
     validations:
       required: true
 
   - type: input
     id: model
     attributes:
-      label: 模型
-      placeholder: 请填写实际执行写作的模型名称和版本
+      label: "모델"
+      placeholder: "실제로 집필을 수행한 모델의 이름과 버전을 적어 주세요"
     validations:
       required: true
 
   - type: dropdown
     id: skill
     attributes:
-      label: 使用的 Skill
+      label: "사용한 스킬"
       multiple: true
       options:
         - story-long-write
@@ -59,84 +59,84 @@ body:
         - story-import
         - story-long-analyze
         - story-short-analyze
-        - 其他
+        - 기타
     validations:
       required: true
 
   - type: textarea
     id: goal
     attributes:
-      label: 原本想得到什么
-      description: 写清这一段要完成的剧情、人物或情绪目标，不要只写“文笔要好”。
-      placeholder: 例如：女主已经怀疑男主，但暂时不能揭穿；她应保持自然，通过细节试探对方。
+      label: "원래 기대했던 결과"
+      description: "“문장이 좋아야 한다”라고만 쓰지 말고, 이 대목이 달성해야 할 줄거리·인물·감정 목표를 구체적으로 적어 주세요."
+      placeholder: "예: 여주인공은 남주인공을 의심하지만 아직 폭로하면 안 됩니다. 자연스럽게 행동하면서 세부 사항으로 상대를 떠봐야 합니다."
     validations:
       required: true
 
   - type: textarea
     id: context
     attributes:
-      label: 最小必要上下文
-      description: 只提供判断该 Case 所需的设定、细纲、前文或指令，不要粘贴整个项目。
-      placeholder: 角色约束、相关情节点、紧邻前文、额外提示词等。
+      label: "최소한의 필요 맥락"
+      description: "사례를 판단하는 데 필요한 설정·상세 개요·앞부분·지시만 제공하고 프로젝트 전체를 붙여 넣지 마세요."
+      placeholder: "인물의 제약, 관련 사건, 바로 앞부분, 추가 프롬프트 등."
     validations:
       required: true
 
   - type: textarea
     id: output
     attributes:
-      label: 实际输出片段
-      description: 建议 200–1500 字，保留足够前后文；过长时截取最能说明问题的连续片段。
-      placeholder: 粘贴实际生成的连续片段。
+      label: "실제 출력 일부"
+      description: "앞뒤 맥락을 충분히 포함한 200~1500자를 권장합니다. 너무 길면 문제를 가장 잘 보여주는 연속된 구간을 발췌해 주세요."
+      placeholder: "실제로 생성된 연속된 구간을 붙여 주세요."
     validations:
       required: true
 
   - type: textarea
     id: problem
     attributes:
-      label: 具体哪里不符合预期
-      description: 至少引用一个具体位置，并说明它违反了哪个人物、剧情、文风或节奏要求。
+      label: "기대와 다른 구체적인 부분"
+      description: "구체적인 위치를 한 곳 이상 인용하고, 어떤 인물·줄거리·문체·전개 속도 요구를 어겼는지 설명해 주세요."
       placeholder: |
-        引用：“原来你一直都在骗我！”她失声喊道。
-        问题：角色反应过于直接，违反“习惯隐藏情绪”的设定，也提前释放了本章冲突。
+        인용: “처음부터 계속 날 속였던 거구나!” 그녀가 자기도 모르게 소리쳤다.
+        문제: 반응이 지나치게 직접적이라 “감정을 숨기는 습관”이라는 설정에 어긋나고, 이번 장의 갈등도 너무 일찍 드러냅니다.
     validations:
       required: true
 
   - type: textarea
     id: direction
     attributes:
-      label: 期望方向
-      description: 不要求完整改写，但要说明怎样的处理更符合目标。
-      placeholder: 希望她先假装相信，再通过询问时间、观察衣服痕迹来试探。
+      label: "원하는 수정 방향"
+      description: "완전한 수정 원고가 필요하지는 않지만, 어떤 처리가 목표에 더 맞는지 설명해 주세요."
+      placeholder: "먼저 믿는 척한 뒤, 시간을 묻거나 옷의 흔적을 관찰하며 떠보면 좋겠습니다."
     validations:
       required: true
 
   - type: dropdown
     id: reproducibility
     attributes:
-      label: 重试情况
+      label: "재시도 결과"
       options:
-        - 相同输入多次出现相同问题
-        - 相似章节反复出现相同问题
-        - 重新生成后消失
-        - 尚未重试
+        - 같은 입력에서 같은 문제가 여러 번 발생함
+        - 비슷한 장에서 같은 문제가 반복됨
+        - 다시 생성한 뒤 사라짐
+        - 아직 재시도하지 않음
     validations:
       required: true
 
   - type: input
     id: attempts
     attributes:
-      label: 尝试次数
-      placeholder: 例如 3 次生成中 2 次出现
+      label: "시도 횟수"
+      placeholder: "예: 생성 3회 중 2회 발생"
     validations:
       required: true
 
   - type: checkboxes
     id: checks
     attributes:
-      label: 提交前确认
+      label: "제출 전 확인"
       options:
-        - label: 我已标出具体问题，而不只是“AI 味重”“没有感情”等总体评价。
+        - label: "“AI 느낌이 강하다”, “감정이 없다” 같은 총평만 적지 않고 구체적인 문제를 표시했습니다."
           required: true
-        - label: 我有权公开以上内容，并已删除 API Key、Token、个人信息和不愿公开的书稿。
+        - label: "위 내용을 공개할 권한이 있으며 API 키, 토큰, 개인정보, 공개하고 싶지 않은 원고를 삭제했습니다."
           required: true
 

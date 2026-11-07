@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Audit and normalize workflow Step numbering in canonical skill Markdown.
+"""기준 스킬 Markdown의 워크플로 Step 번호를 검사하고 정규화한다.
 
-The fixer intentionally has a narrow write surface: it renumbers only explicit
-ATX headings such as ``### Step 1.5`` and references that can be bound to those
-headings without guessing. Phase/Stage labels, raw numeric headings, and
-bullet labels are never rewritten automatically.
+수정기의 쓰기 범위는 의도적으로 좁다. ``### Step 1.5``처럼 명시적인 ATX 제목과 추측 없이
+그 제목에 연결할 수 있는 참조만 다시 번호를 매긴다. Phase/Stage 레이블, 숫자만 있는 제목,
+목록 레이블은 자동으로 다시 쓰지 않는다.
 """
 
 from __future__ import annotations
@@ -29,13 +28,13 @@ ATX_HEADING_RE = re.compile(
     r"^[ ]{0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+[ \t]*)?$"
 )
 FENCE_OPEN_RE = re.compile(r"^[ ]{0,3}(`{3,}|~{3,})")
-# 编号标签的统一收尾条件，替代原来枚举 `:：.、)]—–-` 的终止符白名单：
-#   * `(?!\.?[0-9])` 禁止标签被回溯截断，`Step 1.5甲` 不会退化成 `Step 1`；
-#   * `(?!\w)` 与 STEP_LABEL_RE 原有的 `\b` 语义一致（数字后的 `\b` 就是它）。
-# 白名单会让 `### Step 6（校对）` 只对引用绑定器可见、对重编号器不可见，
-# fix --write 于是绕开该标题重排兄弟标题，写出重复/乱序编号还自称 PASS。
+# 번호 레이블의 공통 종료 조건. 기존 `:：.、)]—–-` 종료 문자 허용 목록을 대체한다.
+#   * `(?!\.?[0-9])`는 역추적으로 레이블이 잘리는 것을 막아 `Step 1.5甲`이 `Step 1`로 축소되지 않게 한다.
+#   * `(?!\w)`는 STEP_LABEL_RE의 기존 `\b`와 같은 의미다(숫자 뒤의 `\b`가 이에 해당).
+# 허용 목록을 쓰면 `### Step 6（校对）`가 참조 연결기에는 보이지만 재번호 매기기에는 보이지 않는다.
+# 그러면 fix --write가 그 제목을 건너뛰고 형제 제목을 재배열해 중복/순서 오류를 만들고도 PASS라고 보고한다.
 LABEL_END = r"(?!\.?[0-9])(?!\w)"
-# 长得像 Step 标题但标签无法解析时用它兜底报错，任何未预料的分隔符都 fail closed。
+# Step 제목처럼 보이지만 레이블을 파싱할 수 없을 때 최종 오류 검사로 사용한다. 예상하지 못한 구분자는 모두 안전하게 거부한다.
 LOOSE_STEP_HEADING_RE = re.compile(r"^Step[ \t]+[0-9]")
 STEP_HEADING_RE = re.compile(
     r"^Step(?P<space>[ \t]+)(?P<label>[0-9]+(?:\.[0-9]+)*)" + LABEL_END
@@ -196,8 +195,8 @@ def parse_document(path: Path, root: Path) -> Document:
 
         step_match = STEP_HEADING_RE.match(title)
         if step_match:
-            # heading_match.start(2) locates the title inside the original line;
-            # step_match spans are relative to that title.
+            # heading_match.start(2)는 원래 줄에서 제목 위치를 찾는다.
+            # step_match 범위는 해당 제목을 기준으로 한다.
             title_start = heading_match.start(2)
             label_start = title_start + step_match.start("label")
             label_end = title_start + step_match.end("label")
@@ -230,7 +229,7 @@ def display_path(path: Path, root: Path) -> str:
 
 
 def markdown_slug(title: str) -> str:
-    """Return the GitHub-style heading slug subset used by repository checks."""
+    """저장소 검사에서 사용하는 GitHub 방식 제목 슬러그 부분집합을 반환한다."""
 
     result: list[str] = []
     for char in title.strip().lower():
@@ -354,7 +353,7 @@ def group_scope_contains(document: Document, step: StepHeading, line_index: int)
 
 
 def containing_workflow_parent(document: Document, line_index: int) -> int | None:
-    """Return the deepest Step-owning parent section containing ``line_index``."""
+    """``line_index``를 포함하며 Step을 소유하는 가장 깊은 상위 절을 반환한다."""
 
     parent_indexes = {
         step.parent_index for step in document.steps if step.parent_index is not None
@@ -464,10 +463,10 @@ def bind_step_references(document: Document) -> tuple[list[Issue], list[Replacem
 
 
 def renamed_heading_anchors(document: Document) -> dict[str, tuple[str, int]]:
-    """Map changed old anchors to `(new_anchor, heading_line)` for one document.
+    """문서 하나에서 바뀐 기존 앵커를 `(새 앵커, 제목 줄)`로 매핑한다.
 
-    Duplicate-anchor suffixes are allocated across every heading, because a
-    Step rename can also shift the generated anchor of a later non-Step heading.
+    Step 이름 변경으로 뒤의 비-Step 제목 앵커도 바뀔 수 있으므로 중복 앵커 접미사는
+    모든 제목을 대상으로 할당한다.
     """
 
     steps_by_heading = {step.heading_index: step for step in document.steps}
@@ -480,7 +479,7 @@ def renamed_heading_anchors(document: Document) -> dict[str, tuple[str, int]]:
         step = steps_by_heading.get(heading_index)
         if step is not None and step.old_label != step.new_label:
             match = STEP_HEADING_RE.match(old_title)
-            if match is None:  # parse_document created the Step, so this is defensive.
+            if match is None:  # parse_document가 Step을 생성했으므로 방어적 검사다.
                 raise RuntimeError(
                     f"cannot rebuild Step heading anchor in {document.display_path}:"
                     f"{heading.line_index + 1}"
@@ -537,11 +536,10 @@ def repository_markdown(root: Path) -> list[Path]:
 def anchor_reference_issues(
     documents: Sequence[Document], root: Path
 ) -> list[Issue]:
-    """Fail closed when renumbering would invalidate an existing fragment link.
+    """번호 변경으로 기존 조각 링크가 무효화되면 안전하게 거부한다.
 
-    Sources are scanned repository-wide rather than only inside the requested
-    write scope, so `fix path/to/SKILL.md` cannot break an inbound same-skill
-    reference that lives in an unselected reference file.
+    요청한 쓰기 범위뿐 아니라 저장소 전체에서 원본을 검사한다. 따라서 `fix path/to/SKILL.md`가
+    선택되지 않은 참조 파일에서 같은 스킬로 들어오는 링크를 깨뜨리지 않는다.
     """
 
     changes_by_path = {
@@ -648,11 +646,11 @@ def check_label_policy(document: Document, root: Path) -> list[Issue]:
 
 
 def unparsable_step_heading_issues(document: Document) -> list[Issue]:
-    """Fail closed on headings that start like a Step but carry no usable label.
+    """Step으로 시작하는 것처럼 보이지만 사용 가능한 레이블이 없는 제목은 안전하게 거부한다.
 
-    这类标题只对引用绑定器（STEP_LABEL_RE）可见、对重编号器（STEP_HEADING_RE）
-    不可见时，fix --write 会跳过它并重排兄弟标题，写出重复或乱序的编号，
-    而事后自检仍然报告 PASS。宁可拦住写入，也不静默漏过。
+    이런 제목이 참조 연결기(STEP_LABEL_RE)에만 보이고 재번호 매기기(STEP_HEADING_RE)에는
+    보이지 않으면 fix --write가 이를 건너뛰고 형제 제목을 재배열해 중복/순서 오류를 만든다.
+    이후 자체 검사도 PASS를 보고한다. 조용히 누락시키기보다 쓰기를 차단한다.
     """
 
     parsed_lines = {step.line_index for step in document.steps}
@@ -828,7 +826,7 @@ def transactional_write(changes: dict[Path, str]) -> None:
     backups: dict[Path, Path] = {}
     replaced: list[Path] = []
     try:
-        # Stage every new file and every backup before replacing the first path.
+        # 첫 경로를 교체하기 전에 모든 새 파일과 백업을 준비한다.
         for path in sorted(changes, key=str):
             stat = path.stat()
             fd, staged_name = tempfile.mkstemp(
@@ -859,16 +857,16 @@ def transactional_write(changes: dict[Path, str]) -> None:
             replaced.append(path)
 
     except BaseException as exc:
-        # 必须是 BaseException：Ctrl-C 抛出的 KeyboardInterrupt 不是 Exception，
-        # 而下面的 finally 无条件删掉所有备份，只捕获 Exception 会让提交循环中途
-        # 被打断的那次改写永久半落盘且无从恢复。与 sync-opencode.py 的提交循环一致。
+        # 반드시 BaseException을 잡아야 한다. Ctrl-C의 KeyboardInterrupt는 Exception이 아니다.
+        # 아래 finally가 모든 백업을 무조건 삭제하므로 Exception만 잡으면 반영 도중
+        # 중단된 변경이 복구 불가능한 부분 반영 상태로 남는다. sync-opencode.py의 반영 루프와 동일하다.
         rollback_errors: list[str] = []
         for path in reversed(replaced):
             try:
                 os.replace(backups[path], path)
-            except BaseException as rollback_exc:  # pragma: no cover - catastrophic I/O
-                # 单个文件回滚失败（或第二次 Ctrl-C）不得中断剩余文件的还原，
-                # 否则同样会留下半提交的工作树。
+            except BaseException as rollback_exc:  # pragma: no cover - 치명적인 입출력 오류
+                # 파일 하나의 롤백 실패(또는 두 번째 Ctrl-C)가 나머지 파일 복구를 중단해서는 안 된다.
+                # 그렇지 않으면 작업 트리가 부분 반영 상태로 남는다.
                 rollback_errors.append(f"{path}: {rollback_exc}")
         if rollback_errors:
             details = "; ".join(rollback_errors)

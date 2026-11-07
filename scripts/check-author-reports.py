@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""守卫：给作者看的报告模板里不许出现工程黑话。
+"""검사 규칙: 작가에게 보여 주는 보고 템플릿에 개발 내부 용어를 쓰지 않는다.
 
-只检查紧跟在 <!-- author-report --> 标记行后面的围栏块（其余 skill 指令不管，避免误报）。
-围栏本身用普通的 ```md：信息串写成 author-report 时模型会把围栏原样回给作者，所以旧写法直接报错。
-检查内容：
-- 已知内部字段/状态名、reviewer 名、严重度代号、Gate 字母、PASS/FAIL；
-- 脚本/配置文件名（.py/.js/.sh/.json/...）、命令行 flag、snake_case 与 kebab-case 标识符
-  （/story-xxx、$story-xxx 这类作者要敲的命令除外）；
-- 裸编号（F003、BP001、REL-001、L1-3）——编号必须挂故事标签：「描述（ID）」或「ID（描述）」。
-本文件是作者报告规则的唯一守卫（static-check.py 不再重复扫描）。
-块内最后一个非空行若以「技术备注：」开头，可承载执行路径等工程细节，不受上述检查；
-技术备注只能有一行且必须在块尾。
+<!-- author-report --> 표식 바로 다음의 코드 블록만 검사한다(오탐을 막기 위해 나머지 스킬 지침은 제외).
+코드 블록은 일반 ```md를 쓴다. 언어 표식을 author-report로 쓰면 모델이 울타리까지 그대로 출력하므로 기존 형식은 오류로 처리한다.
+검사 대상:
+- 알려진 내부 필드/상태명, 검토자 이름, 심각도 코드, Gate 문자, PASS/FAIL
+- 스크립트/설정 파일명(.py/.js/.sh/.json/...), 명령행 플래그, snake_case 및 kebab-case 식별자
+  (작가가 직접 입력하는 /story-xxx, $story-xxx 명령은 제외)
+- 레이블 없는 번호(F003, BP001, REL-001, L1-3). 반드시 ‘설명(ID)’ 또는 ‘ID(설명)’으로 표시한다.
+이 파일이 작가 보고 규칙의 유일한 검사기다(static-check.py는 중복 검사하지 않는다).
+블록의 마지막 비어 있지 않은 줄이 ‘技术备注：’로 시작하면 실행 경로 같은 기술 세부 사항을 담을 수 있으며 위 검사에서 제외한다.
+기술 참고는 반드시 블록 끝의 한 줄이어야 한다.
 
-REQUIRED 里的文件必须有不少于登记数量的 author-report 块，防止模板标记被悄悄删掉。
+REQUIRED에 등록된 파일은 최소한 지정된 개수의 author-report 블록을 포함해야 한다. 템플릿 표식의 조용한 삭제를 방지한다.
 
-用法：python3 scripts/check-author-reports.py [--self-test]
+사용법: python3 scripts/check-author-reports.py [--self-test]
 """
 
 from __future__ import annotations
@@ -25,14 +25,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# 文件 -> 至少几个 author-report 块。
-# 长篇：规划、单章（完成/字数/拍板/停下）、日更批末、大修各有作者汇报模板。
-# 作者记忆回执不在此列：整条回复就是模板两行，写成围栏块时模型会把围栏原样回给作者（实测 2/2），
-# 所以 author-memory.md 用行内示例描述回执。
+# 파일 -> 필요한 author-report 블록의 최소 개수.
+# 장편: 기획, 단일 장(완료/글자 수/결정/중단), 일일 집필 배치 종료, 대규모 수정마다 작가 보고 템플릿이 있다.
+# 작가 기억 확인 응답은 제외한다. 응답 전체가 템플릿 두 줄이며 코드 블록으로 쓰면 모델이 울타리까지 그대로 출력한다(실측 2/2).
+# 따라서 author-memory.md에서는 인라인 예제로 확인 응답을 설명한다.
 REQUIRED = {
-    # 导入的完成报告随汇报时刻移进 import-report.md（长篇、短篇各一块）。
+    # 가져오기 완료 보고는 보고 시점에 맞춰 import-report.md로 이동했다(장편과 단편 각각 한 블록).
     "skills/story-import/references/import-report.md": 2,
-    # 审稿报告随时刻迁出入口（v0.8.2）：full/lean 模板随派子代理读 agent-prompts.md，一人审模板在 solo.md。
+    # 검토 보고서는 시점별로 진입점에서 분리했다(v0.8.2). full/lean 템플릿은 하위 에이전트 배정 시 agent-prompts.md에서, 단독 검토 템플릿은 solo.md에서 읽는다.
     "skills/story-review/references/agent-prompts.md": 1,
     "skills/story-review/references/solo.md": 1,
     "skills/story-deslop/SKILL.md": 1,
@@ -73,7 +73,7 @@ CHECKS = (
 
 _ID = r"(?:[A-Z]{1,3}\d?-?\d{2,}|[EFL]\d+(?:-\d+)?)"
 RAW_ID = re.compile(r"(?<![A-Za-z0-9])" + _ID + r"(?![A-Za-z0-9])")
-# 编号必须挂故事标签，两种写法都算：「描述（ID）」与「ID（描述）」。
+# 번호에는 이야기 레이블이 붙어야 한다. ‘설명(ID)’와 ‘ID(설명)’ 두 형식을 모두 인정한다.
 LABELED_ID = re.compile(
     r"\S（" + _ID + r"(?:[、，,]\s*" + _ID + r")*）"
     r"|(?<![A-Za-z0-9])" + _ID + r"(?:[、，,]\s*" + _ID + r")*\s*[（(][^）)]*[^\sA-Za-z0-9（(）)][^）)]*[）)]"
@@ -85,7 +85,7 @@ LEGACY_INFO = "author-report"
 
 
 def author_blocks(text: str):
-    """产出 (起始行号, 块内行列表)。"""
+    """(시작 줄 번호, 블록 내부 줄 목록)을 생성한다."""
     lines = text.splitlines()
     i = 0
     previous = ""
@@ -111,7 +111,7 @@ def author_blocks(text: str):
 
 
 def legacy_fences(text: str) -> list[int]:
-    """信息串写成 author-report 的旧围栏（行号从 1 起）。"""
+    """언어 표식을 author-report로 쓴 기존 코드 블록(줄 번호는 1부터 시작)."""
     return [
         k + 1 for k, line in enumerate(text.splitlines())
         if (m := FENCE_OPEN.match(line)) and m.group(3) == LEGACY_INFO

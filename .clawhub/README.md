@@ -1,25 +1,25 @@
-# ClawHub distribution
+# ClawHub 배포
 
-This directory is the source of truth for publishing this repository's product skills to ClawHub. `publish.json` enumerates every product skill; no workflow may infer publishable entries by scanning directories.
+이 디렉터리는 저장소의 제품 스킬을 ClawHub에 게시할 때 사용하는 기준 정보입니다. `publish.json`에 모든 제품 스킬을 열거합니다. 워크플로가 디렉터리를 스캔하여 게시 대상을 추정해서는 안 됩니다.
 
-## Rights
+## 권리
 
-On 2026-10-03, the zenstory organization creator recorded that they created the organization and that the other contributors agreed to MIT-0 distribution of these skill packages. The source repository license is unchanged. The packager must preserve applicable notices and, when a skill does not carry its own license file, copy the repository-root `LICENSE` into the package as `LICENSE`. This record authorizes packaging; it does not authorize changing an existing ClawHub owner or creating a replacement identity for an existing entry.
+2026-10-03에 zenstory 조직 생성자는 자신이 조직을 만들었으며 다른 기여자들이 이 스킬 패키지의 MIT-0 배포에 동의했다고 기록했습니다. 소스 저장소의 라이선스는 변경하지 않습니다. 패키징 도구는 적용되는 고지를 보존해야 하며, 스킬에 자체 라이선스 파일이 없으면 저장소 루트의 `LICENSE`를 패키지의 `LICENSE`로 복사해야 합니다. 이 기록은 패키징을 승인하는 것이며, 기존 ClawHub 소유자를 변경하거나 기존 항목을 대신할 새 식별자를 만드는 권한을 부여하지 않습니다.
 
-## Package closure and fingerprint
+## 패키지 범위와 지문
 
-Each `include` pattern is relative to that skill's `path`. Paths may not escape the skill directory, follow symlinks, or pull repository-development scripts into a runtime package. `**/*` intentionally includes the skill-local `SKILL.md`, references, scripts, agents, templates, and other runtime assets.
+각 `include` 패턴의 기준 경로는 해당 스킬의 `path`입니다. 경로가 스킬 디렉터리 밖으로 나가거나 심볼릭 링크를 따라가거나 저장소 개발용 스크립트를 런타임 패키지에 포함하면 안 됩니다. `**/*`는 스킬 내부의 `SKILL.md`, 참조 문서, 스크립트, 에이전트, 템플릿 및 기타 런타임 자산을 모두 포함하기 위한 패턴입니다.
 
-The canonical packager adds the root license only when needed. Cross-platform integrity uses the exact `{path, sha256, size}` file inventory with original bytes. ClawHub v0.23.3 computes its fingerprint using JavaScript `path.localeCompare()` sorting, so the pinned CLI dry run and write must run on the same runtime. Neither digest includes the publish mode. `packageDigest` locks path-sorted canonical JSON `{path, sha256, size}` records; update the explicit version and regenerate the lock with the pinned central `clawhub_release.py lock` command whenever package bytes or exact companion versions change.
+공식 패키징 도구는 필요한 경우에만 루트 라이선스를 추가합니다. 플랫폼 간 무결성 검증에는 원본 바이트를 기준으로 한 정확한 `{path, sha256, size}` 파일 목록을 사용합니다. ClawHub v0.23.3은 JavaScript `path.localeCompare()` 정렬로 지문을 계산하므로, 버전이 고정된 CLI의 모의 실행과 실제 쓰기는 같은 런타임에서 수행해야 합니다. 두 다이제스트 모두 게시 모드를 포함하지 않습니다. `packageDigest`는 경로순으로 정렬한 정규 JSON `{path, sha256, size}` 레코드를 고정합니다. 패키지 바이트나 정확한 동반 패키지 버전이 바뀌면 명시된 버전을 갱신하고, 버전이 고정된 중앙 도구의 `clawhub_release.py lock` 명령으로 잠금 정보를 다시 생성합니다.
 
-## Cold start and normal operation
+## 최초 배포와 정상 운영
 
-`bootstrapSha` pins the first authorized source snapshot so the initial upload does not wait for a future release. Manual bootstrap, stable releases, and the 12-hour reconciliation schedule all call the same central writer. Identical owner/slug/version/fingerprint tuples are no-ops; the workflow must fail rather than overwrite a different fingerprint at the same version.
+`bootstrapSha`는 첫 번째로 승인된 소스 스냅샷을 고정하여 최초 업로드가 다음 릴리스를 기다리지 않도록 합니다. 수동 초기 배포, 안정 버전 릴리스, 12시간 주기 동기화 일정은 모두 같은 중앙 쓰기 도구를 호출합니다. 소유자/슬러그/버전/지문 튜플이 같으면 아무 작업도 하지 않습니다. 같은 버전에서 지문이 다르면 덮어쓰지 않고 실패해야 합니다.
 
-New entries begin at the explicit `1.0.0` semver baseline; known existing entries retain an owner-qualified current/target version instead of being reset. Before the first write, the organization-level dry run reconciles every version with the existing ClawHub identity. `publisher: worldwonderer` is also subject to owner-qualified resolution before a write.
+새 항목은 명시적인 시맨틱 버전 기준 `1.0.0`에서 시작합니다. 알려진 기존 항목은 초기화하지 않고 소유자를 확인한 현재/대상 버전을 유지합니다. 최초 쓰기 전에 조직 단위 모의 실행으로 모든 버전을 기존 ClawHub 식별자와 대조합니다. `publisher: worldwonderer`도 쓰기 전에 소유자를 확인하여 해석해야 합니다.
 
-`supportedRuntimes` remains empty until that exact package has been exercised on the runtime; publication alone is not runtime verification. `runtimeDependsOn` records declared host/binary prerequisites but is not a verification claim.
+정확히 해당 패키지를 해당 런타임에서 실행해 보기 전까지 `supportedRuntimes`는 비워 둡니다. 게시했다는 사실만으로 런타임 검증이 완료된 것은 아닙니다. `runtimeDependsOn`은 선언된 호스트/바이너리 사전 요구 사항을 기록할 뿐, 검증 완료를 주장하지 않습니다.
 
-## browser-cdp exclusion
+## browser-cdp 제외
 
-`skills/browser-cdp` is generic browser-control infrastructure rather than an oh-story product skill. Its history predates the organization-wide product distribution inventory and it requires separate provenance/identity review, so it is enumerated as `excluded` instead of being silently omitted or republished under a new identity.
+`skills/browser-cdp`는 oh-story 제품 스킬이 아니라 범용 브라우저 제어 기반 도구입니다. 조직 전체의 제품 배포 목록이 만들어지기 전부터 존재했으며 출처와 식별자에 대한 별도 검토가 필요합니다. 따라서 조용히 누락하거나 새로운 식별자로 재게시하지 않고 `excluded`로 명시합니다.

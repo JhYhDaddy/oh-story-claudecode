@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# test-codex-cli-e2e.sh — real Codex CLI smoke for repository skill discovery.
-# `debug prompt-input` is an experimental no-auth diagnostic; the stable static
-# schema/generator/hooks backstop remains check-codex-adapter.sh.
+# test-codex-cli-e2e.sh — 저장소 스킬 탐색의 실제 Codex CLI 스모크 테스트.
+# `debug prompt-input`은 인증 없는 실험적 진단이다. 안정적인 정적 스키마/생성기/훅
+# 보완 검사는 계속 check-codex-adapter.sh가 담당한다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -80,10 +80,10 @@ def strings(value):
 
 rendered = "\n".join(strings(data))
 
-# Codex CLI >= 0.151.0 renders skills as short `rN/<skill>/SKILL.md` paths plus a
-# "Skill roots" alias table. Expand the aliases back to absolute paths so the
-# assertions below stay version-agnostic; older CLIs emit absolute paths and no
-# table, in which case this is a no-op.
+# Codex CLI >= 0.151.0은 스킬을 짧은 `rN/<skill>/SKILL.md` 경로와
+# Skill roots 별칭 표로 표시한다. 별칭을 절대 경로로 확장해 아래 단언이
+# 버전과 무관하게 작동하게 한다. 이전 CLI는 절대 경로만 출력하고 표가 없어
+# 이 경우에는 아무것도 바꾸지 않는다.
 skill_roots = re.findall(r"^- `(r\d+)` = `([^`]+)`", rendered, re.MULTILINE)
 for alias, root in sorted(skill_roots, key=lambda item: -len(item[0])):
     rendered = re.sub(

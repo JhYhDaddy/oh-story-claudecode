@@ -47,7 +47,7 @@ class VisibleCharsTests(unittest.TestCase):
         self.assertEqual(storyctl.count_visible_chars("😀"), 1)
         self.assertEqual(storyctl.count_visible_chars("e\u0301"), 2)
         self.assertEqual(storyctl.count_visible_chars("\ufeff正文"), 2)
-        self.assertEqual(storyctl.count_visible_chars("正文\ufeff"), 3)
+        self.assertEqual(storyctl.count_visible_chars("본문\ufeff"), 3)
         self.assertEqual(storyctl.count_visible_chars("中文，。！"), 5)
 
         whitespace = "".join(
@@ -96,9 +96,9 @@ class VisibleCharsTests(unittest.TestCase):
         self.assertEqual(status(1019), "under")
         self.assertEqual(status(1381), "over")
         self.assertEqual(storyctl.evaluate_wordcount("", 1200)["invalid_reason"], "EMPTY_BODY")
-        self.assertEqual(storyctl.evaluate_wordcount("正文", "12.5")["invalid_reason"], "INVALID_TARGET")
+        self.assertEqual(storyctl.evaluate_wordcount("본문", "12.5")["invalid_reason"], "INVALID_TARGET")
         self.assertEqual(
-            storyctl.evaluate_wordcount("正文", "9007199254740992")["invalid_reason"],
+            storyctl.evaluate_wordcount("본문", "9007199254740992")["invalid_reason"],
             "INVALID_TARGET",
         )
 
@@ -128,8 +128,8 @@ class OutlineTargetTests(unittest.TestCase):
 
 OUTLINE_CONTRACT = ROOT / "skills/story-long-write/scripts/check-outline-contract.js"
 CALIBER_LINE = "- 字数口径：visible_chars_v1\n"
-# 同一组细纲写法同时喂给 Python（storyctl / wordcount_core）与 JS（check-outline-contract），
-# 两边对「字数目标」「字数范围」的接受与取值必须逐条一致：细纲验收通过的，章节检查不能再拒。
+# 같은 상세 개요 표기 묶음을 Python(storyctl / wordcount_core)과 JS(check-outline-contract)에 입력한다.
+# 양쪽의 ‘字数目标’와 ‘字数范围’ 수용 조건과 추출 값이 항목별로 같아야 한다. 개요 검증을 통과한 내용을 장 검사에서 거부해서는 안 된다.
 GRAMMAR_CASES: list[tuple[str, int | None, dict[str, int] | None]] = [
     ("- 字数目标：2300\n", 2300, None),
     ("- 字数目标：2300 字\n", 2300, None),
@@ -161,14 +161,14 @@ GRAMMAR_CASES: list[tuple[str, int | None, dict[str, int] | None]] = [
     ("- 字数目标：2300 字\n- 字数范围：2600-2000\n", 2300, "invalid"),
     ("- 字数目标：2300 字\n- 字数范围：约 2000\n", 2300, "invalid"),
     ("- 字数目标：2300 字\n- 字数范围：2000-2600\n- 字数范围：2100-2500\n", 2300, "invalid"),
-    # 旧细纲的说明行：值里没有数字就当说明文字，不参与取值；多个数字值冲突仍报错。
+    # 이전 상세 개요의 설명 행: 값에 숫자가 없으면 설명문으로 보고 값을 추출하지 않는다. 여러 숫자 값이 충돌하면 여전히 오류다.
     ("- 字数目标：2300\n- 字数目标：按卷规划\n", 2300, None),
     ("- 字数目标：按卷规划\n- 字数目标：2300 字\n", 2300, None),
     ("- 字数目标：2300\n- 字数目标：按卷规划\n- 字数目标：2400\n", None, None),
     ("- 字数目标：2300 字\n- 字数范围：按作者要求\n", 2300, None),
     ("- 字数目标：2300 字\n- 字数范围：2000-2600\n- 字数范围：看情况\n", 2300, {"min": 2000, "max": 2600}),
 ]
-# 「字数口径」行：两边用同一套行语法（列表/加粗/引用前缀、行尾括注可有），值只能是 visible_chars_v1。
+# ‘字数口径’ 행: 양쪽 모두 같은 행 문법을 쓴다(목록/굵게/인용 접두사와 끝의 괄호 주석 허용). 값은 visible_chars_v1만 가능하다.
 METRIC_CASES: list[tuple[str, bool]] = [
     ("- 字数口径：visible_chars_v1\n", True),
     ("字数口径：visible_chars_v1\n", True),
@@ -202,7 +202,7 @@ class WordcountGrammarParityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="wordcount-grammar-") as directory:
             files = []
             for index, (lines, _, _) in enumerate(GRAMMAR_CASES):
-                path = Path(directory) / f"细纲_case_{index:02d}.md"
+                path = Path(directory) / f"상세개요_case_{index:02d}.md"
                 path.write_text(lines + CALIBER_LINE, encoding="utf-8")
                 files.append(path)
             completed = subprocess.run(
@@ -225,7 +225,7 @@ class WordcountGrammarParityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="wordcount-metric-") as directory:
             files = []
             for index, (lines, _) in enumerate(METRIC_CASES):
-                path = Path(directory) / f"细纲_metric_{index:02d}.md"
+                path = Path(directory) / f"상세개요_metric_{index:02d}.md"
                 path.write_text("- 字数目标：2300 字\n" + lines, encoding="utf-8")
                 files.append(path)
             completed = subprocess.run(
@@ -243,7 +243,7 @@ class WordcountGrammarParityTests(unittest.TestCase):
 class AuthorRangeTests(unittest.TestCase):
     def test_author_range_replaces_the_default_band_everywhere(self) -> None:
         author = {"min": 2000, "max": 2600}
-        # 2000 字：默认 ±12% 内部带（2024 起）判 borderline；作者给了 2000-2600 就是带内。
+        # 2000자: 기본 내부 허용 구간 ±12%(2024자부터)에서는 borderline이지만 작가 지정 범위가 2000-2600이면 구간 안이다.
         result = storyctl.evaluate_wordcount("字" * 2000, 2300, author_range=author)
         self.assertEqual(result["status"], "internal_pass")
         self.assertEqual(result["band_source"], "author")
@@ -256,7 +256,7 @@ class AuthorRangeTests(unittest.TestCase):
 
     def test_checkpoint_cli_takes_min_and_max_chars(self) -> None:
         with tempfile.TemporaryDirectory(prefix="storyctl-range-") as directory:
-            segment = Path(directory) / "前组.md"
+            segment = Path(directory) / "전반.md"
             segment.write_text("# 前组\n" + "字" * 900, encoding="utf-8")
             completed, result = run_cli(
                 "wordcount", "checkpoint", "--file", str(segment), "--target", "2300",
@@ -287,12 +287,12 @@ class StoryctlCliTests(unittest.TestCase):
     def test_chapter_check_cli_reads_bom_crlf_outline_target(self) -> None:
         with tempfile.TemporaryDirectory(prefix="storyctl-bom-outline-") as directory:
             project = Path(directory)
-            (project / "大纲").mkdir()
-            (project / "正文").mkdir()
-            outline = project / "大纲/细纲_第001章.md"
+            (project / "개요").mkdir()
+            (project / "본문").mkdir()
+            outline = project / "개요/상세개요_제001장.md"
             with outline.open("w", encoding="utf-8", newline="") as output:
                 output.write("\ufeff- 字数目标：1000 字\r\n- 字数口径：visible_chars_v1\r\n")
-            (project / "正文/第001章_测试.md").write_text(
+            (project / "본문/제001장_测试.md").write_text(
                 "# 第一章\n" + "字" * 999 + "。", encoding="utf-8"
             )
             tracking = storyctl._tracking_module()
@@ -320,8 +320,8 @@ class StoryctlCliTests(unittest.TestCase):
                     "timeline_events": [],
                 },
             )
-            # 改稿流程留在 正文/ 的原稿备份不算本章正文（否则「本章正文不唯一」直接失败）。
-            (project / "正文/第001章_测试_原稿_20260925.md").write_text(
+            # 개고 과정에서 본문/에 남긴 원고 백업은 해당 장의 본문으로 세지 않는다. 그렇지 않으면 본문이 유일하지 않다는 오류로 실패한다.
+            (project / "본문/제001장_测试_원본_20260925.md").write_text(
                 "# 第一章\n" + "旧" * 500 + "。", encoding="utf-8"
             )
             completed, result = run_cli(
@@ -337,20 +337,20 @@ class StoryctlCliTests(unittest.TestCase):
     def test_deslop_skip_marker_exempts_ai_patterns(self) -> None:
         with tempfile.TemporaryDirectory(prefix="storyctl-deslop-skip-") as directory:
             root = Path(directory)
-            outline = root / "细纲_第001章.md"
+            outline = root / "상세개요_제001장.md"
             outline.write_text("- 字数目标：1000 字\n", encoding="utf-8")
-            body = root / "第001章_测试.md"
+            body = root / "제001장_测试.md"
             prose = "他站在门口。声音不大，却让屋里的人都停了手。\n"
             body.write_text("## 第1章 测试\n" + prose, encoding="utf-8")
             plain = storyctl.check_blocking_quality(outline, body)
             self.assertEqual(plain["status"], "fail", plain)
-            # 作者说本章不去味：标题行下的豁免标记让 AI 句式降为提示，章节可以提交。
+            # 작가가 이 장의 AI 문체 제거를 원치 않으면 제목 아래의 면제 표식으로 AI 문장 패턴을 안내 수준으로 낮춰 제출을 허용한다.
             body.write_text("## 第1章 测试\n<!-- 去味:跳过 -->\n" + prose, encoding="utf-8")
             skipped = storyctl.check_blocking_quality(outline, body)
             self.assertEqual(skipped["status"], "pass", skipped)
             self.assertTrue(any(item.get("exempted") for item in skipped["advisories"]), skipped)
-            # 标记语法与 hooks（JS core / codex py / bash guard）同一套：注释内 ASCII 空格/Tab 可有可无，
-            # 冒号全角半角都认；裸写（不在注释里）或用全角空格隔开的都不算豁免。
+            # 표식 문법은 훅(JS core / codex py / bash guard)과 같다. 주석 내부의 ASCII 공백과 Tab은 선택 사항이며
+            # 전각·반각 콜론을 모두 허용한다. 주석 밖에 쓰거나 전각 공백으로 구분한 표식은 면제로 인정하지 않는다.
             for marker, exempt in (
                 ("<!--去味 ：\t跳过 -->", True),
                 ("去味:跳过", False),
@@ -358,13 +358,13 @@ class StoryctlCliTests(unittest.TestCase):
             ):
                 body.write_text("## 第1章 测试\n" + marker + "\n" + prose, encoding="utf-8")
                 self.assertEqual(storyctl.deslop_skipped(body), exempt, marker)
-            # 豁免只管 AI 句式：退化类（拒绝语/元信息泄漏）带着标记照样拦。
+            # 면제는 AI 문장 패턴에만 적용한다. 거절문이나 메타정보 유출 같은 생성 퇴화는 표식이 있어도 차단한다.
             leak = "作为AI，我无法继续创作这部分内容。\n"
             body.write_text("## 第1章 测试\n<!-- 去味:跳过 -->\n" + prose + leak, encoding="utf-8")
             degenerate = storyctl.check_blocking_quality(outline, body)
             self.assertEqual(degenerate["status"], "fail", degenerate)
             self.assertEqual({row["source"] for row in degenerate["blocking_findings"]}, {"degeneration"}, degenerate)
-            # 标记只在首 6 行内生效（与 hooks 同窗口）：落在第 7 行的不豁免。
+            # 표식은 훅과 동일하게 처음 6행에서만 유효하다. 7행의 표식은 면제되지 않는다.
             filler = "".join(f"第{index}句。\n" for index in range(1, 6))
             body.write_text("## 第1章 测试\n" + filler + "<!-- 去味:跳过 -->\n" + prose, encoding="utf-8")
             late = storyctl.check_blocking_quality(outline, body)
@@ -424,20 +424,27 @@ class StoryctlCliTests(unittest.TestCase):
         self.assertEqual(result["invalid_reason"], "INVALID_ARGUMENT")
 
     def test_demo_outlines_and_bodies_use_the_same_metric(self) -> None:
-        book = ROOT / "demo/长篇/让你管账号，你高燃混剪炸全网"
-        outlines = sorted((book / "大纲").glob("细纲_第*.md"))
+        original = ROOT / "demo/长篇/让你管账号，你高燃混剪炸全网"
+        migration_spec = importlib.util.spec_from_file_location("test_demo_path_migration", ROOT / "skills/story-setup/scripts/migrate-project-paths.py")
+        migration = importlib.util.module_from_spec(migration_spec)
+        migration_spec.loader.exec_module(migration)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        book = Path(temporary.name) / "한국어"
+        migration.migrate(original, book, apply=True)
+        outlines = sorted((book / "개요").glob("상세개요_제*.md"))
         self.assertGreaterEqual(len(outlines), 1)
-        # 导入的章节其「字数目标」是从已发布正文反推的，因此逐字相等；
-        # 导入之后由 skill 写出的章节只需落在内部带内（作者可接受偏短的成稿）。
+        # 가져온 장의 ‘字数目标’는 이미 발표한 본문에서 역산하므로 글자 수가 정확히 같다.
+        # 가져온 뒤 스킬로 작성한 장은 내부 허용 범위만 충족하면 된다. 작가는 조금 짧은 완성본을 수용할 수 있다.
         state = json.loads(
-            (book / "追踪/_tracking-state.json").read_text(encoding="utf-8")
+            (book / "추적/_tracking-state.json").read_text(encoding="utf-8")
         )
         imported_through = state["imported_through_chapter"]
         for outline in outlines:
             target = storyctl.target_from_outline(outline.read_text(encoding="utf-8"))
 
-            chapter = outline.stem.removeprefix("细纲_第").removesuffix("章")
-            bodies = list((book / "正文").glob(f"第{chapter}章_*"))
+            chapter = outline.stem.removeprefix("상세개요_제").removesuffix("장")
+            bodies = list((book / "본문").glob(f"제{chapter}장_*"))
             self.assertEqual(len(bodies), 1, outline.name)
             completed, result = run_cli(
                 "wordcount",
@@ -479,7 +486,7 @@ def _init_tracking(project: Path) -> None:
 
 
 class ToolFailureTests(unittest.TestCase):
-    """检测器崩溃或输出坏掉时不能把章节当成通过：一律按工具不可用（exit 3）处理。"""
+    """검사기 충돌이나 잘못된 출력을 통과로 취급하지 않는다. 항상 도구 사용 불가(exit 3)로 처리한다."""
 
     def _quality_with(self, script: str, returncode: int, stdout: str) -> dict[str, object]:
         real_run = subprocess.run
@@ -490,9 +497,9 @@ class ToolFailureTests(unittest.TestCase):
             return real_run(command, *args, **kwargs)
 
         with tempfile.TemporaryDirectory(prefix="storyctl-tool-") as directory:
-            outline = Path(directory) / "细纲_第001章.md"
+            outline = Path(directory) / "상세개요_제001장.md"
             outline.write_text("- 字数目标：1000 字\n", encoding="utf-8")
-            body = Path(directory) / "第001章_测试.md"
+            body = Path(directory) / "제001장_测试.md"
             body.write_text("## 第1章 测试\n他推门进去，屋里没人。\n", encoding="utf-8")
             with unittest.mock.patch.object(storyctl.subprocess, "run", fake_run):
                 return storyctl.check_blocking_quality(outline, body)
@@ -520,12 +527,12 @@ class ToolFailureTests(unittest.TestCase):
 class OutlineRangeOverrideTests(unittest.TestCase):
     def _project(self, directory: str, range_line: str) -> Path:
         project = Path(directory)
-        (project / "大纲").mkdir()
-        (project / "正文").mkdir()
-        (project / "大纲/细纲_第001章.md").write_text(
+        (project / "개요").mkdir()
+        (project / "본문").mkdir()
+        (project / "개요/상세개요_제001장.md").write_text(
             "- 字数目标：2300 字\n- 字数口径：visible_chars_v1\n" + range_line, encoding="utf-8"
         )
-        (project / "正文/第001章_测试.md").write_text("# 第一章\n" + "字" * 2100 + "。", encoding="utf-8")
+        (project / "본문/제001장_测试.md").write_text("# 제1장\n" + "字" * 2100 + "。", encoding="utf-8")
         _init_tracking(project)
         return project
 
@@ -542,7 +549,7 @@ class OutlineRangeOverrideTests(unittest.TestCase):
             self.assertNotEqual(result.get("status"), "error", result)
             self.assertEqual(result["length"]["band_source"], "author")
             self.assertEqual(result["length"]["user_band"]["min"], 2000)
-            segment = project / "前组.md"
+            segment = project / "전반.md"
             segment.write_text("# 前组\n" + "字" * 900, encoding="utf-8")
             completed, result = run_cli(
                 "wordcount", "checkpoint", "--file", str(segment), "--project", str(project), "--chapter", "1",
@@ -554,7 +561,7 @@ class OutlineRangeOverrideTests(unittest.TestCase):
     def test_checkpoint_reads_target_and_author_range_from_outline(self) -> None:
         with tempfile.TemporaryDirectory(prefix="storyctl-checkpoint-outline-") as directory:
             project = self._project(directory, "- 字数范围：2000-2600\n")
-            segment = project / "前组.md"
+            segment = project / "전반.md"
             segment.write_text("# 前组\n" + "字" * 900, encoding="utf-8")
             completed, result = run_cli(
                 "wordcount", "checkpoint", "--file", str(segment), "--project", str(project), "--chapter", "1",
@@ -563,13 +570,13 @@ class OutlineRangeOverrideTests(unittest.TestCase):
             self.assertEqual(result["target"], 2300)
             self.assertEqual(result["band_source"], "author")
             self.assertEqual(result["remaining_user_range"], {"min": 1100, "max": 1700})
-            # 命令行上下限优先于细纲；细纲没写范围时回落默认带。
+            # 명령행 상한·하한이 상세 개요보다 우선하며 개요에 범위가 없으면 기본 범위로 돌아간다.
             completed, result = run_cli(
                 "wordcount", "checkpoint", "--file", str(segment), "--project", str(project), "--chapter", "1",
                 "--min-chars", "2100", "--max-chars", "2500",
             )
             self.assertEqual(result["remaining_user_range"], {"min": 1200, "max": 1600})
-            (project / "大纲/细纲_第001章.md").write_text(
+            (project / "개요/상세개요_제001장.md").write_text(
                 "- 字数目标：2300 字\n- 字数口径：visible_chars_v1\n", encoding="utf-8"
             )
             completed, result = run_cli(

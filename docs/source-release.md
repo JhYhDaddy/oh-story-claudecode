@@ -1,45 +1,25 @@
-# Source release
+# 소스 릴리스
 
-This repository publishes a tracked-source archive through the reviewed shared
-ZenStory source-release controls. The procedure binds a stable tag to reviewed
-source, successful CI and public release assets.
+이 저장소는 검토된 ZenStory 공통 소스 릴리스 제어 절차를 통해 Git 추적 소스의 압축 파일을 배포합니다. 이 절차는 안정 버전 태그를 검토된 소스, 성공한 CI, 공개 릴리스 자산과 연결합니다.
 
-## Contract
+## 계약
 
-- `.release/policy.json` is source-bound and names every version authority, the
-  dated changelog, exact installable files, exclusions, and exact main CI jobs.
-- Pull requests run a read-only contract/archive validation.
-- `workflow_dispatch` is allowed only on `main` and never publishes. It also
-  proves the exact main commit's configured CI runs.
-- Only a stable `vX.Y.Z` tag push whose version and dated changelog agree can
-  publish. The tag commit must be on protected `main` with successful exact-SHA
-  CI. Assets are append-only; a same-name byte mismatch fails rather than
-  overwriting.
-- After GitHub source assets pass anonymous byte verification, a separate job
-  dispatches the existing ClawHub workflow with the exact tag and 40-character
-  source SHA. `CLAWHUB_QUEUED` means dispatch accepted, not published or
-  scan-clean.
+- `.release/policy.json`은 소스에 종속되며, 모든 버전 기준 파일, 날짜가 포함된 변경 이력, 정확한 설치 대상 파일, 제외 항목, main의 정확한 CI 작업을 명시합니다.
+- 풀 리퀘스트에서는 읽기 전용 계약·압축 파일 검증을 실행합니다.
+- `workflow_dispatch`는 `main`에서만 허용되며 배포하지 않습니다. 지정된 main 커밋의 CI 실행도 정확히 확인합니다.
+- 버전과 날짜가 있는 변경 이력이 일치하는 안정 버전 `vX.Y.Z` 태그의 push만 배포할 수 있습니다. 태그 커밋은 보호된 `main`에 속하고, 정확히 같은 SHA의 CI가 성공해야 합니다. 자산은 추가만 허용됩니다. 같은 이름의 자산과 바이트가 다르면 덮어쓰지 않고 실패합니다.
+- GitHub 소스 자산이 익명 바이트 검증을 통과하면 별도 작업이 정확한 태그와 40자리 소스 SHA로 기존 ClawHub 워크플로를 호출합니다. `CLAWHUB_QUEUED`는 호출 요청이 수락되었다는 뜻이며, 게시 완료나 검사 통과를 뜻하지 않습니다.
 
-## Release procedure
+## 릴리스 절차
 
-1. Update all version authorities together and add a dated changelog heading.
-2. Merge through the existing product and ClawHub inventory checks.
-3. Run **Source release** manually on `main` as a nonpublishing dry-run.
-4. Create the reviewed stable tag from that exact green main commit and push it.
-5. Inspect the source-release manifest, anonymous asset verification, and the
-   ClawHub audit separately. Never infer ClawHub success from the dispatch job.
+1. 모든 버전 기준 파일을 함께 갱신하고 날짜가 있는 변경 이력 제목을 추가합니다.
+2. 기존 제품 검사와 ClawHub 목록 검사를 거쳐 병합합니다.
+3. `main`에서 **Source release**를 수동 실행하여 실제 게시 없는 모의 실행을 수행합니다.
+4. 검토를 마치고 검사를 통과한 바로 그 main 커밋에서 안정 버전 태그를 만들고 push합니다.
+5. 소스 릴리스 매니페스트, 익명 자산 검증, ClawHub 감사를 각각 확인합니다. 호출 작업만 보고 ClawHub 배포가 성공했다고 판단하지 않습니다.
 
-## Safe reruns and failures
+## 안전한 재실행과 실패 처리
 
-Rerun the same workflow attempt only after diagnosing the failing channel. An
-already uploaded asset is accepted only when its public bytes match the same
-candidate; no workflow deletes, replaces, or `--clobber`s release assets. A
-GitHub API/auth/network error is a failure, not proof that an asset is absent. A
-ClawHub handoff can be re-dispatched for the same exact tag/source, while its
-existing ownership, rights, version/hash, scan and anonymous-audit gates remain
-authoritative.
+실패한 경로를 진단한 뒤에만 같은 워크플로 실행을 재시도합니다. 이미 업로드한 자산은 공개된 바이트가 같은 후보와 일치할 때만 허용됩니다. 어떤 워크플로도 릴리스 자산을 삭제하거나 교체하거나 `--clobber`로 덮어쓰지 않습니다. GitHub API·인증·네트워크 오류는 실패이며, 자산이 없다는 증거가 아닙니다. 같은 태그와 소스로 ClawHub 전달을 다시 요청할 수 있지만, 기존 소유권·권리·버전/해시·검사·익명 감사 조건은 계속 유효합니다.
 
-The caller currently pins shared source controls to `d098c09a27f8fe58ccf3a13a894ecc3804747b7c`.
-When upgrading controls, change all four references together and pass the
-source-bound pin contract before merging. The separate ClawHub writer pin is
-unchanged and remains independently reviewed.
+호출 측은 현재 공통 소스 제어 버전을 `d098c09a27f8fe58ccf3a13a894ecc3804747b7c`로 고정합니다. 제어 절차를 업그레이드할 때는 네 곳의 참조를 함께 바꾸고, 병합 전에 소스에 종속된 버전 고정 계약을 통과해야 합니다. 별도의 ClawHub 쓰기 도구 버전 고정은 변경하지 않으며 독립적으로 검토합니다.

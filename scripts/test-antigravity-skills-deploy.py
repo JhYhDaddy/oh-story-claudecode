@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior tests for project-local Antigravity skill materialization."""
+"""프로젝트 내부 Antigravity 스킬 파일 생성의 동작 테스트."""
 
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ def make_source(root: Path) -> Path:
 
 
 def main() -> None:
-    # The deployer materializes only the skills it names; a skill added under skills/
-    # without updating KNOWN_SKILLS would silently never reach Antigravity projects.
+    # 배포기는 지정한 스킬만 실제 파일로 만든다. KNOWN_SKILLS 갱신 없이 skills/에 추가한
+    # 스킬은 아무 알림 없이 Antigravity 프로젝트에 배포되지 않는다.
     shipped = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}
     assert set(MODULE.KNOWN_SKILLS) == shipped, (
         f"KNOWN_SKILLS drift: missing={sorted(shipped - set(MODULE.KNOWN_SKILLS))}, "

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Merge current story-setup Codex hooks without preserving stale registrations.
+"""오래된 등록을 남기지 않고 현재 story-setup Codex 훅을 병합한다.
 
-Existing project hook configuration is user-owned. Only command hooks that invoke
-story-setup's known Python hook or shared launchers are replaced; unrelated hooks
-and top-level configuration are preserved verbatim.
+기존 프로젝트 훅 설정은 사용자 소유다. story-setup의 알려진 Python 훅이나
+공유 실행기를 호출하는 명령 훅만 교체한다. 관련 없는 훅과 최상위 설정은
+원문 그대로 보존한다.
 """
 
 from __future__ import annotations
@@ -88,12 +88,12 @@ def merge_documents(existing: object, template: object) -> dict[str, Any]:
             raise MergeError(f"template.hooks.{event} must be an array")
 
     result = copy.deepcopy(existing)
-    assert isinstance(result, dict)  # narrowed by require_hooks
+    assert isinstance(result, dict)  # require_hooks에서 타입 범위를 좁힘
     merged_hooks = strip_managed_registrations(existing_hooks)
     for event, blocks in template_hooks.items():
-        # 只在与模板事件撞名时要求用户侧是数组：未知事件的非数组值由
-        # strip_managed_registrations 原样保留（保留用户已有配置的契约），
-        # 撞名却无法 extend 时给出 MergeError 诊断而不是 AttributeError traceback。
+        # 템플릿 이벤트와 이름이 겹칠 때만 사용자 값이 배열인지 요구한다. 알 수 없는 이벤트의 비배열 값은
+        # strip_managed_registrations가 그대로 보존한다(기존 사용자 설정 보존 계약).
+        # 이름이 겹치지만 extend할 수 없다면 AttributeError 추적 대신 MergeError 진단을 제공한다.
         if event in merged_hooks and not isinstance(merged_hooks[event], list):
             raise MergeError(f"existing.hooks.{event} must be an array")
         merged_hooks.setdefault(event, []).extend(copy.deepcopy(blocks))

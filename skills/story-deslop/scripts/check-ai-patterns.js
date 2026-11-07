@@ -49,28 +49,28 @@ const HARD_SEPARATORS = new Set(['。', '.', '！', '!', '？', '?']);
 const MAX_NEGATIVE_SPAN = 80;
 const MAX_POSITIVE_SPAN = 80;
 
-// 碎句号：连续 STUTTER_MIN_RUN 个「叙述」短句（每句可见字数 ≤ STUTTER_MAX_SENTENCE）无呼吸。
-// 只数叙述句，跳过对话/弹幕/系统播报（成片短句是这些体裁的正常形态，不算碎句号）。
+// 잘게 끊긴 문장: 가시 글자 수가 STUTTER_MAX_SENTENCE 이하인 서술 단문이 STUTTER_MIN_RUN개 연속 이어져 호흡이 없는 경우.
+// 서술문만 센다. 대화·실시간 댓글·시스템 안내는 짧은 문장 묶음이 자연스러운 형식이므로 제외한다.
 const STUTTER_MIN_RUN = 6;
 const STUTTER_MAX_SENTENCE = 5;
-// 长段落：单段原始字符数超过阈值即提示按镜头断段（手机阅读保守阈值，正常单段远低于此）。
+// 긴 문단: 원시 문자 수가 기준을 넘으면 장면별 분리를 안내한다. 모바일 읽기의 보수적 기준이며 정상 문단은 훨씬 짧다.
 const LONG_PARAGRAPH_CHARS = 200;
 
-// 微动作复读：「V了下 / V了一下 / 拍了两下 / 松了半圈」式轻量补语在叙述里高密度复现，
-// 容易形成删减过头的电报体指纹。只扫引号外叙述；密度与次数双门槛同时达标才报，
-// 单次出现是正常中文。
+// 미세 동작 반복: ‘V了下 / V了一下 / 拍了两下 / 松了半圈’ 같은 가벼운 보어가 서술에 고밀도로 반복되면
+// 과도하게 줄인 전보체의 흔적이 되기 쉽다. 따옴표 밖 서술만 검사하며 밀도와 횟수 기준을 모두 충족해야 보고한다.
+// 한 번 나오는 것은 정상적인 중국어 표현이다.
 const MICRO_TIC_PATTERN = /了(?:[一两三几半])?[下阵圈道声眼口气会]/g;
 const MICRO_TIC_MIN_HITS = 5;
-// 「没A，也没B」「不A，也不B」否定对偶：七猫人类长篇约 0.07 处/千字，模型稿 0.4-1.5 处/千字；
-// 写人物没做什么是英文式节奏，一章 3 处以上报一条提示。
+// ‘没A，也没B’, ‘不A，也不B’ 부정 대구: 치마오 인간 장편은 약 0.07곳/천 자, 모델 원고는 0.4–1.5곳/천 자다.
+// 인물이 하지 않은 행동을 나열하는 것은 영어식 리듬이다. 한 장에 3곳 이상이면 안내 하나를 보고한다.
 const NEGATION_PAIR_PATTERN = /(?:没有|没|不)[^，。！？；,!?\n]{1,10}[，,；]\s*[^，。！？；,!?\n]{0,6}?也(?:没有|没|不)/g;
 const NEGATION_PAIR_MIN_HITS = 3;
 const MICRO_TIC_PER_KILO = 6;
 
-// 套式反应细节：不是禁写身体，而是提示成片出现的“部位 + 轻微动作/状态”、
-// “胸口像被撞了一下”、喉结/眼圈/声音放轻等通用情绪尾巴，以及“平静语气 +
-// 像在念/宣判”模板。此类句子词面变化大，不能逐词 blocking；按章聚集到 4 处才
-// advisory，要求逐处做删除测试。正常受伤、打斗、生理反应若承担物理后果可保留。
+// 상투적 반응 세부: 신체 묘사 자체를 금지하지 않고 ‘부위 + 미세 동작/상태’가 무더기로 나타나는 경우를 안내한다.
+// ‘胸口像被撞了一下’, 목울대·눈가·낮아지는 목소리 같은 범용 감정 꼬리와 ‘차분한 말투 +
+// 낭독/선고하는 듯함’ 템플릿을 포함한다. 어휘 변화가 커서 단어별 blocking은 하지 않고 한 장에 4곳 모일 때
+// advisory로 각 위치의 삭제 테스트를 요구한다. 물리적 결과를 전달하는 정상 부상·싸움·생리 반응은 유지할 수 있다.
 const STOCK_REACTION_PATTERNS = [
   /(?:指尖|手指|指节|手背|掌心|拳头|袖口|衣角|裙角|下唇|嘴唇|唇角|嘴角|眉头|眼底|眸光|目光|视线|肩膀|呼吸)[^。！？!?\n]{0,16}(?:轻轻|微微|缓缓|悄然|不自觉|无意识|下意识|攥紧|握紧|收紧|绞紧|泛白|发白|叩|敲|摩挲|抿紧|抿成|移开|垂下|躲开|一颤|颤了?一下|停了?一下|顿了?一下)/g,
   /(?:语气|声音)[^。！？!?\n]{0,12}(?:平静|冷静|平淡|冷淡|淡漠|平直)[^。！？!?\n]{0,12}(?:像|仿佛|如同|好像)[^。！？!?\n]{0,16}(?:念|读|报|说|陈述|宣判|背诵)/g,
@@ -81,21 +81,21 @@ const STOCK_REACTION_PATTERNS = [
   /(?:抿了?下唇|抿了?抿唇|抿了?下嘴|抿着笑)/g,
 ];
 const STOCK_REACTION_MIN_HITS = 4;
-// 校准（真人语料，<br> 已还原为换行）：qimao 长篇 5584 章 + heiyan 短篇整篇 3983 篇。
-// 长篇章尺度（中位约 2100 字）per-kilo 1.0→1.5 误报 0.43%→0.39%，几乎不动；
-// 短篇整篇 8000-20000 字下 MIN_HITS 形同虚设、只剩密度门，1.0 时误报 5.57%，
-// 1.5 降到 1.46%。故取 1.5，把两个总体拉到同一量级（四份副本共用一组阈值）。
+// 보정 자료(사람이 쓴 원문, <br>은 줄바꿈으로 복원): qimao 장편 5584개 장 + heiyan 단편 전체 3983편.
+// 장편의 장 단위(중앙값 약 2100자)에서는 per-kilo를 1.0→1.5로 바꿔도 오탐률이 0.43%→0.39%로 거의 변하지 않는다.
+// 단편 전체 8000~20000자에서는 MIN_HITS가 사실상 무의미해져 밀도 기준만 남으며, 1.0일 때 오탐률은 5.57%다.
+// 1.5에서는 1.46%로 낮아진다. 따라서 1.5를 택해 두 모집단을 같은 규모로 맞춘다(네 사본이 같은 기준을 공유).
 const STOCK_REACTION_PER_KILO = 1.5;
 
-// 监控摄像头式动作清单：同一段连续堆叠通用动作动词（伸手/拿起/取过/挑开/放下/转身等），
-// 且用逗号/顿号串联成步骤表时，读感像无视角温度的监控记录。只做 advisory；
-// 打斗/追逐等功能性动作编排可保留或人工复核。
+// 감시 카메라식 행동 목록: 같은 문단에 범용 동작 동사(伸手/拿起/取过/挑开/放下/转身 등)를 연속 쌓고
+// 쉼표·모점으로 연결해 절차표처럼 만들면 시점의 온기가 없는 감시 기록처럼 읽힌다. advisory만 적용한다.
+// 싸움·추격 등의 기능적 동작 설계는 유지하거나 사람이 재검토할 수 있다.
 const ACTION_LIST_VERB_PATTERN = /伸手|抬手|探手|拿起|拿过|取出|取过|掏出|摸出|抓起|攥住|握住|捏住|按住|推开|拉开|打开|关上|放下|递给|挑开|掀开|扯开|拧开|倒出|端起|转身|回头|抬头|低头|弯腰|俯身|走到|走向|坐下|站起|看向|看着|盯着|扫过/g;
 const ACTION_LIST_MIN_HITS = 5;
 const ACTION_LIST_MIN_SEPARATORS = 4;
 
-// 抽象总结复读：模板化段落常把角色当下经历拔成「命运/棋局/
-// 这一刻终于明白/才刚刚开始」的作者总结。单个词可能服务题材；高密度聚集才报。
+// 추상적 요약 반복: 템플릿 문단은 인물의 현재 경험을 ‘命运/棋局/
+// 这一刻终于明白/才刚刚开始’ 같은 작가 요약으로 끌어올리곤 한다. 개별 단어는 장르에 기여할 수 있으므로 고밀도 집중만 보고한다.
 const ABSTRACT_SUMMARY_PATTERNS = [
   /这一刻[，,]?[^\n。！？!?]{0,24}(?:终于|才)(?:明白|意识到)/g,
   /从这一刻开始/g,
@@ -108,8 +108,8 @@ const ABSTRACT_SUMMARY_PATTERNS = [
 const ABSTRACT_SUMMARY_MIN_HITS = 3;
 const ABSTRACT_SUMMARY_PER_KILO = 4;
 
-// 套词密度：单个「仿佛/一丝」可能是正常中文，高密度聚集才会形成模板腔。
-// 词表只收本 repo banned-words 中已明确标为高危的形态，避免把普通功能词一网打尽。
+// 상투어 밀도: ‘仿佛/一丝’ 한 번은 정상 중국어일 수 있으나 고밀도로 모이면 템플릿 어조가 된다.
+// 단어 목록에는 저장소 banned-words에서 고위험으로 명시한 형태만 넣어 일반 기능어까지 일괄 포착하지 않는다.
 const CLICHE_PATTERNS = [
   /仿佛|犹如|宛若|如同/g,
   /一丝|一抹|些许|几分|隐约/g,
@@ -124,16 +124,16 @@ const CLICHE_PATTERNS = [
 const CLICHE_DENSITY_MIN_HITS = 8;
 const CLICHE_DENSITY_PER_KILO = 12;
 
-// 比喻密度：单个生活化比喻可服务画面；“像/好像/仿佛/如同”成片复现时，
-// 容易变成 AI 式修辞堆叠。只做 advisory，修法是删到必要数量并回到具体画面，
-// 不是把“像”换成另一组比喻词。
+// 비유 밀도: 생활 속 비유 하나는 장면에 기여할 수 있지만 ‘像/好像/仿佛/如同’이 무더기로 반복되면
+// AI식 수사 쌓기가 되기 쉽다. advisory만 적용하며 필요한 수만 남기고 구체적 장면으로 돌아가게 한다.
+// ‘像’을 다른 비유 단어로 바꾸라는 뜻이 아니다.
 const METAPHOR_MARKER_PATTERN = /好像|像是|仿佛|宛如|如同|犹如|(?<![不头图画影录摄肖])像(?![头像素])/g;
 const METAPHOR_LIKE_PHRASE_PATTERN = /(?:死|水|冰|火|潮水|石头|木头|机器|纸|铁|鬼|死人|刀|针|网|墙)一样/g;
 const METAPHOR_DENSITY_MIN_HITS = 7;
 const METAPHOR_DENSITY_PER_KILO = 3;
 
-// 解释链密度：常见“他知道/他明白/这意味着/必须需要”
-// 连续替读者推理，读感像报告。单个判断词可服务推理；高密度聚集才提示回到角色当下证据。
+// 설명 연쇄 밀도: ‘他知道/他明白/这意味着/必须需要’처럼
+// 독자 대신 계속 추론하면 보고서처럼 읽힌다. 개별 판단어는 추리에 기여할 수 있어 고밀도일 때만 현재 인물의 증거로 돌아가도록 안내한다.
 const REASONING_CHAIN_PATTERNS = [
   { key: 'mental', core: true, pattern: /(?<![不没未无])(?:他|她|我)?(?:知道|明白|意识到|清楚|判断|确认|分析)/g },
   { key: 'connector', core: true, pattern: /这意味着|也就是说|换句话说|真正的问题(?:在于)?|问题在于|关键在于|在这种情况下|按照这个逻辑|只有这样|想到这里/g },
@@ -145,8 +145,8 @@ const REASONING_CHAIN_CORE_MIN_HITS = 4;
 const REASONING_CHAIN_MIN_BUCKETS = 2;
 const REASONING_CHAIN_PER_KILO = 18;
 
-// 系统公告公文腔：只看成片方括号规则/面板行里的硬规则词。
-// 这不是特定题材词表；单条严肃规则、日常叙述或普通对话不触发。
+// 시스템 공지의 공문체: 대괄호 규칙·패널 행이 모인 곳의 강제 규칙 단어만 검사한다.
+// 특정 장르의 단어 목록이 아니다. 단독의 엄격한 규칙, 일상 서술, 일반 대화는 발동하지 않는다.
 const NOTICE_FORMAL_PATTERNS = [
   /不得|必须|不可|禁止|严禁|应当|须|需|务必/g,
   /当前|本公告|本规则|本系统|提示|任务失败|临时权限|权限|状态|等级/g,
@@ -159,8 +159,8 @@ const NOTICE_FORMAL_MIN_HITS = 12;
 const NOTICE_FORMAL_CORE_MIN_HITS = 5;
 const NOTICE_FORMAL_PER_KILO = 60;
 
-// 过度精炼短段：过度处理样本里常见大量 15 字以内叙述段，且“的/了/就/着/过/呢/吧/啊”等
-// 自然连接偏少；对照文本通常保留更多自然连接。此项只做 advisory，禁止机械注水。
+// 과도하게 압축한 짧은 문단: 과처리 표본에는 15자 이내 서술 문단이 많고 ‘的/了/就/着/过/呢/吧/啊’ 같은
+// 자연스러운 연결이 적다. 대조 텍스트는 보통 이를 더 많이 유지한다. advisory만 적용하며 기계적인 분량 늘리기는 금지한다.
 const OVERCOMPRESSED_PROSE_PARTICLE_PATTERN = /[的了就着过呢吧啊呀嘛]/g;
 const OVERCOMPRESSED_PROSE_MIN_CHARS = 1200;
 const OVERCOMPRESSED_PROSE_MIN_PARAS = 45;
@@ -168,8 +168,8 @@ const OVERCOMPRESSED_PROSE_SHORT_MAX_CHARS = 15;
 const OVERCOMPRESSED_PROSE_SHORT_RATIO = 0.58;
 const OVERCOMPRESSED_PROSE_PARTICLE_PER_KILO = 85;
 
-// 低连接密度：单纯低功能词会误抓有大量中长句的文本；
-// 因此必须叠加“中长句不足”，并只看引号外叙述。这是 overcompressed 的短窗口补充，只做 advisory。
+// 낮은 연결 밀도: 기능어가 적다는 이유만으로는 중·장문이 많은 텍스트까지 잘못 포착한다.
+// 따라서 “중장문 부족” 조건을 함께 적용하고 따옴표 밖의 서술만 살펴야 한다. overcompressed를 짧은 구간에서 보완하는 검사이며 권고만 제공한다.
 const LOW_CONNECTIVE_FUNCTION_TERMS = ['的', '了', '就', '在', '是', '也', '都', '还', '又', '把', '被', '给', '这个', '那个', '里面', '以后', '时候', '现在', '因为', '所以', '但是', '不过', '然后', '已经', '还是', '起来', '出来', '下去'];
 const LOW_CONNECTIVE_PLAIN_TERMS = ['的', '了', '就', '也', '还', '又', '这个', '那个', '东西', '事情', '时候', '里面', '以后', '一下', '一点', '有点', '还是'];
 const LOW_CONNECTIVE_MIN_CHARS = 800;
@@ -178,42 +178,42 @@ const LOW_CONNECTIVE_PLAIN_PER_KILO = 65;
 const LOW_CONNECTIVE_LONG_SENTENCE_CHARS = 30;
 const LOW_CONNECTIVE_LONG_SENTENCE_RATIO = 0.08;
 
-// either-or「不是A就是B / 不是A也是B」里紧贴的「是」是连词的一部分，不是肯定项系动词。
-// 含「不」以沿用「不是A，也不是B」第二个否定段不算翻转的旧排除。
+// 양자택일 ‘不是A就是B / 不是A也是B’에서 붙어 있는 ‘是’는 접속사 일부이며 긍정절의 계사가 아니다.
+// ‘不是A，也不是B’의 두 번째 부정절을 전환으로 보지 않던 기존 예외를 유지하도록 ‘不’를 포함한다.
 const COMPACT_EITHER_OR_PREV = new Set(['不', '就', '也']);
-// 句尾语气/反问助词；「…，是吗 / 是吧 / 是嘛」是反问尾巴，不是否定后的肯定翻转。
+// 문장 끝 어기·반문 조사: ‘…，是吗 / 是吧 / 是嘛’는 반문 꼬리이며 부정 뒤의 긍정 전환이 아니다.
 const TAG_PARTICLES = new Set(['吗', '吧', '嘛']);
-// 段首确认语；「不是第一次来。是的，他还记得……」里的「是的/是啊」
-// 是承接确认，不是「不是 A，是 B」的肯定翻转。
+// 문단 시작의 확인 표현: ‘不是第一次来。是的，他还记得……’의 ‘是的/是啊’는
+// 앞 내용을 이어 확인하는 말이며 ‘不是 A，是 B’의 긍정 전환이 아니다.
 const AFFIRMATION_TAG_PARTICLES = new Set(['的', '啊', '呀', '呢']);
 const AFFIRMATION_TAG_BOUNDARY = new Set(['', '，', ',', '。', '.', '！', '!', '？', '?', '、', '；', ';', '：', ':', '\n', '\r', '\t', ' ']);
 
-// 成对引号（台词/系统播报/弹幕）的字符对，stripQuoted 与 quotedRanges 共用一份来源。
-// 引号片段一律不跨行（字符类里排掉 \n）：正文漏一个收引号很常见（多段台词只在末段收尾、
-// 全半角引号混用都会漏），若允许跨行配对，一个未闭合的开引号会把后面成百上千字全算成
-// 「引号内」，让 quotedRanges 的消费方（not-is 跨行扫描）把整段叙述静默豁免掉。
+// 대사·시스템 안내·실시간 댓글의 따옴표 문자 쌍. stripQuoted와 quotedRanges가 같은 정의를 공유한다.
+// 따옴표 구간은 줄을 넘지 않는다(문자 클래스에서 \n 제외). 여러 문단 대사의 마지막에만 닫거나 전각·반각 혼용으로
+// 닫는 따옴표가 빠지는 일은 흔하다. 줄을 넘겨 짝지으면 닫히지 않은 따옴표 뒤 수백·수천 자를 모두
+// 따옴표 안으로 보아 quotedRanges 소비자(not-is 다중 행 검사)가 서술 전체를 조용히 면제하게 된다.
 const QUOTE_PAIRS = [['「', '」'], ['『', '』'], ['【', '】'], ['“', '”'], ['‘', '’'], ['"', '"'], ["'", "'"]];
 const QUOTE_SOURCES = QUOTE_PAIRS.map(([open, close]) => `${escapeRegExp(open)}[^${escapeRegExpCharClass(close)}\\n]*${escapeRegExp(close)}`);
 
-// ---- 实战测试漏网句式（来源：实战写作抓到的真实漏网例句；2026-07 校准）----
-// 校准基线：《万疆》真人正文 20 章（第1/10/20/…/190章）+ demo 前 20 章。
-// blocking 规则要求真人语料命中 ≈0（每 20 章 ≤1 处且人工判定确属该句式）；数据见各规则注释。
+// ---- 실전 테스트에서 누락된 문장 패턴(실제 집필의 누락 예문에서 추출, 2026-07 보정) ----
+// 보정 기준: 인간 집필 《万疆》 본문 20장(1/10/20/…/190장) + demo 첫 20장.
+// blocking 규칙은 인간 말뭉치 적중이 거의 0이어야 한다(20장당 1곳 이하이며 사람이 해당 패턴임을 확인). 자료는 규칙별 주석 참조.
 
-// 音量反差腔（实战漏网 A）：「声音不高，第一句却稳稳压住了整个大厅。」
-// 旧网只有套词密度桶里的「声音不大，却带着」，音量词/转折词一换就漏。
-// 引号外叙述逐处 blocking；修法是删掉音量铺垫，直接写声音落进场子的具体效果。
-// 校准：《万疆》20 章 0 命中，demo 前 20 章 0 命中。
+// 음량 대비 어조(실전 누락 A): ‘声音不高，第一句却稳稳压住了整个大厅。’
+// 기존 검사에는 상투어 밀도의 ‘声音不大，却带着’만 있어 음량·전환 단어가 바뀌면 놓쳤다.
+// 따옴표 밖 서술은 위치마다 blocking 처리한다. 음량 도입을 삭제하고 목소리가 현장에 미친 구체적 효과를 바로 쓴다.
+// 보정: 《万疆》 20장 0건, demo 첫 20장 0건.
 const VOICE_CONTRAST_PATTERN = /声音(?:并)?不[大高响亮][^。！？!?\n]{0,16}[却但偏]/g;
 
-// 否定排比（实战漏网 B）：「没有伴奏，没有和声，没有提词器。」同句 ≥2 个「没有X，」连排；
-// 变体「他没炫技，没有那种…架势。他只是唱」先否定铺垫、再用「只是/只会/只有」收肯定。
-// 只收「没/没有」段，不收「不X」段——真人叙述里「不哭不闹」类太常见，收进来误报换不来收益。
-// 光杆「没」还得挡两类非否定用法，否则正常叙述会被判成排比：
-//   1) 黏着语素（沉没/淹没/埋没/出没/隐没…）——前字排除，「船沉没在雾里，没人回头，…只有…」不算；
-//   2) 时间惯用语（没多久/没过多久/没等X）——后字排除，「没多久，没等她撑伞，…只有…」不算。
-// 「没有X」段不带这两种歧义（黏着语素后接不出「有」，时间惯用语已被后字排除覆盖），
-// 第一条连排式照旧不加护栏。
-// 校准：《万疆》20 章 0 命中，demo 前 20 章 0 命中。
+// 부정 병렬(실전 누락 B): ‘没有伴奏，没有和声，没有提词器。’ 같은 문장에 ‘没有X，’가 2개 이상 연속됨.
+// 변형 ‘他没炫技，没有那种…架势。他只是唱’은 부정으로 도입한 뒤 ‘只是/只会/只有’로 긍정 마무리한다.
+// ‘没/没有’ 절만 수집하며 ‘不X’는 제외한다. 인간 서술의 ‘不哭不闹’ 등이 너무 흔해 오탐 비용에 비해 이득이 없다.
+// 단독 ‘没’는 두 가지 비부정 용법도 제외해야 정상 서술을 병렬로 오판하지 않는다.
+//   1) 결합 형태소(沉没/淹没/埋没/出没/隐没 등): 앞 글자로 제외한다. “船沉没在雾里，没人回头，…只有…”는 세지 않는다.
+//   2) 시간 관용구(没多久/没过多久/没等X): 뒤 글자로 제외한다. “没多久，没等她撑伞，…只有…”는 세지 않는다.
+// ‘没有X’에는 두 모호성이 없다. 결합 형태소 뒤에는 ‘有’가 붙지 않으며 시간 관용어는 다음 글자 제외 규칙으로 이미 처리한다.
+// 첫 번째 연속 나열 패턴에는 기존처럼 보호 조건을 추가하지 않는다.
+// 보정: 《万疆》 20장 0건, demo 첫 20장 0건.
 const NEGATION_PARADE_PATTERNS = [
   /(?:没有[^。！？!?\n，,]{1,12}[，,]){2}/g,
   /(?<![沉淹埋出隐湮吞覆漫泯])没(?!有?过?多久)(?:有)?[^。！？!?\n，,]{1,12}[，,]\s*没(?!有?过?多久)(?:有)?[^。！？!?\n，,]{1,16}[，,。.][^。！？!?\n，,]{0,6}只(?:是|会|有)/g,
@@ -222,84 +222,84 @@ const CROSS_NEGATION_START = /^不是[^。！？!?\n]{1,24}[。！？!?]?$/;
 const CROSS_NEGATION_MIDDLE = /^(?:也|还)不是[^。！？!?\n]{1,24}[。！？!?]?$/;
 const CROSS_NEGATION_END = /^只是[^。！？!?\n]{1,32}[。！？!?]?$/;
 
-// 两类常见但不能直接判错的工整框架，只做 advisory。与 blocking 规则不同，这里故意扫描
-// 台词：自然点单「不放辣，不放葱」靠对象最短长度排除；更长的同动词清单交语义审查判断功能。
+// 흔하지만 바로 오류로 판정할 수 없는 두 종류의 정형적 문장 구조는 권고만 제공한다. 차단 규칙과 달리 여기서는 의도적으로 검색한다.
+// 대사: 자연스러운 주문 ‘不放辣，不放葱’은 목적어 최소 길이로 제외한다. 더 긴 동일 동사 목록의 기능은 의미 검토에 맡긴다.
 const DECISION_FRAME_PATTERN = /至于([\u3400-\u9fff]{1,3})不\1[，,]\s*怎么\1/g;
 const REPEATED_NEGATIVE_VERB_PATTERN = /不([\u3400-\u9fff]{1,2})([\u3400-\u9fff]{2,8})[，,]\s*不\1([\u3400-\u9fff]{2,8})/g;
 
-// 反序对比腔（实战漏网 C）：「是真嗓子，不是修音修出来的」——not-is-comparison 的反序变种。
-// 复用 not-is 的排除基建：引号内剥离（maskQuoted）、「是的/是啊」确认语（isAffirmationTagAt）；
-// 前字排除从 either-or 的 不/就/也 扩展到全部「X是」连词/副词合成词（还是/只是/可是/但是/
+// 역순 대비(실전 누락 C): ‘是真嗓子，不是修音修出来的’는 not-is-comparison의 역순 변형이다.
+// not-is의 제외 기반을 재사용한다. 따옴표 내부 제거(maskQuoted), ‘是的/是啊’ 확인 표현(isAffirmationTagAt).
+// 앞 글자 제외를 양자택일의 不/就/也에서 모든 ‘X是’ 접속사·부사 합성어로 확장한다(还是/只是/可是/但是/
 // 于是/倒是/像是/若是/要是/正是/便是/总是/老是/更是/最是/算是/怕是/凡是/或是/即是/自是/
-// 竟是/原是/本是/仍是/许是/净是/光是/单是/尽是）；「是不是」问句起头与「不是吗/不是么/
-// 不是吧」反问尾巴单独排除。
-// 校准：《万疆》20 章 0 命中，demo 前 20 章 0 命中，按 blocking 实现。
+// 竟是/原是/本是/仍是/许是/净是/光是/单是/尽是). ‘是不是’ 의문 시작과 ‘不是吗/不是么/
+// 不是吧’ 반문 꼬리는 별도로 제외한다.
+// 보정: 《万疆》 20장 0건, demo 첫 20장 0건이므로 blocking으로 구현한다.
 const REVERSE_NOT_IS_PATTERN = /是([^。！？!?\n，,]{1,12})[，,]\s*(?:而)?不是([^。！？!?\n]{1,20})/g;
 const REVERSE_NOT_IS_PREV_EXCLUDE = new Set([...COMPACT_EITHER_OR_PREV, '还', '只', '可', '但', '于', '倒', '像', '若', '要', '正', '便', '总', '老', '更', '最', '算', '怕', '凡', '或', '即', '自', '竟', '原', '本', '仍', '许', '净', '光', '单', '尽']);
 
-// 预告式总结收尾（实战漏网 D）：「没人知道，这才刚刚开头。」「一场…震惊接力，正朝着…缓缓压了过去。」
-// 章尾替读者预告下一章走向是 AI 收尾腔。只扫文末窗口（剥引号后可见字数，按行取整），
-// 正文中段的「没人知道」多为普通叙述，不误伤；引号内台词（「没人知道…」）不计。
-// 「正式拉开序幕/帷幕」是场内事件的报幕式陈述（真人语料「钟声再度响起，比赛正式拉开序幕」），
-// 不是叙述者预告，前置 lookbehind 排除。
-// 校准：《万疆》20 章排除「正式拉开序幕」2 处报幕句后 0 命中，demo 前 20 章 0 命中。
+// 예고형 요약 마무리(실전 누락 D): ‘没人知道，这才刚刚开头。’, ‘一场…震惊接力，正朝着…缓缓压了过去。’
+// 장 끝에서 독자 대신 다음 전개를 예고하는 것은 AI식 마무리다. 따옴표 제거 후 가시 글자 수로 정한 문말 구간만 행 단위로 검사한다.
+// 본문 중간의 ‘没人知道’는 보통 일반 서술이므로 오탐하지 않는다. 따옴표 속 대사 ‘没人知道…’도 세지 않는다.
+// ‘正式拉开序幕/帷幕’는 장면 속 사건의 개막 안내다(인간 예문: ‘钟声再度响起，比赛正式拉开序幕’).
+// 서술자의 예고가 아니므로 앞쪽 lookbehind로 제외한다.
+// 보정: 《万疆》 20장에서 ‘正式拉开序幕’ 개막 안내 2곳을 제외하면 0건, demo 첫 20장도 0건.
 const TRAILER_ENDING_PATTERN = /没人知道|谁也不知道|谁也没想到|殊不知|(?:这)?才刚刚开(?:始|头)|正(?:朝着|向着)[^。！？!?\n]{0,24}(?:压|涌|袭|逼)(?:了?过去|了?过来|来)|(?<!正式)拉开(?:序幕|帷幕)|即将(?:开始|来临|降临)/g;
 const TRAILER_ENDING_WINDOW_CHARS = 600;
 
-// 章尾状态总结体：把细纲「结尾设定」原样写成总结句收章（「这一夜注定无人入眠」
-// 「这一切都结束了」「新的人生才刚刚开始」「命运的齿轮」）。与 trailer-ending 共用文末窗口，
-// 区别是它盖章过去、trailer-ending 预告将来；收的都是 banned-words 已按名禁掉的形态。
-// 不收「(这|那)一刻…终于明白」：真人语料里那是正常的认知节拍，短篇第一人称审判句还是卖点
-// （short-craft「审判金句 / 心死余韵」），密度型由 advisory 的 abstract-summary-tic 兜。
-// 各分支都要求落在句末断言位，否则会吃进条件从句（等这一切结束了，我们就…）、动补
-// （这一切都说明得非常清楚）、成语跨匹配（这一刻…命中注定）、系表（这一战的结果是注定的）、
-// 及物用法（就这样…才结束了这个话题）、场内报幕（就这样…宣布…圆满落幕）和否定认知
-// （他不知道这一切意味着什么）——最后一类靠 (?!什么) 排掉间接疑问，那是盖章的反面。
-// 校准（文末 600 字窗口，命中逐条人工复核）：qimao 章中段 20000 章命中 1 处（0.005%）、
-// heiyan 整篇 3999 篇命中 22 处（0.550%，全部是上列禁用形态）；同批既有 trailer-ending
-// 分别命中 1.345% / 6.602%——本规则误报面显著小于已上线的同窗口规则。短篇整篇即收口，
-// 基线天然高于长篇章中段，故两个总体分别报数。
+// 장 끝 상태 요약체: 상세 개요의 결말 설정을 요약문 그대로 써서 마무리한다(‘这一夜注定无人入眠’,
+// ‘这一切都结束了’, ‘新的人生才刚刚开始’, ‘命运的齿轮’). trailer-ending과 문말 구간을 공유하지만
+// 이 규칙은 과거를 단정하고 trailer-ending은 미래를 예고한다. banned-words에서 명시적으로 금지한 형태만 수집한다.
+// “(这|那)一刻…终于明白”는 포함하지 않는다. 실제 작가의 글에서는 정상적인 인식의 흐름이며, 단편의 1인칭 판단 문장은 오히려 매력 요소다.
+// (short-craft의 ‘审判金句 / 心死余韵’). 밀도 유형은 advisory인 abstract-summary-tic이 담당한다.
+// 각 분기는 문장 끝 단정 위치여야 한다. 아니면 조건절(等这一切结束了，我们就…), 동사 보어
+// (这一切都说明得非常清楚), 성어를 가로지르는 일치(这一刻…命中注定), 계사 서술(这一战的结果是注定的),
+// 타동사 용법(就这样…才结束了这个话题), 장면 내 안내(就这样…宣布…圆满落幕), 부정 인식
+// (他不知道这一切意味着什么)까지 잡는다. 마지막 유형은 (?!什么)로 간접 의문을 제외하며 이는 단정과 반대다.
+// 보정 자료(글 끝 600자 구간, 일치 항목을 하나씩 수동 검토): qimao 장 중간 구간 20000개 장에서 1곳 일치(0.005%),
+// heiyan 단편 전체 3999편에서 22곳 일치(0.550%, 모두 위에 나열한 금지 형태). 같은 자료에서 기존 trailer-ending
+// 각각 1.345% / 6.602%가 적중하므로 이 규칙의 오탐 범위는 같은 구간의 기존 규칙보다 훨씬 작다. 단편 전체가 마무리 구간이므로
+// 기준 발생률이 장편의 장 중간 구간보다 본래 높으므로 두 모집단의 수치를 따로 보고한다.
 const TRAILER_SUMMARY_PATTERN = /这一(?:夜|天|刻|战|年|局|役)[，,]?[^。！？!?，,\n]{0,6}(?<!命中)(?<!是)注定[^。！？!?\n]{0,8}[。！]|就这样[，,][^。！？!?，,\n]{0,8}(?:一切|全部)[^。！？!?，,\n]{0,4}(?:结束了|落幕|收场)[。！]|这一切[，,]?[^。！？!?，,\n]{0,6}(?:都)?(?:说明|意味着|结束了)(?!的)(?:(?!什么)[^。！？!?\n]){0,6}[。！]|(?:新的篇章|新的旅程|崭新的篇章|新的人生)[^。！？!?\n]{0,6}(?:开始|拉开|展开)|命运[^。！？!?\n]{0,6}齿轮/g;
 
-// 引号强调滥用（实战漏网 E，advisory 密度型，风格照 metaphor-density-tic）：
-// 叙述里短词加引号强调（他是被请来"把关"的）。只数叙述层 1-4 字成对引号片段；
-// 排除项：【】系统面板载体、引语动词（说|道|问|喊|答|念|叫|回|吼|嘀咕，加细 骂|写|读|唱）
-// 前 6 字/后 3 字邻接的极短台词、引号内含句读的台词、引号外无叙述的行（独立台词/
-// 弹幕流/拟声词连发）、引号套引号（台词内强调）。全文 ≥3 处报一条——单处强调是
-// 正常修辞，密度高才是模板腔。
-// 校准：demo 前 20 章 0 章过阈值；《万疆》20 章 2 章过阈值（海报标语“我在番城”系列、
-// “邀战书”等转述载体，真人也这么写），所以该规则只做 advisory，不升 blocking。
+// 따옴표 강조 남용(실사용에서 누락된 유형 E, 밀도 기반 권고, metaphor-density-tic 방식):
+// 서술 속 짧은 단어를 따옴표로 강조하는 경우(他是被请来"把关"的). 서술 층위에서 1~4자를 감싼 따옴표 쌍만 센다.
+// 제외 항목: 【】 시스템 패널, 인용 동사(说|道|问|喊|答|念|叫|回|吼|嘀咕 및 추가한 骂|写|读|唱)의
+// 앞 6자/뒤 3자 안에 붙어 있는 아주 짧은 대사, 따옴표 안에 문장부호가 있는 대사, 따옴표 밖 서술이 없는 행(독립 대사/
+// 실시간 댓글/연속 의성어), 중첩 따옴표(대사 안의 강조). 전체 글에서 3곳 이상이면 한 건 보고한다. 한 곳의 강조는
+// 정상적인 수사이며, 밀도가 높아야 상투적인 문체가 된다.
+// 보정: demo 첫 20개 장은 임계값 초과 0개, 《万疆》 20개 장은 2개(포스터 문구 “我在番城” 계열,
+// “邀战书” 등 전달 문구로, 실제 작가도 이렇게 쓴다). 따라서 이 규칙은 권고만 제공하며 차단으로 격상하지 않는다.
 const QUOTE_EMPHASIS_MIN_HITS = 3;
 const QUOTE_EMPHASIS_MAX_VISIBLE = 4;
 const QUOTE_EMPHASIS_SPEECH_VERB_PATTERN = /[说道问喊答念叫回吼骂写读唱嘀咕]/;
 
-// review 分类：下游按它分流。mechanical = 命中的表面形态本身就是问题，写作端就地改写即可；
-// semantic = 同一形态可能承担叙事功能，要读上下文判断保留还是改（交语义审查）。blocking 只能是
-// mechanical（blocking 的含义就是不需判断、必须清零）。新增 finding type 必须在此登记，否则运行期
-// 直接报错退出（scripts/test-ai-patterns.sh 另从源码抽 type 与本表双向核对）。
-//   type                         review      理由
-//   not-is-comparison            mechanical  固定句式模板「不是A，而是B」，blocking
-//   voice-contrast               mechanical  固定反差模板「声音不大…却」，blocking
-//   negation-parade              mechanical  固定否定排比模板，blocking
-//   reverse-not-is               mechanical  固定反序对比模板「是A，不是B」，blocking
-//   trailer-ending               mechanical  文末窗口固定预告短语，blocking
-//   trailer-summary              mechanical  文末窗口固定总结短语，blocking
-//   em-dash                      mechanical  标点，blocking
-//   long-paragraph               mechanical  段长阈值，断段即可
-//   period-stutter               mechanical  连续短句计数，合句即可
-//   micro-action-tic             mechanical  固定补语「了下/了一下」密度
-//   negation-pair-tic            semantic    「没A，也没B」否定对偶，留真正要强调的
-//   cliche-density-tic           mechanical  固定禁用词表密度
-//   stock-reaction-tic           semantic    身体反应可能承担物理后果或情绪，要逐处做删除测试
-//   action-list-tic              semantic    打斗/追逐等功能性动作编排可保留
-//   abstract-summary-tic         semantic    作者总结/上帝视角，是否越位要看语境
-//   metaphor-density-tic         semantic    比喻是否服务画面、删哪几个要读上下文
-//   reasoning-chain-tic          semantic    替读者推理的解释链，长推理段可能是正当的
-//   system-notice-formality-tic  semantic    系统/规则文本本就可以公文腔，看体裁功能
-//   overcompressed-prose-tic     semantic    短段过密可能是节奏选择，禁止机械注水
-//   low-connective-density-tic   semantic    同上，连接词补不补要看读感
-//   quote-emphasis-tic           semantic    标语/转述载体的引号是正常写法
-//   formulaic-parallelism        semantic    工整并列可能承担辩解或悬念排除
+// review 분류: 후속 처리를 나누는 기준. mechanical = 일치한 표면 형태 자체가 문제이므로 집필 단계에서 바로 고치면 된다.
+// semantic = 같은 형태가 서사 기능을 할 수 있으므로 문맥을 읽고 유지/수정을 판단한다(의미 검토에 위임). blocking은 반드시
+// mechanical이어야 한다(blocking은 별도 판단 없이 모두 제거해야 한다는 뜻). 새 finding type은 여기에 등록해야 하며, 누락되면 실행 중
+// 즉시 오류를 내고 종료한다(scripts/test-ai-patterns.sh도 소스에서 type을 추출해 이 표와 양방향 대조한다).
+//   type                         review      이유
+//   not-is-comparison            mechanical  고정 문형 “不是A，而是B”, 차단
+//   voice-contrast               mechanical  고정 대비 문형 “声音不大…却”, 차단
+//   negation-parade              mechanical  고정 부정 병렬 문형, 차단
+//   reverse-not-is               mechanical  역순 대비 문형 “是A，不是B”, 차단
+//   trailer-ending               mechanical  글 끝 구간의 고정 예고 문구, 차단
+//   trailer-summary              mechanical  글 끝 구간의 고정 요약 문구, 차단
+//   em-dash                      mechanical  문장부호, 차단
+//   long-paragraph               mechanical  문단 길이 임계값, 문단을 나누면 해결
+//   period-stutter               mechanical  연속된 짧은 문장 수, 문장을 합치면 해결
+//   micro-action-tic             mechanical  고정 보어 “了下/了一下”의 밀도
+//   negation-pair-tic            semantic    “没A，也没B” 부정 대구, 실제로 강조해야 하는 부분은 유지
+//   cliche-density-tic           mechanical  고정 금지 어휘 목록의 밀도
+//   stock-reaction-tic           semantic    신체 반응은 물리적 결과나 감정을 표현할 수 있으므로 각 부분을 삭제해 보며 판단
+//   action-list-tic              semantic    전투/추격 등 기능적인 동작 구성은 유지 가능
+//   abstract-summary-tic         semantic    작가의 요약/전지적 시점이 부적절한지는 문맥에 따라 판단
+//   metaphor-density-tic         semantic    비유가 장면에 기여하는지, 무엇을 삭제할지는 문맥을 읽고 판단
+//   reasoning-chain-tic          semantic    독자 대신 추론하는 설명의 연쇄이며, 긴 추론 문단도 정당할 수 있음
+//   system-notice-formality-tic  semantic    시스템/규칙 텍스트는 본래 공문체가 가능하므로 장르와 기능을 확인
+//   overcompressed-prose-tic     semantic    짧은 문단의 높은 밀도는 리듬 선택일 수 있으므로 기계적인 분량 늘리기 금지
+//   low-connective-density-tic   semantic    위와 같으며, 접속어 추가 여부는 읽는 느낌에 따라 판단
+//   quote-emphasis-tic           semantic    표어/전달 문구의 따옴표는 정상적인 표현
+//   formulaic-parallelism        semantic    정형적인 병렬 구조는 해명이나 의문 해소 기능을 할 수 있음
 const REVIEW_CLASSES = Object.freeze({
   'not-is-comparison': 'mechanical',
   'voice-contrast': 'mechanical',
@@ -334,7 +334,7 @@ const options = {
 for (let i = 2; i < process.argv.length; i += 1) {
   const arg = process.argv[i];
   if (arg === '--check') {
-    // Accepted for symmetry with normalize-punctuation.js; detection is always check-only.
+    // normalize-punctuation.js와의 인터페이스 대칭성을 위해 허용한다. 탐지는 항상 검사만 수행한다.
   } else if (arg === '--list-review-classes') {
     process.stdout.write(`${JSON.stringify(REVIEW_CLASSES, null, 2)}\n`);
     process.exit(0);
@@ -388,7 +388,7 @@ if (options.json) {
 }
 
 if (failed) process.exit(2);
-// --fail-on=blocking 只在出现 blocking finding 时退出 1（advisory 仅报告）；默认 all 沿用「有任何 finding 即 1」。
+// --fail-on=blocking은 blocking finding이 있을 때만 종료 코드 1을 반환한다(advisory는 보고만 함). 기본값 all은 기존처럼 finding이 하나라도 있으면 1을 반환한다.
 const hasBlocking = allFindings.some((f) => f.severity === 'blocking');
 if (options.failOn === 'blocking' ? hasBlocking : allFindings.length > 0) process.exit(1);
 
@@ -415,8 +415,8 @@ function die(message) {
   process.exit(2);
 }
 
-// unclosedOpenings：到文末都没闭合的 `<!--` 位置（"行号:列号"）。未闭合的注释不是注释，
-// 否则一个漏写的 `-->` 会把后面整章藏起来；这些位置按正文扫描，只把 `<!--` 本身抹掉。
+// unclosedOpenings: 글 끝까지 닫히지 않은 `<!--`의 위치("행:열"). 닫히지 않은 주석은 주석으로 취급하지 않는다.
+// 그렇지 않으면 `-->` 하나를 빠뜨렸을 때 뒤의 장 전체가 숨겨진다. 해당 위치는 본문으로 검사하되 `<!--` 자체만 지운다.
 function scanDocument(input, unclosedOpenings = new Set()) {
   const lines = input.split(/\r?\n/);
   const findings = [];
@@ -456,8 +456,8 @@ function scanDocument(input, unclosedOpenings = new Set()) {
       continue;
     }
 
-    // HTML 注释（如 `<!-- 去味:跳过 -->` 豁免标记）是元信息不是正文：注释段等长换成空格
-    // 保列号，整行都是注释的直接跳过；注释可跨行。
+    // HTML 주석(예: `<!-- 去味:跳过 -->` 예외 표식)은 본문이 아닌 메타정보이므로 같은 길이의 공백으로 바꿔
+    // 열 번호를 유지한다. 행 전체가 주석이면 건너뛰며, 주석은 여러 행에 걸칠 수 있다.
     const masked = maskHtmlComments(line, commentOpen, index, unclosedOpenings);
     commentOpen = masked.open;
     if (masked.openedAt !== null) commentStart = masked.openedAt;
@@ -477,7 +477,7 @@ function scanDocument(input, unclosedOpenings = new Set()) {
   return findings;
 }
 
-// 段落级检测：碎句号（连续短叙述句）、长段落、破折号（按功能改写，非机械替换）。
+// 문단 단위 검사: 지나친 마침표 분할(연속된 짧은 서술문), 긴 문단, 줄표(기계적으로 치환하지 않고 기능에 맞게 수정).
 function scanProsePatterns(proseLines) {
   const findings = [];
 
@@ -531,8 +531,8 @@ function scanProsePatterns(proseLines) {
   return findings;
 }
 
-// 音量反差腔（实战漏网 A）：引号外叙述逐处 blocking，位置与摘录取自原文
-// （maskQuoted 等长占位保偏移；命中片段不含问号占位符，故不会落进占位区）。
+// 음량 대비 문체(실사용에서 누락된 유형 A): 따옴표 밖 서술의 각 일치를 차단하고 위치와 발췌는 원문에서 가져온다.
+// (maskQuoted가 같은 길이의 자리표시자로 오프셋을 보존한다. 일치 조각에는 물음표 자리표시자가 없어 치환 영역에 들어가지 않는다.)
 function findVoiceContrast(proseLines) {
   const findings = [];
 
@@ -557,8 +557,8 @@ function findVoiceContrast(proseLines) {
   return findings;
 }
 
-// 否定排比（实战漏网 B）：同句「没有X，」连排 / 先否定后「只是」收肯定。
-// 可能在同一片文字上重叠命中，按区间去重只报一次。
+// 부정 병렬(실사용에서 누락된 유형 B): 한 문장에서 “没有X，”를 연속 나열하거나 먼저 부정한 뒤 “只是”로 긍정 결론을 맺는 형태.
+// 같은 텍스트에 겹쳐 일치할 수 있으므로 구간 기준으로 중복을 제거해 한 번만 보고한다.
 function findNegationParade(proseLines) {
   const findings = [];
 
@@ -623,8 +623,8 @@ function findFormulaicParallelism(proseLines) {
     }
   }
 
-  // 跨段「不是A / 也不是B / 只是C」既可能是细纲复述，也可能是正常的
-  // 辩解、悬念排除或情绪递进。纯句法无法稳定区分，因此只给 advisory，交给语义复核。
+  // 여러 문단에 걸친 “不是A / 也不是B / 只是C”는 상세 개요를 되풀이한 것일 수도 있고 정상적인
+  // 해명, 의문 해소 또는 감정의 점층일 수도 있다. 구문만으로는 안정적으로 구분할 수 없어 권고만 제공하고 의미 검토에 넘긴다.
   const window = [];
   for (const { text, lineNo } of proseLines) {
     const trimmed = text.trim();
@@ -653,8 +653,8 @@ function findFormulaicParallelism(proseLines) {
   return findings;
 }
 
-// 反序对比腔（实战漏网 C）：「是A，不是B」。排除基建复用 not-is-comparison：
-// 引号内剥离、「是的/是啊」确认语；前字合成词与反问尾巴见 REVERSE_NOT_IS_PREV_EXCLUDE 注释。
+// 역순 대비 문체(실사용에서 누락된 유형 C): “是A，不是B”. 제외 처리는 not-is-comparison의 기반 기능을 재사용한다.
+// 따옴표 안을 제외하고 “是的/是啊” 확인 표현을 제외한다. 앞 글자와의 합성어 및 반문 어미는 REVERSE_NOT_IS_PREV_EXCLUDE 주석 참조.
 function findReverseNotIs(proseLines) {
   const findings = [];
 
@@ -666,13 +666,13 @@ function findReverseNotIs(proseLines) {
     let match;
     while ((match = REVERSE_NOT_IS_PATTERN.exec(masked)) !== null) {
       const start = match.index;
-      // 「就是/也是/还是/只是/可是…」里的「是」是合成词一部分，不是肯定项系动词。
+      // “就是/也是/还是/只是/可是…”의 “是”는 합성어의 일부이며 긍정 항목을 연결하는 계사가 아니다.
       if (REVERSE_NOT_IS_PREV_EXCLUDE.has(masked[start - 1])) continue;
-      // 「是不是…」问句起头。
+      // “是不是…”로 시작하는 의문문.
       if (masked[start + 1] === '不') continue;
-      // 「是的，…不是…」承接确认语（复用 not-is 的判定）。
+      // “是的，…不是…”의 확인 연결 표현(not-is 판정 재사용).
       if (isAffirmationTagAt(masked, start)) continue;
-      // 「…，不是吗/不是么/不是吧」反问尾巴。
+      // “…，不是吗/不是么/不是吧”의 반문 어미.
       if (/^[吗么吧]/.test(match[2])) continue;
       findings.push({
         line: lineNo,
@@ -688,8 +688,8 @@ function findReverseNotIs(proseLines) {
   return findings;
 }
 
-// 预告式总结收尾（实战漏网 D）：只扫文末窗口。从文末往回收集叙述行，
-// 直到剥引号后的可见字数达到窗口大小（按行取整，边界行整行计入）。
+// 예고/요약형 마무리(실사용에서 누락된 유형 D): 글 끝 구간만 검사한다. 끝에서 역방향으로 서술 행을 수집하며,
+// 따옴표 내용을 제거한 가시 문자 수가 구간 크기에 도달하면 멈춘다(행 단위로 올림하며 경계 행도 전체를 포함).
 function findTrailerEnding(proseLines) {
   const windowLines = [];
   let accumulated = 0;
@@ -734,8 +734,8 @@ function findTrailerEnding(proseLines) {
   return findings;
 }
 
-// 引号强调滥用（实战漏网 E）：统计叙述层 1-4 字成对引号强调片段，全文只报一条
-// （密度型分布指纹）。台词类排除见 QUOTE_EMPHASIS_* 常量注释。
+// 따옴표 강조 남용(실사용에서 누락된 유형 E): 서술 층위에서 1~4자를 따옴표 쌍으로 강조한 조각을 세며 전체 글에서 한 건만 보고한다.
+// (밀도 기반 분포 특성). 대사 제외 조건은 QUOTE_EMPHASIS_* 상수 주석 참조.
 function findQuoteEmphasisTic(proseLines) {
   let hits = 0;
   let firstLine = null;
@@ -744,22 +744,22 @@ function findQuoteEmphasisTic(proseLines) {
   for (const { text, lineNo } of proseLines) {
     const trimmed = text.trim();
     if (!trimmed || isDivider(trimmed) || isStructural(trimmed)) continue;
-    // 引号外没有叙述的行（独立台词/弹幕流/拟声词连发「“叮咚~”“叮咚~”」）整行跳过：
-    // 强调滥用是叙述层指纹，没有叙述就无所谓强调。
+    // 따옴표 밖에 서술이 없는 행(독립 대사/실시간 댓글/연속 의성어 ““叮咚~”“叮咚~””)은 전체를 건너뛴다.
+    // 강조 남용은 서술 층위의 특성이므로 서술이 없으면 강조 여부를 따질 필요가 없다.
     if (visibleLength(stripQuoted(trimmed)) === 0) continue;
     const ranges = quotedRanges(text);
 
     for (const [start, end] of ranges) {
-      if (text[start] === '【') continue; // 系统面板/公告载体，不是强调引号
-      // 引号套引号：台词内部的强调属于角色语言，不算叙述层强调滥用。
+      if (text[start] === '【') continue; // 시스템 패널/공지의 표기로, 강조 따옴표가 아니다.
+      // 중첩 따옴표: 대사 안의 강조는 인물의 말이므로 서술 층위의 강조 남용으로 세지 않는다.
       if (ranges.some(([s2, e2]) => s2 <= start && end <= e2 && (s2 !== start || e2 !== end))) continue;
       const inner = text.slice(start + 1, end - 1);
       const visible = visibleLength(inner);
       if (visible < 1 || visible > QUOTE_EMPHASIS_MAX_VISIBLE) continue;
-      if (/[。！？!?…，,；;：:]/.test(inner)) continue; // 含句读的是台词/播报，不是强调
+      if (/[。！？!?…，,；;：:]/.test(inner)) continue; // 문장부호를 포함하면 대사/안내 방송이며 강조가 아니다.
       const before = text.slice(Math.max(0, start - 6), start);
       const after = text.slice(end, end + 3);
-      if (QUOTE_EMPHASIS_SPEECH_VERB_PATTERN.test(before) || QUOTE_EMPHASIS_SPEECH_VERB_PATTERN.test(after)) continue; // 引语动词邻接=极短台词
+      if (QUOTE_EMPHASIS_SPEECH_VERB_PATTERN.test(before) || QUOTE_EMPHASIS_SPEECH_VERB_PATTERN.test(after)) continue; // 인용 동사에 인접하면 아주 짧은 대사다.
       hits += 1;
       if (firstLine === null) firstLine = lineNo;
       if (samples.length < 6 && !samples.includes(inner)) samples.push(inner);
@@ -778,7 +778,7 @@ function findQuoteEmphasisTic(proseLines) {
   }];
 }
 
-// 否定对偶：统计引号外叙述里「没A，也没B」式句子，全文只报一条。
+// 부정 대구: 따옴표 밖 서술의 “没A，也没B” 문장을 세며 전체 글에서 한 건만 보고한다.
 function findNegationPairTic(proseLines) {
   let hits = 0;
   let firstLine = null;
@@ -806,8 +806,8 @@ function findNegationPairTic(proseLines) {
   }];
 }
 
-// 微动作复读：统计引号外叙述里「了X量词」轻量补语的密度。次数与每千字密度双门槛，
-// 全文只报一条（这是分布级指纹，不是逐处问题）。
+// 미세 동작 반복: 따옴표 밖 서술에서 “了X量词”라는 짧은 보어의 밀도를 센다. 횟수와 천 자당 밀도 두 기준을 적용하며,
+// 전체 글에서 한 건만 보고한다(개별 위치의 문제가 아니라 분포 수준의 특성이다).
 function findMicroActionTic(proseLines) {
   let hits = 0;
   let narrativeChars = 0;
@@ -842,9 +842,9 @@ function findMicroActionTic(proseLines) {
   }];
 }
 
-// 套式反应细节：统计引号外叙述中通用的部位/声线反应与固定语气比喻。
-// 这是删除测试的候选集，不是身体描写黑名单；全篇只报一条，保留有动作后果、
-// 伤势、人物习惯或情节功能的细节。
+// 상투적 반응 묘사: 따옴표 밖 서술의 일반적인 신체 부위/목소리 반응과 고정된 어조 비유를 센다.
+// 삭제 테스트 후보이며 신체 묘사 금지 목록이 아니다. 전체 글에서 한 건만 보고하고, 행동의 결과,
+// 부상, 인물의 습관 또는 플롯 기능을 가진 세부 묘사는 유지한다.
 function findStockReactionTic(proseLines) {
   let hits = 0;
   let narrativeChars = 0;
@@ -916,8 +916,8 @@ function findActionListTic(proseLines) {
   return findings;
 }
 
-// 套词密度：统计引号外叙述中的高危禁用词聚集。不是逐词替换器；只在密度高到
-// 形成模板腔时提示，修法是删总结、换具体动作/物件/对话，不是同义词轮换。
+// 상투어 밀도: 따옴표 밖 서술에 고위험 금지 어휘가 몰리는지 센다. 단어별 치환기가 아니며, 밀도가 높아
+// 상투적인 문체가 될 때만 알린다. 요약을 삭제하고 구체적인 행동/물건/대화로 바꿔야 하며, 동의어를 돌려 쓰는 방식은 아니다.
 function findClicheDensityTic(proseLines) {
   let hits = 0;
   let narrativeChars = 0;
@@ -955,8 +955,8 @@ function findClicheDensityTic(proseLines) {
   }];
 }
 
-// 比喻密度：统计引号外叙述中“像/好像/仿佛/如同”等比喻标记。
-// 单个比喻不是问题；高密度成片时才提示，避免把文本改成另一种修辞模板。
+// 비유 밀도: 따옴표 밖 서술의 “像/好像/仿佛/如同” 등 비유 표지를 센다.
+// 비유 하나는 문제가 아니다. 높은 밀도로 몰릴 때만 알려 글을 또 다른 수사적 틀로 바꾸는 일을 막는다.
 function findMetaphorDensityTic(proseLines) {
   let hits = 0;
   let narrativeChars = 0;
@@ -1003,8 +1003,8 @@ function findMetaphorDensityTic(proseLines) {
   }];
 }
 
-// 解释链密度：统计引号外叙述中“知道/明白/这意味着/必须需要”等判断链。
-// 全篇只报一条；修法不是补结构虚词，而是把判断落到动作、物件、对话和现场反馈。
+// 설명 연쇄 밀도: 따옴표 밖 서술의 “知道/明白/这意味着/必须需要” 등 판단의 연쇄를 센다.
+// 전체 글에서 한 건만 보고한다. 구조적 기능어를 보충하는 대신 판단을 행동, 물건, 대화와 현장의 반응으로 표현해야 한다.
 function findReasoningChainTic(proseLines) {
   let hits = 0;
   let coreHits = 0;
@@ -1048,8 +1048,8 @@ function findReasoningChainTic(proseLines) {
   }];
 }
 
-// 系统/规则行如果连续像 API 文档或政府公文，读者容易闻到机器味。
-// 修法不是删除规则，而是保留功能后把一部分硬词改成白话或具体后果。
+// 시스템/규칙 행이 계속 API 문서나 정부 공문처럼 보이면 독자는 기계적인 문체를 쉽게 느낀다.
+// 규칙을 삭제하는 대신 기능을 유지하면서 일부 딱딱한 말을 일상적인 표현이나 구체적인 결과로 바꾼다.
 function findNoticeFormalityTic(proseLines) {
   let hits = 0;
   let noticeChars = 0;
@@ -1093,8 +1093,8 @@ function findNoticeFormalityTic(proseLines) {
   }];
 }
 
-// 长文本整体过于“精炼”：短段很多、自然连接偏少，读起来像处理过的梗概/分镜表。
-// 修法是通读后补断裂处，不是为凑阈值全局加“的/了/就”。
+// 긴 글 전체가 지나치게 “정제”된 경우: 짧은 문단은 많고 자연스러운 연결은 부족해 가공한 줄거리/스토리보드처럼 읽힌다.
+// 전체를 읽고 끊긴 곳을 보완해야 하며, 임계값을 맞추려고 전역에 “的/了/就”를 넣어서는 안 된다.
 function findOvercompressedProseTic(proseLines) {
   let narrativeChars = 0;
   let narrativeParas = 0;
@@ -1139,8 +1139,8 @@ function findOvercompressedProseTic(proseLines) {
 
 }
 
-// 低连接密度：长文本/中短窗口里，引号外叙述的功能词和白话连接同时偏低，且缺少中长承接句，
-// 会呈现“提纲/电报体”分布。修法是恢复必要连接和句群，不是全局补词。
+// 낮은 연결 밀도: 긴 글이나 중단기 구간의 따옴표 밖 서술에서 기능어와 일상적 연결이 모두 적고 중장문 연결도 부족하면,
+// “개요/전보체” 분포가 나타난다. 필요한 연결과 문장 묶음을 복원해야 하며, 전역에 단어를 보충하는 방식은 아니다.
 function findLowConnectiveDensityTic(proseLines) {
   let bodyChars = 0;
   let functionHits = 0;
@@ -1153,7 +1153,7 @@ function findLowConnectiveDensityTic(proseLines) {
     const trimmed = text.trim();
     if (!trimmed || isDivider(trimmed) || isStructural(trimmed)) continue;
 
-    // 只看引号外叙述。台词/弹幕/系统播报可以天然短促，混入统计会把体裁特征误当电报体。
+    // 따옴표 밖 서술만 본다. 대사/실시간 댓글/시스템 안내는 본래 짧을 수 있으며, 함께 집계하면 장르 특성을 전보체로 오인하게 된다.
     const narrative = stripQuoted(trimmed).trim();
     const narrativeLen = visibleLength(narrative);
     if (narrativeLen === 0) continue;
@@ -1189,8 +1189,8 @@ function findLowConnectiveDensityTic(proseLines) {
   }];
 }
 
-// 抽象总结复读：统计引号外叙述中的高抽象收束模板。全篇只报一条，提醒回到角色
-// 当下可见的文件、动作、对话或物理后果；不要用命运大词替读者总结。
+// 추상적 요약 반복: 따옴표 밖 서술에서 추상도가 높은 마무리 문형을 센다. 전체 글에서 한 건만 보고하며, 인물이
+// 현재 볼 수 있는 문서, 행동, 대화 또는 물리적 결과로 돌아가도록 알린다. 운명 같은 거창한 말로 독자 대신 요약하지 않는다.
 function findAbstractSummaryTic(proseLines) {
   let hits = 0;
   let narrativeChars = 0;
@@ -1253,17 +1253,17 @@ function findPeriodStutter(proseLines) {
 
   for (const { text, lineNo } of proseLines) {
     const trimmed = text.trim();
-    if (!trimmed) continue; // 空行是一句一段排版，不打断叙述连贯
+    if (!trimmed) continue; // 빈 행은 한 문장씩 문단을 나누는 편집 형식이며 서술의 연속성을 끊지 않는다.
     if (isDivider(trimmed) || isStructural(trimmed)) {
-      flush(); // 分隔线/markdown 结构行：重置碎句计数
+      flush(); // 구분선/Markdown 구조 행: 짧은 문장 카운트를 초기화한다.
       continue;
     }
     const narrative = stripQuoted(trimmed);
     if (visibleLength(narrative) === 0) {
-      flush(); // 纯对话/弹幕/系统播报：成片短句是正常形态，重置碎句计数
+      flush(); // 순수 대화/실시간 댓글/시스템 안내: 연속된 짧은 문장이 정상적이므로 짧은 문장 카운트를 초기화한다.
       continue;
     }
-    // 只数引号外叙述句：混合行（叙述+引号内物件/短台词）的引号外片段仍参与碎句计数。
+    // 따옴표 밖 서술문만 센다. 혼합 행(서술+따옴표 안의 물건/짧은 대사)도 따옴표 밖 부분은 짧은 문장 집계에 포함한다.
     for (const sentence of splitSentences(narrative)) {
       if (visibleLength(sentence) <= STUTTER_MAX_SENTENCE) {
         if (runLen === 0) runStartLine = lineNo;
@@ -1282,26 +1282,26 @@ function isDivider(trimmed) {
   return /^-{3,}$/.test(trimmed) || /^[*_]{3,}$/.test(trimmed);
 }
 
-// markdown 结构行（标题/列表/引用/表格）不是叙述正文，长段落/碎句号/破折号检测都跳过。
+// Markdown 구조 행(제목/목록/인용/표)은 서술 본문이 아니므로 긴 문단/지나친 마침표 분할/줄표 검사에서 모두 건너뛴다.
 function isStructural(trimmed) {
   return /^(#{1,6}\s|>\s?|[-*+]\s|\d+[.)]\s|\|)/.test(trimmed)
     || /^第[零一二三四五六七八九十百千万\d]+章(?:\s|_|$)/.test(trimmed);
 }
 
-// 去掉成对引号内的片段（台词/系统播报），只留引号外叙述。碎句号判定用：纯对话/弹幕成片短句
-// 是体裁正常形态（豁免），但「叙述 + 引号内物件/短台词」混合行的引号外叙述仍要参与短句计数。
+// 따옴표 쌍 안의 조각(대사/시스템 안내)을 제거하고 밖의 서술만 남긴다. 짧은 문장 판정용: 순수 대화/실시간 댓글의 연속된 짧은 문장은
+// 장르상 정상적이므로 제외하지만 “서술+따옴표 안의 물건/짧은 대사” 혼합 행은 따옴표 밖 서술을 짧은 문장 집계에 포함한다.
 function stripQuoted(text) {
   let out = text;
   for (const src of QUOTE_SOURCES) out = out.replace(new RegExp(src, 'g'), '');
   return out;
 }
 
-// 把成对引号片段（含引号）替换为等长问号占位：既豁免引号内台词/播报，又保住原文
-// 偏移量，供逐处 blocking 规则定位与截取原文摘录（stripQuoted 会移位，不适合定位）。
-// 占位字符用「？」而不是「。」：占位既要截断各规则的 [^。！？!?…] 否定类（？与句号在每条
-// 规则的否定类里等效），又不能落在任何规则的接受位。句号占位会替 trailer-summary 的句末
-// [。！] 伪造出终止符，让「这一战注定是「血屠」的开端，…」这类引号里放代号/绰号的叙述行
-// 被误报，且报出的『这一战注定是。』在原文里 grep 不到。占位长度不变，故偏移与摘录窗口不漂移。
+// 따옴표 쌍으로 둘러싼 조각(따옴표 포함)을 같은 길이의 물음표로 바꾼다. 따옴표 안 대사/안내를 제외하면서 원문의
+// 오프셋을 보존해 개별 blocking 규칙이 위치와 원문 발췌를 구할 수 있게 한다(stripQuoted는 위치를 이동시켜 부적합하다).
+// 자리표시자는 “。” 대신 “？”를 쓴다. 각 규칙의 [^。！？!?…] 부정 문자 클래스를 끊어야 하며(？와 마침표는 각
+// 규칙의 부정 문자 클래스에서 같은 역할), 어떤 규칙에도 일치하는 문자로 들어가면 안 된다. 마침표를 쓰면 trailer-summary의 문장 끝
+// [。！] 종료 문자가 가짜로 생겨 “这一战注定是「血屠」的开端，…”처럼 따옴표 안에 암호명/별명을 넣은 서술 행을
+// 오탐한다. 보고된 “这一战注定是。”는 원문에서 grep으로 찾을 수도 없다. 자리표시자 길이가 같으므로 오프셋과 발췌 구간은 이동하지 않는다.
 function maskQuoted(text) {
   let out = text;
   for (const src of QUOTE_SOURCES) {
@@ -1310,7 +1310,7 @@ function maskQuoted(text) {
   return out;
 }
 
-// 返回引号内片段（含引号本身）的 [start, end) 区间，供 not-is 对比句豁免台词用。
+// 따옴표 안 조각(따옴표 자체 포함)의 [start, end) 구간을 반환해 not-is 대비 문장에서 대사를 제외하는 데 쓴다.
 function quotedRanges(text) {
   const ranges = [];
   for (const src of QUOTE_SOURCES) {
@@ -1357,9 +1357,9 @@ function countTerms(text, terms) {
   return count;
 }
 
-// 把行内 HTML 注释（含 `<!--`、`-->` 本身）换成等长空格；openBefore 表示上一行留下未闭合注释。
-// unclosedOpenings 里的 `<!--` 到文末都没闭合：只抹掉这四个字符，后面照常当正文。
-// openedAt 是本行最后一个开始注释的 `<!--` 位置（"行号:列号"），没有则为 null。
+// 행 안의 HTML 주석(`<!--`, `-->` 포함)을 같은 길이의 공백으로 바꾼다. openBefore는 이전 행에서 닫히지 않은 주석이 남았음을 나타낸다.
+// unclosedOpenings의 `<!--`는 글 끝까지 닫히지 않는다. 네 글자만 지우고 뒤는 그대로 본문으로 취급한다.
+// openedAt은 이 행에서 마지막으로 주석을 연 `<!--`의 위치("행:열")이며, 없으면 null이다.
 function maskHtmlComments(line, openBefore, lineIndex = 0, unclosedOpenings = new Set()) {
   let out = '';
   let open = openBefore;
@@ -1452,14 +1452,14 @@ function findNotIsComparisons(text, getPosition) {
     const start = text.indexOf('不是', offset);
     if (start === -1) break;
 
-    // 引号内是台词/系统播报：口语里「不是A，是B」是自然辩解/反问，不算叙述层 AI 对比句式
-    // （与碎句号一致豁免引号内容）。
+    // 따옴표 안은 대사/시스템 안내다. 구어의 “不是A，是B”는 자연스러운 해명/반문이므로 서술 층위의 AI 대비 문형으로 세지 않는다.
+    // (지나친 마침표 분할 검사와 마찬가지로 따옴표 내용을 제외한다.)
     if (insideRanges(start, quoted)) {
       offset = start + 2;
       continue;
     }
 
-    // Avoid the common yes/no question fragment “是不是”.
+    // 흔한 예/아니요 의문문 조각 “是不是”를 피한다.
     if (start > 0 && text[start - 1] === '是') {
       offset = start + 2;
       continue;
@@ -1493,7 +1493,7 @@ function findNotIsComparisons(text, getPosition) {
 }
 
 function findPositiveFlipEnd(candidate) {
-  let index = 2; // after “不是”
+  let index = 2; // “不是” 다음
   let scanned = 0;
   let crossedSeparator = false;
 
@@ -1518,18 +1518,18 @@ function findPositiveFlipEnd(candidate) {
 
     if (STOP_CHARS.has(char)) break;
 
-    // Catch compact forms such as “不是A是B”, but only within the first clause —
-    // before any separator. After a separator the trailing “是” of a conjunction
-    // (只是/可是/但是/还是/于是/倒是/总是…) is part of that word, not a positive
-    // copula (issue #166 false-positive class). Post-separator flips are still
-    // caught when separator-adjacent (“，是”/“，而是”) by the separator branches
-    // above; subject-present flips like “，他是”/“，那是” are intentionally NOT
-    // caught here — there is no separator-local way to tell them from a
-    // conjunction without a word list, and on a hard rescan-to-0 gate a false
-    // positive (forcing a rewrite of good prose) costs more than missing this
-    // rarer form. The “是” in the either-or idiom “不是A就是B / 也是B” is part of
-    // the 就是/也是 conjunction, not a copula, so 就/也 are excluded too. Also never
-    // treat the “是” inside a second negative fragment (“不是A，也不是B”) as the flip.
+    // “不是A是B”처럼 붙어 있는 형태도 잡지만 첫 절 안으로 한정한다.
+    // 즉, 어떤 구분자도 나오기 전이어야 한다. 구분자 뒤의 접속사 끝에 붙은 “是”는
+    // (只是/可是/但是/还是/于是/倒是/总是…) 해당 단어의 일부이며 긍정 항목이 아니다.
+    // 계사로 오인한다(issue #166의 오탐 유형). 구분자 뒤 전환은 여전히
+    // 구분자에 붙은 ‘，是’/‘，而是’를 위의 구분자 분기로 포착한다.
+    // ‘，他是’/‘，那是’처럼 주어가 있는 전환은 여기서 의도적으로 잡지 않는다.
+    // 단어 목록 없이는 구분자 주변만 보고 이를 접속사와 구별할 수 없으며,
+    // 재검사 0건을 요구하는 필수 관문에서는 오탐으로 좋은 문장을 고치게 하는 비용이
+    // 이 드문 형태를 놓치는 비용보다 더 크기 때문이다.
+    // 양자택일 관용구 ‘不是A就是B / 也是B’의 ‘是’는
+    // 就是/也是 접속사 일부이지 계사가 아니므로 就/也도 제외한다. 또한
+    // ‘不是A，也不是B’의 두 번째 부정절 안 ‘是’를 전환으로 취급하지 않는다.
     if (char === '是' && !COMPACT_EITHER_OR_PREV.has(candidate[index - 1]) && !crossedSeparator) {
       return index + 1;
     }
@@ -1565,8 +1565,8 @@ function isAffirmationTagAt(text, index) {
   return AFFIRMATION_TAG_BOUNDARY.has(boundary);
 }
 
-// 跳过行内空白与换行（含空行/段落间距），停在下一个实义字符。原实现只吞一个换行，
-// 会漏掉跨空行的「不是A。（空行）是B」这类分段揭示句。
+// 행 내부 공백과 줄바꿈(빈 행·문단 간격 포함)을 건너뛰고 다음 의미 있는 문자에서 멈춘다. 기존 구현은 줄바꿈 하나만 건너뛰어
+// ‘不是A。(빈 행)是B’처럼 빈 행을 가로지르는 분할 공개 문장을 놓쳤다.
 function skipGap(text, index) {
   while (index < text.length && (isInlineSpace(text[index]) || text[index] === '\n')) index += 1;
   return index;

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Register inspiration atoms from EM mechanism cards, then validate/query the index.
-
-三层灵感库的机械层。原子灵感（IA）不再生成独立文件：每个 IA 是
-`灵感索引.csv` 里的一行登记，机制全文只在 `拆文库/{书}/剧情/情绪模块.md`
-的 EM 卡一处维护，需要时按 ID 回查。NM/CBA 卡内禁止路径引用，
-来源只记 `书名/EM-xxx` 式裸 ID；路径解析统一走索引。
+"""EM 기법 카드에서 영감 원자를 등록하고 색인을 검증·조회한다.
+3층 영감 라이브러리의 기계적 계층. 원자 영감(IA)은 별도 파일을 만들지 않고 `灵感索引.csv`의 한 행으로 등록한다.
+기법 전문은 `작품분석실/{书}/플롯/감정모듈.md`의 EM 카드에서만 유지하며 필요할 때 ID로 조회한다.
+NM/CBA 카드에는 경로 참조를 금지하고 출처는 `书名/EM-xxx` 형식 ID만 기록한다. 경로 해석은 색인으로 통일한다.
 """
 
 from __future__ import annotations
@@ -36,21 +34,21 @@ LAYERS = {"原子灵感": "IA-", "单小说灵感合并": "NM-", "跨书灵感�
 TAG_AXES = {"题材", "读者需求", "情绪", "关系动作", "剧情功能", "节奏位置", "适用阶段", "风险"}
 REQUIRED_CBA_AXES = {"题材", "读者需求", "情绪", "剧情功能", "适用阶段", "风险"}
 CORE_QUERY_AXES = {"题材", "读者需求", "情绪", "剧情功能", "适用阶段"}
-# EM 完整卡必须具备的五个灵感映射字段（缺失＝Stage 3 卡片质量问题，报错回拆文侧修复）
+# 완전한 EM 카드에 필수인 다섯 영감 매핑 필드. 누락은 Stage 3 카드 품질 문제이므로 오류를 보고하고 분석 측에서 수정한다.
 EM_REQUIRED_FIELDS = ("读者想看什么", "情绪链", "戏剧单元", "可替换项", "不可照搬")
-# 专名泄漏扫描范围：排除「不可照搬」——该字段的职责就是点名原书专名
+# 고유명 유출 검사에서 ‘不可照搬’은 제외한다. 이 필드는 원작 고유명을 명시하는 용도다.
 EM_LEAK_SCAN_FIELDS = ("读者想看什么", "情绪链", "戏剧单元", "可替换项")
 EM_HEADER_RE = re.compile(r"^###\s+[*_]*(EM-[0-9]{2,})(?![0-9])[*_]*\s*(?:[·\-—：:｜|]\s*)?(.*?)[\s*_]*$")
-# 以 EM 编号开头、却不是 `### EM-xxx` 的标题行：下一张卡会被静默并进上一张
+# EM 번호로 시작하지만 `### EM-xxx`가 아닌 제목은 다음 카드가 이전 카드에 조용히 병합되게 한다.
 EM_MISPLACED_HEADER_RE = re.compile(r"^#{1,6}\s+[*_【\[]*EM-[0-9]")
 EM_TABLE_SEPARATOR_RE = re.compile(r"^:?-+:?$")
 EM_INDEX_ID_RE = re.compile(r"(EM-[0-9]{2,})")
-# 字段行的两种体裁：表格 `| 字段 | 值 |` 与粗体列表 `- **字段**：值`（前导 `- ` 可省）
+# 필드 행은 표 `| 字段 | 值 |`와 굵은 목록 `- **字段**：值` 두 형식을 받는다(선행 `- ` 생략 가능).
 EM_BOLD_FIELD_RE = re.compile(r"^[-*]?\s*\*{2,3}([^*]+?)(?:[:：]\*{2,3}|\*{2,3}\s*[:：])\s*(.*)$")
-# 同义字段名归一；表头行的首列词不作为字段
+# 동의 필드 이름을 정규화하며 헤더 첫 열 단어는 필드로 보지 않는다.
 EM_FIELD_ALIASES = {"不可照搬项": "不可照搬", "可替换项目": "可替换项"}
 EM_TABLE_HEADER_KEYS = {"字段", "维度", "---", ""}
-CARD_PATH_RE = re.compile(r"\]\(|\.md\)|原子灵感/|单小说灵感合并/|跨书灵感聚合/|拆文库/")
+CARD_PATH_RE = re.compile(r"\]\(|\.md\)|原子灵感/|单小说灵感合并/|跨书灵感聚合/|작품분석실/")
 
 
 def atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -81,17 +79,16 @@ def csv_text(rows: list[dict[str, str]]) -> str:
 
 
 def normalize_em_field(key: str) -> str:
-    """去掉字段名上的粗体标记与空白，再按同义表归一。"""
+    """필드명의 굵은 표시·공백을 제거하고 동의어 표로 정규화한다."""
     return EM_FIELD_ALIASES.get(key.strip().strip("*").strip(), key.strip().strip("*").strip())
 
 
 def parse_em_module(module_text: str) -> tuple[list[dict[str, str]], list[tuple[str, str]], list[str]]:
-    """Return (complete cards, index-only entries, structural problems) from 情绪模块.md text.
-
-    完整卡＝`### EM-xxx 名称` 小节内的字段行，表格 `|字段|内容|` 与粗体列表 `- **字段**：内容` 都接受；
-    粗体字段同行没写值时，吸收其后到下一个字段/标题为止的列表或段落行作为多行值。
-    索引条目＝「其他机制索引」小节里出现 EM-xxx 的行（机制ID｜名称｜…）。
-    认不出的 EM 标题行和同卡重复字段记为问题：它们意味着下一张卡被并进了上一张。
+    """감정모듈.md에서 (완전한 카드, 색인 전용 항목, 구조 문제)를 반환한다.
+    완전한 카드는 `### EM-xxx 名称` 절의 필드이며 표 `|字段|内容|`와 목록 `- **字段**：内容`을 모두 받는다.
+    굵은 필드와 같은 행에 값이 없으면 다음 필드·제목 전의 목록·문단을 여러 행 값으로 흡수한다.
+    색인 항목은 ‘其他机制索引’ 절의 EM-xxx 포함 행(机制ID｜名称｜…)이다.
+    인식하지 못한 EM 제목과 카드 내 중복 필드는 다음 카드가 이전 카드에 합쳐졌다는 뜻이므로 문제로 기록한다.
     """
     lines = module_text.split("\n")
     cards: list[dict[str, str]] = []
@@ -110,7 +107,7 @@ def parse_em_module(module_text: str) -> tuple[list[dict[str, str]], list[tuple[
             pending_field = None
             continue
         if EM_MISPLACED_HEADER_RE.match(stripped):
-            problems.append(f"em_header_unrecognized:{stripped[:40]}——EM 卡标题须写成 `### EM-xxx 名称`")
+            problems.append(f"em_header_unrecognized:{stripped[:40]} — EM 카드 제목은 `### EM-xxx 이름` 형식이어야 합니다")
             current = None
             pending_field = None
             continue
@@ -130,7 +127,7 @@ def parse_em_module(module_text: str) -> tuple[list[dict[str, str]], list[tuple[
                     current[key] = cells[1]
             continue
         if current is not None:
-            # 多行值：字段名行之后缩进的列表行一律是续行，哪怕它自己带粗体小标题
+            # 여러 행 값: 필드명 다음의 들여쓴 목록 행은 굵은 소제목이 있어도 이어지는 값이다.
             if pending_field is not None and stripped and line[:1] in (" ", "\t"):
                 appended = stripped.lstrip("-*").strip()
                 current[pending_field] = f"{current[pending_field]}；{appended}" if current[pending_field] else appended
@@ -166,30 +163,29 @@ def parse_em_module(module_text: str) -> tuple[list[dict[str, str]], list[tuple[
 
 
 def resolve_workspace(root: Path, explicit: Path | None = None) -> Path:
-    """定位含 `拆文库/` 的工作区——泄漏门名单与 EM 集合校验都依赖它。
-
-    显式 `--workspace` 优先；否则从 `--root` 起向上最多探测 5 级。
-    定位失败必须报错而不是回退空名单：名单为空集时泄漏检查等于没跑。
+    """`작품분석실/`를 포함한 작업 공간을 찾는다. 유출 검사 명단과 EM 집합 검증이 여기에 의존한다.
+    명시적 `--workspace`를 우선하며 없으면 `--root`부터 최대 5단계 위로 탐색한다.
+    실패하면 빈 명단으로 대체하지 않고 오류를 낸다. 빈 집합은 유출 검사를 실행하지 않은 것과 같다.
     """
     if explicit is not None:
-        if (explicit / "拆文库").is_dir():
+        if (explicit / "작품분석실").is_dir():
             return explicit
-        raise ValueError(f"workspace_invalid:{explicit} 下没有 拆文库/")
+        raise ValueError(f"workspace_invalid:{explicit} 아래에 작품분석실/이 없습니다")
     candidate = root.resolve()
     for _ in range(6):
-        if (candidate / "拆文库").is_dir():
+        if (candidate / "작품분석실").is_dir():
             return candidate
         if candidate.parent == candidate:
             break
         candidate = candidate.parent
-    raise ValueError("workspace_not_located:从 --root 向上未找到含 拆文库/ 的目录——用 --workspace 显式指定")
+    raise ValueError("workspace_not_located:--root의 상위에서 작품분석실/이 있는 폴더를 찾지 못했습니다. --workspace로 직접 지정하세요")
 
 
 EM_ARROW_RE = re.compile(r"→|⟶|->")
 
 
 def replaceable_antipattern_hits(value: str, names: set[str]) -> list[str]:
-    """「专名→任意X」反模式：箭头左侧命中角色名单即高置信真引用。"""
+    """‘고유명→임의 X’ 안티패턴: 화살표 왼쪽이 인물 명단과 맞으면 신뢰도 높은 실제 참조다."""
     hits: set[str] = set()
     for segment in re.split(r"[；;，,、｜|]", value):
         if not EM_ARROW_RE.search(segment):
@@ -200,7 +196,7 @@ def replaceable_antipattern_hits(value: str, names: set[str]) -> list[str]:
 
 
 def character_names(workspace: Path, book: str) -> set[str]:
-    role_dir = workspace / "拆文库" / book / "角色"
+    role_dir = workspace / "작품분석실" / book / "인물"
     names: set[str] = set()
     if role_dir.is_dir():
         for entry in role_dir.rglob("*.md"):
@@ -211,7 +207,7 @@ def character_names(workspace: Path, book: str) -> set[str]:
 
 
 def load_numbered_rows(root: Path) -> tuple[list[tuple[int, dict[str, str]]], list[str]]:
-    """索引行连同其文件行号；列数不对的行报错并剔除，行号仍按文件实际位置。"""
+    """파일 행 번호를 포함한 색인 행. 열 수가 틀리면 오류 보고 후 제외하되 실제 행 번호를 유지한다."""
     errors: list[str] = []
     index_path = root / "灵感索引.csv"
     try:
@@ -236,7 +232,7 @@ def load_rows(root: Path) -> tuple[list[dict[str, str]], list[str]]:
 
 
 class RegisterError(ValueError):
-    """携带完整问题清单的登记失败——一次报全，避免逐轮试跑。"""
+    """문제 전체를 포함한 등록 실패. 반복 시행착오를 피하도록 한 번에 모두 보고한다."""
 
     def __init__(self, errors: list[str], warnings: list[str] | None = None) -> None:
         super().__init__("\n".join(errors))
@@ -246,11 +242,11 @@ class RegisterError(ValueError):
 
 def analyze_module(root: Path, module_path: Path, book: str,
                    workspace: Path | None = None) -> dict[str, Any]:
-    """解析并检查一本书的 EM 卡，收集全部 errors/warnings，不写盘。"""
+    """작품의 EM 카드를 파싱·검사해 모든 errors/warnings를 모으고 파일은 쓰지 않는다."""
     errors: list[str] = []
     warnings: list[str] = []
     if not book or book in {".", ".."} or "/" in book or "\\" in book:
-        raise RegisterError([f"book_name_invalid:{book!r}——--book 只写书名本身"])
+        raise RegisterError([f"book_name_invalid:{book!r} — --book에는 작품명만 입력하세요"])
     try:
         ws = resolve_workspace(root, workspace)
     except ValueError as exc:
@@ -264,14 +260,14 @@ def analyze_module(root: Path, module_path: Path, book: str,
         raise RegisterError(["emotion_module_has_no_em_cards"])
     errors.extend(problems)
 
-    book_dir = ws / "拆文库" / book
+    book_dir = ws / "작품분석실" / book
     if not book_dir.is_dir():
-        errors.append(f"book_dir_not_found:拆文库/{book}——工作区 {ws} 下没有这本书，泄漏门无法取角色名单")
+        errors.append(f"book_dir_not_found:작품분석실/{book} — 작업 공간 {ws}에 이 작품이 없어 고유명 유출 검사에 사용할 인물 목록을 얻을 수 없습니다")
     elif book_dir.resolve() not in module_path.resolve().parents:
-        errors.append(f"module_book_mismatch:{module_path} 不在 拆文库/{book}/ 下——--book 与 --module 必须是同一本书")
+        errors.append(f"module_book_mismatch:{module_path}은(는) 작품분석실/{book}/ 아래에 없습니다. --book과 --module은 같은 작품이어야 합니다")
     names = character_names(ws, book)
     if not names and book_dir.is_dir():
-        warnings.append(f"character_roster_missing:拆文库/{book}/角色/ 不存在或为空——泄漏门本次没有名单可查，请人工确认卡内无专名")
+        warnings.append(f"character_roster_missing:작품분석실/{book}/인물/이(가) 없거나 비어 있습니다. 이번 고유명 유출 검사에 사용할 목록이 없으므로 카드에 고유명이 없는지 직접 확인하세요")
 
     seen: set[str] = set()
     atom_rows: list[dict[str, str]] = []
@@ -283,15 +279,15 @@ def analyze_module(root: Path, module_path: Path, book: str,
         seen.add(em_id)
         card_errors = 0
         if not card["title"].strip():
-            errors.append(f"{em_id}:em_title_missing——EM 卡标题须写成 `### {em_id} 名称`")
+            errors.append(f"{em_id}:em_title_missing — EM 카드 제목은 `### {em_id} 이름` 형식이어야 합니다")
             card_errors += 1
         absent = [field for field in EM_REQUIRED_FIELDS if field not in card]
         empty = [field for field in EM_REQUIRED_FIELDS if field in card and not card[field].strip()]
         if absent:
-            errors.append(f"{em_id}:em_fields_missing:{'|'.join(absent)}——请回 story-long-analyze Stage 3 补全该模块卡")
+            errors.append(f"{em_id}:em_fields_missing:{'|'.join(absent)} — story-long-analyze Stage 3으로 돌아가 해당 모듈 카드를 완성하세요")
             card_errors += 1
         if empty:
-            errors.append(f"{em_id}:em_field_value_empty:{'|'.join(empty)}——字段在但值为空；多行值须紧跟字段名行（支持列表/段落）")
+            errors.append(f"{em_id}:em_field_value_empty:{'|'.join(empty)} — 필드는 있지만 값이 비어 있습니다. 여러 줄 값은 필드명 바로 다음에 적으세요(목록·문단 지원)")
             card_errors += 1
 
         field_texts = {"标题": card.get("title", "")}
@@ -304,16 +300,16 @@ def analyze_module(root: Path, module_path: Path, book: str,
         antipattern = replaceable_antipattern_hits(card.get("可替换项", ""), names)
         non_portable = card.get("不可照搬", "")
         for name in antipattern:
-            errors.append(f"{em_id}:replaceable_antipattern:{name}——「专名→任意X」把专名写进抽象字段，改写成「功能位→任意X」")
+            errors.append(f"{em_id}:replaceable_antipattern:{name} — ‘고유명→임의의 X’는 추상화 필드에 고유명을 남깁니다. ‘기능 역할→임의의 X’로 고치세요")
             card_errors += 1
         for name, locations in hit_locations.items():
             if name in antipattern:
                 continue
             if name in non_portable:
-                errors.append(f"{em_id}:source_specific_name_in_mechanism:{name}@{'|'.join(locations)}——本卡「不可照搬」已点名该专名却仍在抽象字段使用，请回 Stage 3 去专名后重试")
+                errors.append(f"{em_id}:source_specific_name_in_mechanism:{name}@{'|'.join(locations)} — 이 카드의 복제 금지 항목「不可照搬」에 적힌 고유명이 추상화 필드에도 남아 있습니다. Stage 3에서 고유명을 제거하고 다시 시도하세요")
                 card_errors += 1
             else:
-                warnings.append(f"{em_id}:leak_suspect:{name}@{'|'.join(locations)}——角色卡名与通用职能词无法机械区分，请人工复核；确认是专名请回 Stage 3 修卡")
+                warnings.append(f"{em_id}:leak_suspect:{name}@{'|'.join(locations)} — 인물 카드 이름과 일반 역할 용어를 자동 구분할 수 없습니다. 직접 확인하고 고유명이면 Stage 3에서 카드를 수정하세요")
         if card_errors == 0:
             atom_rows.append(_ia_row(book, em_id, card["title"], grade="full"))
     for em_id, title in index_entries:
@@ -321,7 +317,7 @@ def analyze_module(root: Path, module_path: Path, book: str,
             continue
         seen.add(em_id)
         for name in sorted(name for name in names if name in title):
-            warnings.append(f"{em_id}:leak_suspect:{name}@索引标题——请人工复核；确认是专名请回 Stage 3 修索引条目")
+            warnings.append(f"{em_id}:leak_suspect:{name}@색인 제목 — 직접 확인하고 고유명이면 Stage 3에서 색인 항목을 수정하세요")
         atom_rows.append(_ia_row(book, em_id, title, grade="index"))
     return {
         "book": book,
@@ -336,7 +332,7 @@ def analyze_module(root: Path, module_path: Path, book: str,
 
 def check_atoms(root: Path, module_path: Path, book: str,
                 workspace: Path | None = None) -> dict[str, Any]:
-    """只读自检：报出一本书的卡数、名单规模与全部问题，不写任何文件。"""
+    """읽기 전용 자체 검사. 작품 카드 수·명단 크기·전체 문제를 보고하며 어떤 파일도 쓰지 않는다."""
     try:
         report = analyze_module(root, module_path, book, workspace)
     except RegisterError as exc:
@@ -434,7 +430,7 @@ def source_ids(raw: str) -> list[str]:
 
 
 def load_book_em_ids(workspace: Path, source_book: str) -> tuple[set[str], str | None]:
-    module_path = workspace / "拆文库" / source_book / "剧情" / "情绪模块.md"
+    module_path = workspace / "작품분석실" / source_book / "플롯" / "감정모듈.md"
     try:
         module_text = module_path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeError):
@@ -493,7 +489,7 @@ def validate(root: Path, workspace: Path | None = None) -> list[str]:
                 except (OSError, UnicodeError):
                     card_text = ""
             if card_text and CARD_PATH_RE.search(card_text):
-                errors.append(f"line_{number}:path_reference_in_card——卡内只允许裸 ID，路径按 ID 查灵感索引.csv")
+                errors.append(f"line_{number}:path_reference_in_card — 카드에는 ID만 허용합니다. 경로는 ID로 灵感索引.csv에서 조회하세요")
             if row.get("grade", "").strip():
                 errors.append(f"line_{number}:grade_reserved_for_ia")
         tags, tag_errors = parse_tags(row.get("tags", ""))
@@ -507,7 +503,7 @@ def validate(root: Path, workspace: Path | None = None) -> list[str]:
                     if axis not in vocabulary:
                         continue
                     for value in sorted(values - set(vocabulary[axis])):
-                        errors.append(f"line_{number}:tag_value_not_in_vocabulary:{axis}={value}——先对照 标签词表.md：同义就用表内值，确属新维度先受控扩表")
+                        errors.append(f"line_{number}:tag_value_not_in_vocabulary:{axis}={value} — 먼저 태그목록.md와 대조하세요. 같은 뜻이면 기존 값을 사용하고 새로운 분류라면 절차에 따라 목록부터 확장하세요")
             novel_count = positive_int(row.get("novel_count", ""))
             if novel_count is None:
                 errors.append(f"line_{number}:novel_count_invalid")
@@ -601,8 +597,8 @@ def validate(root: Path, workspace: Path | None = None) -> list[str]:
 
 
 def load_vocabulary(root: Path) -> dict[str, list[str]] | None:
-    """读 `灵感库/标签词表.md`：`## 轴` 小节下的 `- 值` 行。文件不存在返回 None。"""
-    path = root / "标签词表.md"
+    """`영감자료실/태그목록.md`의 `## 轴` 절 아래 `- 值` 행을 읽는다. 파일이 없으면 None이다."""
+    path = root / "태그목록.md"
     if not path.is_file():
         return None
     vocabulary: dict[str, list[str]] = {}
@@ -627,7 +623,7 @@ def load_vocabulary(root: Path) -> dict[str, list[str]] | None:
 
 
 def vocabulary_errors(vocabulary: dict[str, list[str]]) -> list[str]:
-    """词表自身的健康检查：必填轴齐全。同义判定交给扩表时的人工比对。"""
+    """단어 목록의 필수 축 완전성을 검사한다. 동의어 판정은 목록 확장 시 수동 비교에 맡긴다."""
     return [
         f"vocabulary_axis_missing:{axis}"
         for axis in sorted(REQUIRED_CBA_AXES - set(vocabulary))
@@ -635,10 +631,8 @@ def vocabulary_errors(vocabulary: dict[str, list[str]]) -> list[str]:
 
 
 def coverage(root: Path) -> dict[str, Any]:
-    """增量入库的机械导航：报出未进入任何 active CBA 闭包的原子。
-
-    跨书聚合的 LLM 工作只需要看 uncovered 原子与现存单书假设卡，
-    不必重读已覆盖的 EM 卡。只读，不写盘。
+    """증분 등록을 위한 기계적 안내: 어떤 active CBA 폐포에도 포함되지 않은 원자를 보고한다.
+    작품 간 집계 LLM은 uncovered 원자와 기존 단일 작품 가설 카드만 보면 되며 포함된 EM 카드를 다시 읽을 필요가 없다. 읽기 전용이다.
     """
     rows, errors = load_rows(root)
     if errors:
@@ -693,9 +687,8 @@ def requested_tags(values: list[str]) -> dict[str, set[str]]:
 
 
 def query(root: Path, values: list[str], limit: int) -> dict[str, Any]:
-    """返回 matches 之外还带纠词元数据：请求值在全库零出现时点名
-    `unmatched_tags`，并给出所查各轴的现存值清单——零命中先纠词重查，
-    而不是把词表漂移误记成「库里没有」。"""
+    """matches와 함께 용어 수정 메타데이터를 반환한다. 요청 값이 라이브러리 전체에 없으면 `unmatched_tags`에 명시하고 조회 축의 기존 값 목록을 준다.
+    0건이면 용어를 고쳐 다시 조회하며 단어 목록의 변화를 라이브러리에 없음으로 오인하지 않는다."""
     rows, errors = load_rows(root)
     if errors:
         raise ValueError(";".join(errors))
@@ -748,7 +741,7 @@ def query(root: Path, values: list[str], limit: int) -> dict[str, Any]:
 
 
 def resolve(root: Path, refs: list[str]) -> dict[str, Any]:
-    """按 `书名/EM-xxx`、`书名/NM-xxx` 或 `CBA-xxx` 裸 ID 解析可读位置——需要时才查。"""
+    """`书名/EM-xxx`, `书名/NM-xxx`, `CBA-xxx` ID를 읽을 위치로 해석한다. 필요할 때만 조회한다."""
     rows, errors = load_rows(root)
     if errors:
         raise ValueError(";".join(errors))
@@ -769,7 +762,7 @@ def resolve(root: Path, refs: list[str]) -> dict[str, Any]:
             missing.append(raw_ref)
             continue
         if row.get("layer") == "原子灵感":
-            location = f"拆文库/{book}/剧情/情绪模块.md#{row.get('source_ids', '')}"
+            location = f"작품분석실/{book}/플롯/감정모듈.md#{row.get('source_ids', '')}"
         else:
             location = row.get("path", "")
         resolved.append({"ref": raw_ref, "item_id": row.get("item_id", ""), "title": row.get("title", ""), "location": location})

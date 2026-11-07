@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""对比两个版本的基准结果：效率降幅 + 质量非劣效门槛。
+"""두 버전의 벤치마크 결과를 비교한다. 효율 개선 폭과 품질 비열등성 기준을 사용한다.
 
-用法：
-  compare.py --base <run目录>... --cand <run目录>... --coverage <judge coverage 目录>
-             --pairwise <judge pairwise 目录> [--tell <tell仓库>] [--json]
+사용법:
+  compare.py --base <run디렉터리>... --cand <run디렉터리>... --coverage <judge coverage 디렉터리>
+             --pairwise <judge pairwise 디렉터리> [--tell <tell저장소>] [--json]
 
-门槛（非劣效，全部满足才算通过；数值在预注册协议里冻结，这里是默认值）：
-  Q1 情节点兑现率（landed=1、summarized=0.5、missing=0；未提交的章按 0 计）候选 − 基线 ≥ −0.05
-  Q2 每章越界新增 候选 − 基线 ≤ +0.3
-  Q3 配对盲评：有胜负的对里候选胜率 ≥ 0.35；有胜负的对少于 6 个判「证据不足」
-  Q4 每章检测器 advisory 候选 − 基线 ≤ +1.0；给了 --tell 时人类区间越界项中位数差 ≤ +1
+기준(비열등성, 모두 충족해야 통과; 사전 등록 프로토콜의 고정값이며 아래는 기본값):
+  Q1 플롯 포인트 실현율(landed=1, summarized=0.5, missing=0; 미제출 장은 0): 후보 − 기준 ≥ −0.05
+  Q2 장당 허용 범위 밖 추가: 후보 − 기준 ≤ +0.3
+  Q3 쌍별 블라인드 평가: 승패가 있는 쌍 중 후보 승률 ≥ 0.35; 승패가 있는 쌍이 6개 미만이면 ‘근거 부족’
+  Q4 장당 검사기 advisory: 후보 − 기준 ≤ +1.0; --tell 지정 시 인간 범위를 벗어난 항목의 중앙값 차이 ≤ +1
 """
 import argparse
 import json
@@ -48,7 +48,7 @@ def side(runs, cov_dir, tell):
         for k in keys:
             rates.append(cov[k][0])
             unauth.append(cov[k][1])
-        rates.extend([0.0] * max(0, goal_chapters - len(keys)))  # 没写出来的章按全漏计
+        rates.extend([0.0] * max(0, goal_chapters - len(keys)))  # 작성되지 않은 장은 전부 누락으로 계산한다.
         for p in committed.values():
             adv.append(p.get('detector', {}).get('advisory', 0))
             if p.get('human_ref_out_of_range') is not None:

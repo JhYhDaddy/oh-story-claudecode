@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 "use strict"
 
-// Antigravity 2.0 hook adapter for oh-story writing projects. The shared story
-// guard logic lives in story_hook_core.js; this file only translates the
-// Antigravity camelCase hook contract and bridges PostToolUse (which must return
-// {}) to the next PreInvocation through the session artifact directory.
+// oh-story 집필 프로젝트의 Antigravity 2.0 훅 어댑터. 공유 이야기
+// 가드 로직은 story_hook_core.js에 있으며 이 파일은
+// Antigravity camelCase 훅 계약을 변환하고 {}를 반환해야 하는 PostToolUse를
+// 세션 산출물 디렉터리를 통해 다음 PreInvocation으로 연결한다.
 
 const fs = require("node:fs")
 const os = require("node:os")
@@ -182,7 +182,7 @@ function sessionContext() {
   }
   const book = core.discoverActiveBook(root)
   if (book) {
-    const context = path.join(book, "追踪", "上下文.md")
+    const context = path.join(book, "추적", "문맥.md")
     if (fs.existsSync(context)) messages.push(`[story context] Active book: ${core.safeRelative(root, book)}. Read ${core.safeRelative(root, context)} before continuing long-form writing.`)
     else messages.push(`[story context] Detected writing project: ${core.safeRelative(root, book)}.`)
   }

@@ -1,50 +1,50 @@
-# Agent Note: 长短篇拆文按阶段时刻加载，每个时刻只读此刻的规则
+# Agent Note: 장·단편 분석을 단계별 시점으로 나누어 해당 시점의 규칙만 읽기
 
 Status: implemented
 Date: 2026-09-26
-Related: [35K 加载上限](2026-09-26-per-call-load-ceiling-35k.md)、[开书按作者确认点分时刻](2026-09-26-opening-by-author-moments.md)、[主会话不中转内容](../simplification/2026-09-24-long-analyze-no-relay-and-digest.md)
+Related: [35K 로드 상한](2026-09-26-per-call-load-ceiling-35k.md), [작가 확인 지점별 새 책 시작](2026-09-26-opening-by-author-moments.md), [주 세션에서 내용 중계 금지](../simplification/2026-09-24-long-analyze-no-relay-and-digest.md)
 
 ## Problem
 
-拆文两个 skill 的入口没有按阶段指明该读什么，模型只能把方法论和模板整份读进来：
+두 분석 스킬의 진입부가 단계별 읽을 자료를 지정하지 않아 모델이 방법과 템플릿을 통째로 읽었다.
 
-- **长篇**：SKILL.md 8.4K，末尾一句把 pipeline-ops（7.6K）、output-templates（15.1K）、material-decomposition（13.0K）一起点名；Stage 3–5 的时刻连同 author-facing（4.3K）约 48K，还没算 digest 取回的语料。Stage 1 没有自己的小节，模板藏在 output-templates 中段；Stage 3 的小节没有指向聚合方法。入口常驻着罕见分支（章号对不上的三选一，约 700 字）、与 pipeline-ops 重复的计划/提交/拆分说明，以及只有维护者用得上的回归与语义验收样例。Stage 1 停下来问时，还要作者在串行、有限并行、不限顺序三种派发方式里选，这是工程选择。
-- **短篇**：Stage 2–6 一口气做完，「必须加载」的五份（output-contract、output-templates、material-decomposition、source-story-quality、analysis-report-style）连同 SKILL 约 42.5K，再加全文约 60K。output-contract 里写作侧怎么读产出、维护者烟雾测试也被当成全程加载；SKILL.md 的验收四步与 output-contract「验收接入点」重复。
+- **장편**: SKILL.md 8.4K의 마지막 문장이 pipeline-ops(7.6K), output-templates(15.1K), material-decomposition(13.0K)를 함께 지정한다. Stage 3–5는 author-facing(4.3K)까지 약 48K이며 digest로 가져올 자료는 제외한 값이다. Stage 1은 자체 절이 없고 템플릿은 output-templates 중간에 숨었다. Stage 3 절에는 집계 방법 링크가 없다. 드문 분기(장 번호 불일치의 세 선택지, 약 700자), pipeline-ops와 중복인 계획·제출·분할 설명, 유지보수자만 쓰는 회귀·의미 검증 예시가 상주한다. Stage 1 질문에서는 작가에게 순차·제한 병렬·순서 무제한 중 배분 방법을 고르게 하는데 이는 기술적 선택이다.
+- **단편**: Stage 2–6을 한꺼번에 처리하며 필수 다섯 파일(output-contract, output-templates, material-decomposition, source-story-quality, analysis-report-style)과 SKILL은 약 42.5K, 본문까지 약 60K다. output-contract의 집필 측 활용법·유지보수자 스모크 테스트도 계속 읽고, SKILL.md의 검수 네 단계는 output-contract의 검수 접점과 중복된다.
 
-拆文各阶段之间真正依赖的只有落盘产物和进度（长篇 `_progress.md` 的阶段状态与 `mark-stage`，短篇 `_meta.json` 的 `stages_completed`），不依赖上一阶段的操作说明。
+단계 사이에 필요한 것은 저장된 산출물과 진행 정보(장편 `_progress.md`의 단계 상태와 `mark-stage`, 단편 `_meta.json`의 `stages_completed`)뿐이며 이전 단계의 작업 설명은 필요 없다.
 
 ## Decision
 
-- **长篇按 Stage 分时刻**：SKILL.md 新增「按时刻读」表，一行一个时刻：开头三章（Phase 1–2、Stage 0–1）读 `stage1-golden-chapters.md`；Stage 2 读 `pipeline-ops.md`，子代理不可用时加 `stage2-extraction.md`；Stage 3/4/5 各读 `synthesis-inputs.md`（digest 取料、阶段标记、合成阶段事实保真）加本阶段的 `stage3-plot-rhythm.md` / `stage4-characters-settings.md` / `stage5-report.md`；Stage 6 读 `style-profile-generator.md`（Stage 6 字段速查并入）；全部拆完读 `final-checks.md`。output-templates.md 与 material-decomposition.md 按阶段拆进上述文件后删除。Stage 1 在入口有了自己的小节。
-- **长篇入口瘦身**：章号对不上三选一与原文变化的细则移到 `index-rebuild.md`，脚本停下时才读；入口的 Stage 2 只留一段指向 pipeline-ops；维护者回归与语义验收样例移到 `final-checks.md`「维护者回归」。
-- **派发方式替作者定好**：Stage 2 默认有限并行（每轮 3 批），停下来问的模板不再列三种拆法；作者问起更快或更稳时，按 author-facing 新增的「作者问起怎么拆」解释并切换。三档本身与 story-import 自动续跑的有限并行不变。
-- **短篇分两个时刻**：Stage 2–3 读 output-contract、`analysis-method.md`（拆解思路，两个时刻共用）、`stage2-3-structure-emotion.md`、`quality-checklist.md`（逐阶段清单与质量标准，BLOCK 项扫描的依据）、analysis-report-style；Stage 4–6 把阶段文件换成 `stage4-6-reversal-summary.md`，Stage 6 评源文好坏时加 source-story-quality。同类对比、平台适配、详细节奏移到 `optional-modules.md`。
-- **短篇阈值统一**：反转铺垫线索按 output-contract（单一权威）写 ≥3 条、无反转/报应型不查，入口管道表、Stage→文件映射、stage4-6 方法与质量清单同口径（没有检查脚本，靠文字对齐）。数「有反差人物」（计入 `character_archetypes`）的最小判定写进 stage4-6：三层标签至少一层与另两层相反且原文有行为对照；Stage 5 只在细拆反差手法时才按标题查 analysis-character-design 一节。
-- **短篇去重**：SKILL.md 的验收只保留本 skill 的具体做法（表达自检跳过源文引用、无反转合法、BLOCK 扫 quality-checklist、补不出时用故事话告诉作者）和完成汇报，步骤本身以 output-contract「验收接入点」为准；输出目录树、Stage→文件映射、写盘协议改为指向 output-contract。
-- **output-contract 瘦身**：共享源（story-short-write）删去「下游消费规范」「写作流程建议」「维护者本地烟雾测试」与只对维护者有用的 sync-policy、版本约定细则；构思时用得上的读法（`_meta.json` 可选、按反转类型选骨架、情节节点排节奏、手法与原文只学写法）并成 benchmark-recall 的一段，不再另设文件；两份副本经 shared-references 同步。验收接入点三步与入口一致：表达自检命中时分析者自己修订报告本身，BLOCK 项扫本地质量清单，通过后按 SKILL 的完成汇报告诉作者。
-- **守卫**：check-current-skill-contracts 新增 `analyze-moment-routing`（两个入口的按时刻读表必须链接每份时刻文件）与 `analyze-dispatch-default`（停下来问的模板不得让作者选派发方式），test-current-skill-contracts 有正反例回归。原有锚点（pipeline-ops 派发清单与 schema_version、SKILL 的章号连续校验、选题决策 Phase、author-facing 模板工程词、短篇观察标尺路由）都留在原文件或随内容保留。
+- **장편 Stage별 분리**: SKILL.md에 시점별 읽기 표를 추가한다. 도입 세 장(Phase 1–2, Stage 0–1)은 `stage1-golden-chapters.md`, Stage 2는 `pipeline-ops.md`와 하위 에이전트 불가 시 `stage2-extraction.md`, Stage 3/4/5는 `synthesis-inputs.md`(digest 자료 조회·단계 표시·종합 단계 사실 보존)와 해당 `stage3-plot-rhythm.md` / `stage4-characters-settings.md` / `stage5-report.md`, Stage 6은 `style-profile-generator.md`(Stage 6 필드 요약 통합), 전체 완료 시 `final-checks.md`를 읽는다. output-templates.md와 material-decomposition.md는 내용을 단계별로 옮긴 뒤 삭제한다. Stage 1은 진입부 자체 절을 갖는다.
+- **장편 진입부 축소**: 장 번호 불일치 세 선택지와 원문 변경 세칙은 `index-rebuild.md`로 옮겨 스크립트가 멈출 때만 읽는다. Stage 2는 pipeline-ops 링크 문단만 남긴다. 유지보수자 회귀·의미 검증 예시는 `final-checks.md`의 유지보수자 회귀 절로 옮긴다.
+- **배분 방식 기본 결정**: Stage 2는 제한 병렬(회당 3배치)을 기본으로 하며 질문 템플릿에서 세 방식을 나열하지 않는다. 작가가 속도·안정성을 물으면 author-facing의 새 설명으로 안내하고 전환한다. 세 방식 자체와 story-import의 제한 병렬 자동 재개는 유지한다.
+- **단편 두 시점**: Stage 2–3은 output-contract, `analysis-method.md`(두 시점 공통 분석법), `stage2-3-structure-emotion.md`, `quality-checklist.md`(단계별 목록·품질 기준, BLOCK 검색 근거), analysis-report-style을 읽는다. Stage 4–6은 단계 파일을 `stage4-6-reversal-summary.md`로 바꾸며 Stage 6 원문 품질 평가 때 source-story-quality를 더한다. 같은 유형 비교·플랫폼 적합성·상세 리듬은 `optional-modules.md`로 옮긴다.
+- **단편 기준 통일**: 반전 복선은 단일 기준인 output-contract에 따라 ≥3개이며 무반전/응보형은 검사하지 않는다. 진입부 흐름 표, Stage→파일 표, stage4-6 방법·품질 목록을 같은 문구로 맞춘다(검사 스크립트는 없다). `character_archetypes`에 세는 대비 인물의 최소 조건은 세 층 라벨 중 하나 이상이 다른 둘과 반대이고 원문 행동 대비가 있는 것이다. Stage 5에서 대비 기법을 세분할 때만 analysis-character-design의 해당 제목 절을 읽는다.
+- **단편 중복 제거**: SKILL.md 검수는 이 스킬 고유 사항(표현 검사에서 원문 인용 제외, 무반전 허용, quality-checklist에서 BLOCK 검색, 보완 불가 시 이야기 언어로 설명)과 완료 보고만 남긴다. 절차는 output-contract의 검수 접점을 따른다. 출력 트리·Stage→파일 표·저장 규약도 output-contract를 가리킨다.
+- **output-contract 축소**: 공유 원본(story-short-write)에서 하위 소비 규약·집필 절차 제안·유지보수자 로컬 스모크 테스트와 유지보수자용 sync-policy·버전 세칙을 삭제한다. 구상에 필요한 활용법(`_meta.json` 선택 사항, 반전 유형별 뼈대 선택, 사건 노드로 리듬 배열, 기법·원문에서는 쓰는 방법만 학습)은 benchmark-recall의 한 문단으로 합치고 별도 파일을 만들지 않는다. shared-references로 두 사본을 동기화한다. 검수 접점 세 단계는 진입부와 같다. 표현 검사 적중 시 분석자가 보고서 자체를 수정하고, 로컬 품질 목록의 BLOCK을 검색하고, 통과 후 SKILL의 완료 보고로 작가에게 알린다.
+- **보호 검사**: check-current-skill-contracts에 `analyze-moment-routing`(두 진입부 표가 각 시점 파일을 링크)과 `analyze-dispatch-default`(질문 템플릿에서 작가에게 배분 방식 선택 금지)를 추가하고 test-current-skill-contracts에 정상·실패 회귀 사례를 둔다. 기존 기준점(pipeline-ops 배분 목록·schema_version, SKILL 장 번호 연속 검사, 소재 결정 Phase, author-facing 템플릿 기술 용어, 단편 관찰 척도 경로)은 원래 파일 또는 옮긴 내용에 유지한다.
 
-| 时刻（主会话规则部分，去空白字数） | 改前 | 改后 |
+| 시점(주 세션 규칙, 공백 제외 문자 수) | 변경 전 | 변경 후 |
 |---|---|---|
-| 长篇 开头三章（含 Stage 0） | 27.8K | 14.4K（章号对不上 15.8K） |
-| 长篇 Stage 2 | 20.3K（自己写批次 48.4K） | 17.0K（自己写批次 22.6K） |
-| 长篇 Stage 3 | 48.4K | 25.4K（查桥段词表 29.5K） |
-| 长篇 Stage 4 / 5 | 48.4K | 18.3K / 15.0K |
-| 长篇 Stage 6 | 32.2K | 16.6K |
-| 短篇 Stage 2–3 | 42.5K | 20.1K |
-| 短篇 Stage 4–6 | 42.5K | 26.9K（评源文 31.1K；人物标尺各一份 32.7–33.2K；最重的写作技法表分支 34.9K） |
+| 장편 도입 세 장(Stage 0 포함) | 27.8K | 14.4K(장 번호 불일치 15.8K) |
+| 장편 Stage 2 | 20.3K(직접 배치 작성 48.4K) | 17.0K(직접 배치 작성 22.6K) |
+| 장편 Stage 3 | 48.4K | 25.4K(클리셰 어휘표 조회 29.5K) |
+| 장편 Stage 4 / 5 | 48.4K | 18.3K / 15.0K |
+| 장편 Stage 6 | 32.2K | 16.6K |
+| 단편 Stage 2–3 | 42.5K | 20.1K |
+| 단편 Stage 4–6 | 42.5K | 26.9K(원문 평가 31.1K, 인물 척도 각 하나 32.7–33.2K, 가장 큰 집필 기법 표 분기 34.9K) |
 
-改前按入口实际点名的文件计，Stage 3–5 与短篇为同一套全量加载。
+변경 전은 진입부가 실제 지정한 파일 기준이며 Stage 3–5와 단편은 각각 같은 전체 자료를 읽었다.
 
 ## Alternatives considered
 
-- **不拆文件，在入口精确点名小节**：最强理由是文件数不变、改动面小、git 历史连续。不采用：模型读参考文件是整份 Read，点名小节约束不了实际加载；output-templates 与 material-decomposition 各自横跨全部阶段，只靠点名，每个时刻仍要付 15K+13K。
-- **短篇也按 Stage 一阶段一时刻**：最强理由是每次加载最小。不采用：短篇全文只有 5000–15000 字，Stage 2–3、Stage 4–6 各自前后依赖紧（情感曲线要用节点，人物与综合评估要用反转与手法），分成五个时刻交接成本高于省下的规则字数；两个时刻已在 35K 内。
-- **派发方式仍请作者选，只把话术改得更白**：最强理由是作者对速度与稳定的偏好可能不同。不采用：三种方式的差别是并发与接续的工程权衡，作者没有依据判断；默认有限并行本来就是作者不选时的行为，作者问起时仍可切换。
-- **保留 output-contract 的下游用法，只在拆文入口说「跳过该节」**：最强理由是共享契约一字不动。不采用：跳过的约定靠模型自觉，文件仍整份进上下文；下游用法本来就是写作侧的内容，放在写作侧更符合归属。
+- **파일을 나누지 않고 절만 정확히 지정**: 파일 수·변경 범위·git 이력을 유지한다. 그러나 모델은 파일 전체를 Read하므로 절 지정으로 실제 로드를 제한하지 못한다. 두 큰 파일이 모든 단계를 포괄해 매 시점 15K+13K를 지불한다.
+- **단편도 Stage마다 한 시점**: 매번 읽는 양은 최소다. 그러나 본문 5000–15000자이며 Stage 2–3(감정 곡선과 노드), Stage 4–6(인물·종합 평가와 반전·기법)은 내부 의존성이 강하다. 다섯 시점의 인계 비용이 절약량보다 크며 두 시점으로도 35K 이하다.
+- **쉽게 설명하고 배분 방식은 작가가 선택**: 속도·안정성 취향은 다를 수 있다. 그러나 동시성과 이어가기의 기술적 절충을 작가가 판단할 근거가 없다. 미선택 기본값도 이미 제한 병렬이며 질문하면 전환할 수 있다.
+- **output-contract의 하위 활용법을 유지하고 분석에서 해당 절 생략**: 공유 계약을 그대로 둔다. 그러나 생략은 모델의 자율에 기대고 파일 전체는 여전히 문맥에 들어온다. 집필 활용법은 집필 측에 두는 것이 맞다.
 
 ## Consequences
 
-- 收益：长篇每个时刻 ≤25.4K（含条件分支 ≤29.5K），短篇两个时刻 ≤27K（分支 ≤35K）；Stage 1 有了入口小节，罕见分支与维护者内容不再常驻；作者不再面对工程选择。时刻之间只靠落盘交接，续跑与换新对话走同一条路。
-- 代价：长篇参考文件从 9 份变 14 份，短篇核心文件从 5 份变 6 份，维护时要按阶段找文件；「按时刻读」表成为新的路由契约，加阶段文件必须同步入口（由新守卫拦）。短篇 Stage 4–6 读 analysis-writing-techniques 整份时正好 35.0K，入口要求只按标题查其中一张表；再往 Stage 4–6 文件加内容需先删等量文字。各时刻与人物标尺分支已登记 doc-budget 路径，Stage 5 的人物标尺一次只查一份。
-- 行为：阶段编号、脚本命令、验收与交接不变；唯一的可观察变化是 Stage 1 停下来问时不再列出三种拆法、直接按每次三段继续。本次没有做真实模型对照评测。
+- 이점: 장편 시점별 ≤25.4K(분기 포함 ≤29.5K), 단편 두 시점 ≤27K(분기 ≤35K)다. Stage 1 진입 절이 생기고 드문 분기·유지보수 자료가 상주하지 않으며 작가에게 기술적 선택을 요구하지 않는다. 저장 파일만으로 인계하므로 재개와 새 대화가 같은 경로다.
+- 비용: 장편 참조는 9→14개, 단편 핵심은 5→6개이며 단계에 따라 찾아야 한다. 시점별 표가 경로 계약이 되어 단계 파일 추가 시 진입부도 갱신해야 한다(새 검사가 감시). 단편 Stage 4–6에서 analysis-writing-techniques 전체를 읽으면 정확히 35.0K여서 제목으로 표 하나만 찾도록 한다. 해당 단계 파일에 추가하려면 같은 분량을 먼저 빼야 한다. 모든 시점·인물 척도 분기는 doc-budget에 등록했고 Stage 5 인물 척도는 한 번에 하나만 읽는다.
+- 동작: 단계 번호·스크립트 명령·검수·인계는 같다. 관찰 가능한 유일한 변화는 Stage 1 질문에서 세 방식을 나열하지 않고 회당 세 구간씩 계속한다는 것이다. 실제 모델 대조 평가는 하지 않았다.

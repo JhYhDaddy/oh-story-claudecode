@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-"""Plan, commit, split, and recover long-analysis batches.
-
-Runtime state lives only in the managed block of ``_progress.md``. Plans are
-printed as JSON and are never persisted. Batch caches are complete recovery
-evidence, not a second state database. An existing chapter summary is never
-overwritten: to redo a chapter, delete its summary and plan again.
+"""장편 분석 배치를 계획·커밋·분할·복구한다.
+런타임 상태는 ``_progress.md``의 관리 블록에만 있다. 계획은 JSON 출력만 하며 저장하지 않는다.
+배치 캐시는 완전한 복구 근거이지 두 번째 상태 DB가 아니다. 기존 장 요약은 덮어쓰지 않는다. 다시 분석하려면 요약을 삭제하고 재계획한다.
 """
 
 from __future__ import annotations
@@ -54,7 +51,7 @@ MAX_PLOT_POINTS = 30
 CHARS_PER_FLOOR_POINT = 200
 MAX_CHAPTERS = 3
 MAX_CHARS = 25_000
-# Stage 3-6 each run once over complete Stage 2 output; their rows decide 最终状态.
+# Stage 3-6은 완전한 Stage 2 출력에서 각각 한 번 실행하며 그 행들이 最终状态를 결정한다.
 FINAL_STAGES = ("stage3", "stage4", "stage5", "stage6")
 LEGACY_FINAL_RE = re.compile(r"(?m)^([ \t]*(?:[-*][ \t]*)?最终状态[ \t]*[：:][ \t]*)([A-Za-z0-9_]+)")
 
@@ -204,7 +201,7 @@ def load_state(progress: Path) -> Tuple[Dict[str, Any], bytes]:
 
 
 def final_status(stages: Dict[str, Dict[str, str]]) -> str:
-    """Value for the ``最终状态`` line that session hooks read (Stage 3-6 rows)."""
+    """세션 훅이 읽는 ``最终状态`` 행의 값(Stage 3-6 행 기준)."""
     statuses = [stages.get(stage, {}).get("status") for stage in FINAL_STAGES]
     if all(status in {"completed", "completed_with_errors"} for status in statuses):
         return "completed_with_errors" if "completed_with_errors" in statuses else "completed"
@@ -236,9 +233,9 @@ def write_state(progress: Path, state: Dict[str, Any]) -> bool:
     raw = progress.read_bytes() if progress.is_file() else b""
     text, bom, newline = decode_progress(raw)
     pattern = re.compile(re.escape(STATE_START) + r".*?" + re.escape(STATE_END), re.DOTALL)
-    # Hooks read the first 最终状态 in the file. A legacy project keeps its own
-    # line as that single value; the runtime only promotes it once Stage 3-6
-    # are all complete and never demotes it.
+    # 훅은 파일의 첫 最终状态를 읽는다. 이전 프로젝트는 자체 행 하나를 기준값으로 유지하며
+    # 런타임은 Stage 3-6이 모두 완료된 뒤에만 그 상태를 올리고
+    # 절대 낮추지 않는다.
     existing = pattern.search(text)
     head = text[:existing.start()] if existing else text
     legacy = LEGACY_FINAL_RE.search(head)
@@ -262,7 +259,7 @@ def write_state(progress: Path, state: Dict[str, Any]) -> bool:
 
 
 def min_plot_points(chapter_chars: Optional[int]) -> int:
-    """Raw-chapter floor: chars / 200 rounded, at least 1, at most 10 (a ~540-char prologue needs 3)."""
+    """원시 장 최소값: chars / 200을 반올림해 최소 1·최대 10으로 제한한다(약 540자 프롤로그는 3 필요)."""
     if chapter_chars is None:
         return MIN_PLOT_POINTS
     return max(1, min(MIN_PLOT_POINTS, (chapter_chars + CHARS_PER_FLOOR_POINT // 2) // CHARS_PER_FLOOR_POINT))
@@ -273,7 +270,7 @@ def chars_by_chapter(rows: Optional[Sequence[Dict[str, Any]]]) -> Dict[int, int]
 
 
 def summary_path(root: Path, chapter: int) -> Path:
-    return root / "章节" / ("第%s章_摘要.md" % chapter)
+    return root / "장별분석" / ("제%s장_요약.md" % chapter)
 
 
 def cache_complete(path: Path) -> bool:
@@ -347,12 +344,12 @@ def chunk_range(start: int, end: int, index_by_chapter: Optional[Dict[int, Dict[
 
 def invalid_batch_targets(root: Path, rows: Optional[Sequence[Dict[str, Any]]],
                           state: Dict[str, Any]) -> Tuple[Set[int], Set[int]]:
-    """Chapters of recorded batches that no longer verify (cache lost or source changed)."""
+    """캐시 손실·원문 변경으로 검증되지 않는 기록된 배치의 장."""
     raw = set()
     reuse = set()
     for batch in state["batches"].values():
         chapters = set(range(batch["start"], batch["end"] + 1))
-        # Split children stay owed until committed, even when summaries exist.
+        # 분할된 자식은 요약이 있어도 커밋 전까지 미완료다.
         pending_child = batch.get("parent") and batch.get("status") == "planned"
         if not pending_child and (
             batch.get("status") not in {"completed", "success"} or completed_batch(root, batch, rows)
@@ -367,7 +364,7 @@ def invalid_batch_targets(root: Path, rows: Optional[Sequence[Dict[str, Any]]],
 
 def add_recoverable_caches(root: Path, state: Dict[str, Any],
                            rows: Optional[Sequence[Dict[str, Any]]]) -> Tuple[List[Dict[str, Any]], Set[int]]:
-    """Use complete caches in this read-only plan without persisting recovery."""
+    """복구를 저장하지 않고 읽기 전용 계획에서 완전한 캐시를 사용한다."""
     cache_dir = root / "_analysis_cache"
     recoverable = []
     covered = set()  # type: Set[int]
@@ -460,7 +457,7 @@ def plan_command(args: argparse.Namespace) -> Dict[str, Any]:
             for start, end in chunk_range(range_start, range_end, index_by_chapter if kind == "raw-original" else None):
                 selected.append({"input_kind": kind, "start": start, "end": end})
 
-    # Persisted split children replace any recombined parent range on later plans.
+    # 저장된 분할 자식은 이후 계획에서 다시 합쳐진 부모 범위를 대체한다.
     split_children = [
         row for row in state["batches"].values()
         if row.get("parent") and row.get("status") != "superseded"
@@ -476,7 +473,7 @@ def plan_command(args: argparse.Namespace) -> Dict[str, Any]:
                     selected.append({"input_kind": item["input_kind"], "start": child["end"] + 1, "end": item["end"]})
                 break
 
-    # Handoff = the committed batch that ends nearest before a batch's first chapter.
+    # 인계 자료는 배치 첫 장 직전에 가장 가깝게 끝나는 커밋된 배치다.
     committed = [row for row in state["batches"].values() if completed_batch(root, row, index_rows)]
 
     def handoff_cache(start: int) -> Optional[str]:
@@ -509,7 +506,7 @@ def plan_command(args: argparse.Namespace) -> Dict[str, Any]:
             "input_kind": item["input_kind"], "range_sha256": current_range_hash,
             "source_files": sources, "cache": "_analysis_cache/批次-%s.md" % batch_id,
             "chapter_chars": chapter_chars,
-            # Reuse gap summaries have no length to scale by: at least one point each.
+            # 재사용 누락 요약에는 비례 계산할 길이가 없으므로 각 최소 1포인트를 요구한다.
             "min_plot_points": [min_plot_points(chars) for chars in chapter_chars]
             if chapter_chars else [1] * (item["end"] - item["start"] + 1),
             "input_file": "_analysis_cache/输入-%s.md" % batch_id,
@@ -535,8 +532,8 @@ def plan_command(args: argparse.Namespace) -> Dict[str, Any]:
     if args.next is not None:
         if args.next < 0:
             raise RunError("invalid_next", str(args.next))
-        # Dispatch one batch at a time without re-reading the whole remaining plan;
-        # counts above still describe everything that is left.
+        # 남은 계획 전체를 다시 읽지 않고 배치를 한 번에 하나씩 배정한다.
+        # 위의 개수는 여전히 남은 전체 작업을 나타낸다.
         payload["batches"] = batches[:args.next]
         payload["summary_gaps"] = ["%s-%s" % pair if pair[0] != pair[1] else str(pair[0])
                                    for pair in compact_ranges(summary_gaps)]
@@ -564,7 +561,7 @@ def compact_field(body: str, name: str) -> str:
 
 
 def map_enum(value: str, allowed: Sequence[str], aliases: Dict[str, str], default: str = "其他") -> str:
-    """Map one enum value; with several listed values, the first that maps wins."""
+    """열거값 하나를 매핑한다. 여러 값이 나열되면 처음 매핑되는 값을 쓴다."""
     for token in [value.strip()] + re.split(r"[、/，,；;\s]+", value.strip()):
         if token in allowed:
             return token
@@ -577,7 +574,7 @@ def map_enum(value: str, allowed: Sequence[str], aliases: Dict[str, str], defaul
 
 
 def parse_plot_points(body: str, chapter: int, minimum: int) -> List[Dict[str, Any]]:
-    """Parse the repeated ``P{n}`` blocks that follow ``**情节点**：``."""
+    """``**情节点**：`` 뒤의 반복 ``P{n}`` 블록을 파싱한다."""
     match = re.search(r"(?m)^\*\*情节点\*\*\s*[：:]\s*$", body)
     if not match:
         raise RunError("chapter_schema_incomplete", "chapter %s missing field: 情节点" % chapter)
@@ -587,7 +584,7 @@ def parse_plot_points(body: str, chapter: int, minimum: int) -> List[Dict[str, A
         header = POINT_HEADER_RE.match(stripped)
         if header:
             segments = [item.strip() for item in re.split(r"[|｜]", header.group(3))]
-            # Tolerate the tag written inline at the end of the P line.
+            # P 행 끝에 인라인으로 쓴 태그를 허용한다.
             inline = POINT_TAG_RE.match(" | ".join(segments[-2:])) if len(segments) >= 3 else None
             rest = segments[1:-2] if inline else segments[1:]
             if not segments[0].startswith("类型") or not rest or not rest[0]:
@@ -639,7 +636,7 @@ def parse_model_output(text: str, start: int, end: int, input_kind: str,
         if not re.search(r"(?m)^##\s+第%s章(?:\s+.*)?$" % chapter, body):
             raise RunError("chapter_schema_incomplete", "chapter %s heading missing" % chapter)
         fields = {name: compact_field(body, name) for name in COMPACT_FIELDS}  # type: Dict[str, Any]
-        # Raw floor scales with chapter length; projections rebuilt from old results need only one beat.
+        # 원시 최소값은 장 길이에 비례한다. 이전 결과에서 재구축한 투영은 비트 하나만 필요하다.
         minimum = min_plot_points((chapter_chars or {}).get(chapter)) if input_kind == "raw-original" else 1
         fields["情节点"] = parse_plot_points(body, chapter, minimum)
         records[chapter] = fields
@@ -790,7 +787,7 @@ def commit_command(args: argparse.Namespace) -> Dict[str, Any]:
         raise RunError("range_hash_required", "pass the value printed by plan")
     if args.range_sha256 and args.range_sha256 != current_hash:
         raise RunError("range_hash_mismatch", args.batch_id)
-    # Parsing above validates the whole result before the first write.
+    # 위 파싱에서 첫 쓰기 전에 결과 전체를 검증한다.
     path = cache_path(root, args.batch_id)
     data = render_cache(args.batch_id, start, end, input_kind, current_hash,
                         source_files_from_args(args.source_file), text)
@@ -820,7 +817,7 @@ def repair_command(args: argparse.Namespace) -> Dict[str, Any]:
     skipped = []
     errors = []
     for path in paths:
-        # A cache replaced by a split or by other committed batches is history, not a repair target.
+        # 분할이나 다른 커밋 배치로 대체된 캐시는 이력이며 복구 대상이 아니다.
         batch_id = path.stem[len("批次-"):]
         if BATCH_ID_RE.fullmatch(batch_id):
             _, start, end = parse_batch_id(batch_id)
@@ -887,35 +884,35 @@ def split_command(args: argparse.Namespace) -> Dict[str, Any]:
 def stage_required_outputs(root: Path, stage: str) -> List[str]:
     if stage == "stage1":
         expected = inspect(root, None).get("expected_chapters") or 3
-        required = ["章节/第%s章_深度拆解.md" % chapter for chapter in range(1, min(3, int(expected)) + 1)]
-        required.append("快速预览.md")
+        required = ["장별분석/제%s장_심층분석.md" % chapter for chapter in range(1, min(3, int(expected)) + 1)]
+        required.append("빠른미리보기.md")
         return required
     if stage == "stage2":
         expected = inspect(root, None).get("expected_chapters")
         if not expected:
             raise RunError("expected_chapters_unknown", "Stage 2 completion requires a known chapter count")
-        return ["章节/第%s章_摘要.md" % chapter for chapter in range(1, int(expected) + 1)]
+        return ["장별분석/제%s장_요약.md" % chapter for chapter in range(1, int(expected) + 1)]
     if stage == "stage3":
-        return ["剧情/情绪模块.md", "剧情/节奏.md"]
+        return ["플롯/감정모듈.md", "플롯/리듬.md"]
     if stage == "stage4":
-        # 角色关系.md is the relation table, not a character profile.
+        # 인물관계.md는 관계 표이며 인물 프로필이 아니다.
         character_files = sorted(
-            path for path in (root / "角色").glob("*.md")
-            if path.name != "角色关系.md" and path.is_file() and path.stat().st_size
+            path for path in (root / "인물").glob("*.md")
+            if path.name != "인물관계.md" and path.is_file() and path.stat().st_size
         )
-        setting_files = sorted(path for path in (root / "设定").rglob("*.md") if path.is_file() and path.stat().st_size)
+        setting_files = sorted(path for path in (root / "설정").rglob("*.md") if path.is_file() and path.stat().st_size)
         missing = []
         if not character_files:
-            missing.append("角色/*.md")
+            missing.append("인물/*.md")
         if not setting_files:
-            missing.append("设定/**/*.md")
+            missing.append("설정/**/*.md")
         if missing:
             raise RunError("stage_output_missing", ",".join(missing))
         return [character_files[0].relative_to(root).as_posix(), setting_files[0].relative_to(root).as_posix()]
     if stage == "stage5":
-        return ["拆文报告.md"]
+        return ["작품분석보고서.md"]
     if stage == "stage6":
-        return ["文风.md"]
+        return ["문체.md"]
     raise RunError("stage_unknown", stage)
 
 
@@ -924,8 +921,8 @@ def mark_stage_command(args: argparse.Namespace) -> Dict[str, Any]:
     if args.prepare:
         if args.stage != "stage5":
             raise RunError("prepare_stage_unsupported", args.stage)
-        report = root / "拆文报告.md"
-        backup = root / "_analysis_cache" / "legacy" / "拆文报告.md"
+        report = root / "작품분석보고서.md"
+        backup = root / "_analysis_cache" / "legacy" / "작품분석보고서.md"
         created = False
         selected_backup = backup
         if report.is_file():
@@ -965,7 +962,7 @@ def mark_stage_command(args: argparse.Namespace) -> Dict[str, Any]:
 
 OBS_START = "<!-- BATCH_OBSERVATIONS_START -->"
 OBS_END = "<!-- BATCH_OBSERVATIONS_END -->"
-# Labels as projected by render_summary (legacy summaries use the same labels).
+# render_summary가 투영하는 레이블. 이전 요약도 같은 레이블을 쓴다.
 SUMMARY_FIELDS = ("概要", "关键事件", "因果", "局面结果", "涉及", "信息变化", "状态变化",
                   "三维节奏", "章尾钩子", "证据")
 
@@ -984,7 +981,7 @@ def parse_chapter_window(value: Optional[str]) -> Optional[Tuple[int, int]]:
 
 
 def digest_caches(root: Path) -> List[Tuple[int, int, str, Path]]:
-    """Complete caches of committed batches, falling back to every complete cache on disk."""
+    """커밋된 배치의 완전한 캐시. 없으면 디스크의 모든 완전한 캐시를 사용한다."""
     state, _ = load_state(root / "_progress.md")
     chosen = {}  # type: Dict[str, Tuple[int, int, str, Path]]
     for row in state["batches"].values():
@@ -1059,7 +1056,7 @@ def digest_command(args: argparse.Namespace) -> Dict[str, Any]:
             raise RunError("digest_empty_request", "pass --fields and/or --points")
         chapters = sorted(
             int(match.group(1)) for match in
-            (re.fullmatch(r"第(\d+)章_摘要", path.stem) for path in (root / "章节").glob("第*章_摘要.md"))
+            (re.fullmatch(r"제(\d+)장_요약", path.stem) for path in (root / "장별분석").glob("제*장_요약.md"))
             if match
         )
         for chapter in chapters:

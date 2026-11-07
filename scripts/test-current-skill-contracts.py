@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused regressions for the structured current-contract validator."""
+"""구조화된 현재 계약 검증기의 핵심 회귀 검사."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def repository_manifest() -> object:
 
 
 def manifest_with(**overrides: object) -> object:
-    """按正常加载路径构造一个改过值的当前契约，用来演练 bump。"""
+    """정상 로드 경로로 값을 바꾼 현재 계약을 구성해 버전 갱신을 시험한다."""
     raw = json.loads((SCRIPT_DIR / "current-contract.json").read_text(encoding="utf-8"))
     raw.update(overrides)
     with tempfile.TemporaryDirectory() as tmp:
@@ -102,7 +102,7 @@ def test_manifest_contract() -> None:
         )
 
         duplicate_artifacts = dict(raw)
-        duplicate_artifacts["primary_benchmark_artifacts"] = ["剧情/节奏.md", "剧情/节奏.md"]
+        duplicate_artifacts["primary_benchmark_artifacts"] = ["플롯/리듬.md", "플롯/리듬.md"]
         duplicate_path = tmpdir / "duplicate-artifacts.json"
         duplicate_path.write_text(json.dumps(duplicate_artifacts, ensure_ascii=False), encoding="utf-8")
         _, duplicate_findings = VALIDATOR.load_manifest(duplicate_path)
@@ -113,8 +113,8 @@ def test_manifest_contract() -> None:
 
         renamed_artifacts = dict(raw)
         renamed_artifacts["primary_benchmark_artifacts"] = [
-            "剧情/主情绪.md",
-            "剧情/主节奏.md",
+            "플롯/主情绪.md",
+            "플롯/主节奏.md",
         ]
         renamed_path = tmpdir / "renamed-artifacts.json"
         renamed_path.write_text(
@@ -126,7 +126,7 @@ def test_manifest_contract() -> None:
             "renamed current artifacts must remain manifest-driven",
         )
         renamed_semantic = semantic_findings(
-            "- 若 `剧情/主节奏.md` 缺失，回退读取 `拆文报告.md`。",
+            "- 若 `플롯/主节奏.md` 缺失，回退读取 `작품분석보고서.md`。",
             renamed_manifest.primary_benchmark_artifacts,
         )
         require(
@@ -149,13 +149,13 @@ def semantic_findings(
 
 def test_bad_fallbacks_fail() -> None:
     bad_cases = {
-        "inline report fallback": "- 若 `剧情/情绪模块.md` 缺失，回退读取 `拆文报告.md`。",
+        "inline report fallback": "- 若 `플롯/감정모듈.md` 缺失，回退读取 `작품분석보고서.md`。",
         "nested summary substitution": """
-1. 检查 `剧情/节奏.md`。
+1. 检查 `플롯/리듬.md`。
 2. 任一主产物缺失时：
-   - 使用 `章节/*_摘要.md` 代替。
+   - 使用 `장별분석/*_요약.md` 代替。
 """,
-        "structured gap story fallback": "- `rhythm_missing: true` 时改用 `故事线.md` 补足节奏。",
+        "structured gap story fallback": "- `rhythm_missing: true` 时改用 `이야기선.md` 补足节奏。",
     }
     for label, text in bad_cases.items():
         findings = semantic_findings(text)
@@ -167,12 +167,12 @@ def test_bad_fallbacks_fail() -> None:
 
 def test_fail_fast_prose_passes() -> None:
     good_cases = {
-        "explicit不得": "- `剧情/情绪模块.md` 缺失时必须停止；不得以 `拆文报告.md`、章节摘要或故事线代替。",
-        "explicit禁止 fallback": "- `rhythm_missing: true` 时返回 `missing_primary_contract`，禁止 fallback 到 `故事线.md`。",
-        "normal complete branch": "- 两个主产物都存在时读取 `拆文报告.md`，仅作人类可读概览。",
+        "explicit不得": "- `플롯/감정모듈.md` 缺失时必须停止；不得以 `작품분석보고서.md`、章节摘要或故事线代替。",
+        "explicit禁止 fallback": "- `rhythm_missing: true` 时返回 `missing_primary_contract`，禁止 fallback 到 `이야기선.md`。",
+        "normal complete branch": "- 两个主产物都存在时读取 `작품분석보고서.md`，仅作人类可读概览。",
         "deep-dive fallback is not primary fallback": (
-            "- 先读 `剧情/情绪模块.md` 与 `剧情/节奏.md`；模块或节奏文件缺失时停止修复。"
-            "匹配 `章节/*_摘要.md` 后，若同章深度拆解不存在，则回退黄金三章深度拆解。"
+            "- 先读 `플롯/감정모듈.md` 与 `플롯/리듬.md`；模块或节奏文件缺失时停止修复。"
+            "匹配 `장별분석/*_요약.md` 后，若同章深度拆解不存在，则回退黄金三章深度拆解。"
         ),
     }
     for label, text in good_cases.items():
@@ -181,11 +181,11 @@ def test_fail_fast_prose_passes() -> None:
 
 
 def test_sibling_bullets_do_not_lend_the_missing_condition() -> None:
-    """相邻条目各自是独立契约：fail-fast 兄弟条目不得把「主产物缺失」借给正确的读取条目。"""
-    fail_fast = "- `剧情/节奏.md` → 缺失时停止导入，不得以 `拆文报告.md`、章节摘要或故事线代替"
+    """인접 항목은 독립 계약이다. 즉시 실패하는 형제 항목이 올바른 읽기 항목에 ‘주요 산출물 누락’ 조건을 빌려주면 안 된다."""
+    fail_fast = "- `플롯/리듬.md` → 缺失时停止导入，不得以 `작품분석보고서.md`、章节摘要或故事线代替"
     good_neighbours = {
-        "benign read after a fail-fast sibling": "- 两个主产物都存在时读取 `拆文报告.md`，仅作人类可读概览。",
-        "human-readable overview bullet": "- 故事线（人类可读概览）→ 从 `剧情/故事线.md` 读取；缺失时留空",
+        "benign read after a fail-fast sibling": "- 两个主产物都存在时读取 `작품분석보고서.md`，仅作人类可读概览。",
+        "human-readable overview bullet": "- 故事线（人类可读概览）→ 从 `플롯/이야기선.md` 读取；缺失时留空",
         "prose block after a fail-fast bullet": "**无损检查**（任一不过即删除 `_章节摘要汇总.md`、回退逐文件扫描）：",
     }
     for label, good in good_neighbours.items():
@@ -196,18 +196,18 @@ def test_sibling_bullets_do_not_lend_the_missing_condition() -> None:
         "任一主产物缺失时：\n"
         "- 先记录到追踪\n"
         "- 再确认块状态\n"
-        "- 回退读取 `拆文报告.md` 拼出对标视图\n"
+        "- 回退读取 `작품분석보고서.md` 拼出对标视图\n"
     )
     require(
         "silent-primary-artifact-fallback" in finding_codes(semantic_findings(nested)),
         "上级条目给出的缺失条件必须仍然拦住降级子项",
     )
-    deep = "- 主产物缺失时：\n  - 导入分支：\n    - 采用 `故事线.md` 顶替。\n"
+    deep = "- 主产物缺失时：\n  - 导入分支：\n    - 采用 `이야기선.md` 顶替。\n"
     require(
         "silent-primary-artifact-fallback" in finding_codes(semantic_findings(deep)),
         "隔了一层的上级条件也要拦住降级子项",
     )
-    wrapped = "- 若 `剧情/节奏.md` 缺失，\n  则改读 `章节/*_摘要.md` 补足节奏。\n"
+    wrapped = "- 若 `플롯/리듬.md` 缺失，\n  则改读 `장별분석/*_요약.md` 补足节奏。\n"
     require(
         "silent-primary-artifact-fallback" in finding_codes(semantic_findings(wrapped)),
         "同一条目的续行仍与条件同属一件事",
@@ -215,8 +215,8 @@ def test_sibling_bullets_do_not_lend_the_missing_condition() -> None:
     table_rows = (
         "| 条件 | 行为 |\n"
         "|---|---|\n"
-        "| `剧情/节奏.md` 缺失 | 停止 Stage 6 并报 `missing_primary_contract` |\n"
-        "| `章节/第1-3章_深度拆解.md` 缺失 | 对话潜台词段从拆文报告兜底 |\n"
+        "| `플롯/리듬.md` 缺失 | 停止 Stage 6 并报 `missing_primary_contract` |\n"
+        "| `장별분석/제1-3장_심층분석.md` 缺失 | 对话潜台词段从拆文报告兜底 |\n"
     )
     require(
         not semantic_findings(table_rows),
@@ -227,7 +227,7 @@ def test_sibling_bullets_do_not_lend_the_missing_condition() -> None:
     bad_row = (
         "| 条件 | 行为 |\n"
         "|---|---|\n"
-        "| `剧情/节奏.md` 缺失 | 回退读取 `拆文报告.md` 补足节奏 |\n"
+        "| `플롯/리듬.md` 缺失 | 回退读取 `작품분석보고서.md` 补足节奏 |\n"
     )
     require(
         "silent-primary-artifact-fallback" in finding_codes(semantic_findings(bad_row)),
@@ -236,7 +236,7 @@ def test_sibling_bullets_do_not_lend_the_missing_condition() -> None:
 
 
 def test_undecodable_markdown_is_a_named_failure() -> None:
-    """非 UTF-8 文本会让所有内容规则静默放行，必须命名报错；二进制资产照旧跳过。"""
+    """UTF-8이 아닌 텍스트는 모든 내용 규칙을 조용히 통과시키므로 명명된 오류를 내야 한다. 바이너리 자산은 기존처럼 건너뛴다."""
     rule = next(
         r for r in VALIDATOR.LEGACY_RULES if r.code == "dotted-demo-workflow-label"
     )
@@ -269,7 +269,7 @@ def test_undecodable_markdown_is_a_named_failure() -> None:
         )
         target.write_text(dotted, encoding="utf-8")
         (demo / "封面.png").write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe")
-        # 无后缀 / 非白名单后缀的二进制（.DS_Store 之类）靠 NUL 字节识别，不能误报
+        # 확장자가 없거나 허용 목록 밖인 바이너리(.DS_Store 등)는 NUL 바이트로 식별하며 오탐하면 안 된다.
         (demo / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1\xff\xfe")
         require(
             not VALIDATOR.undecodable_source_findings([demo]),
@@ -280,7 +280,7 @@ def test_undecodable_markdown_is_a_named_failure() -> None:
 
 
 def test_progress_schema_pins_are_repo_wide() -> None:
-    """bump progress_schema_version 时，每个字面锚点都要被点名，不能只点 pipeline-ops.md。"""
+    """progress_schema_version 갱신 시 pipeline-ops.md뿐 아니라 모든 리터럴 앵커를 검사해야 한다."""
     current = repository_manifest().progress_schema_version
     stale = flagged_paths(
         manifest_with(progress_schema_version=current + 1), "progress-schema-version"
@@ -305,13 +305,13 @@ def test_progress_schema_pins_are_repo_wide() -> None:
 
 
 def test_stale_scan_phase_reference_accepts_backticks() -> None:
-    """房子风格 `story-long-scan` Phase N 与裸 token 写法都要被 stale 引用扫描抓到。"""
+    """저장소 표기 규칙인 `story-long-scan` Phase N과 백틱 없는 토큰을 모두 오래된 참조 검사에서 잡아야 한다."""
     current = repository_manifest().topic_decision_phase
     stale = flagged_paths(
         manifest_with(topic_decision_phase=current + 1),
         "stale-topic-decision-phase-reference",
     )
-    # 长篇「先查选题决策」随 Phase 1 搬进 workflow-setup.md（#269），扫描目标跟着内容走。
+    # 장편의 ‘먼저 소재 결정 확인’은 Phase 1과 함께 workflow-setup.md로 이동했다(#269). 검사 대상도 내용을 따라간다.
     for relative in (
         "skills/story-long-write/references/workflow-setup.md",
         "skills/story-long-analyze/SKILL.md",
@@ -461,16 +461,16 @@ def test_upgrading_version_contract() -> None:
 
 def test_deeply_nested_fallback_keeps_all_governing_ancestors() -> None:
     text = (
-        "- `剧情/节奏.md` 缺失时：\n"
+        "- `플롯/리듬.md` 缺失时：\n"
         "  - 导入阶段：\n"
         "    - 第六阶段：\n"
         "      - 对标视图：\n"
-        "        - 回退读取 `拆文报告.md` 拼出节奏。\n"
+        "        - 回退读取 `작품분석보고서.md` 拼出节奏。\n"
     )
     found = VALIDATOR.semantic_primary_fallback_findings(
         text,
         Path("deeply-nested.md"),
-        ("剧情/节奏.md",),
+        ("플롯/리듬.md",),
     )
     require(
         "silent-primary-artifact-fallback" in finding_codes(found),
@@ -479,13 +479,13 @@ def test_deeply_nested_fallback_keeps_all_governing_ancestors() -> None:
 
 
 def test_old_artifact_prose_silent_only() -> None:
-    """keep C：带显式标记的旧格式大纲容忍放行，无标记的静默降级仍拦（drop A/B 不受影响）。"""
+    """keep C: 명시적 표식이 있는 기존 개요 형식 허용은 통과시키고 표식 없는 조용한 대체는 계속 차단한다(drop A/B는 영향 없음)."""
     rule = next(r for r in VALIDATOR.LEGACY_RULES if r.code == "old-artifact-prose")
     require(rule.exempt_when is not None, "old-artifact-prose must narrow to silent-only")
     flagged = [
         "旧版细纲缺这些字段不阻塞读取，未知项写 `[待补充]`。",
         "旧版细纲回退读取核心事件、情节点序列、目标情绪。",
-        "旧版卷纲缺少卷契约/剧情单元卡不阻塞日更；本轮记录到 `追踪/上下文.md`。",
+        "旧版卷纲缺少卷契约/剧情单元卡不阻塞日更；本轮记录到 `추적/문맥.md`。",
         "旧版细纲只核对核心事件、目标情绪、章首/章尾钩子和字数目标。",
     ]
     silent = [
@@ -516,15 +516,15 @@ def test_story_import_keeps_self_out_of_benchmarks() -> None:
     cases = {
         "story-import-self-main-benchmark": "主对标书: {书名}\n导入当前书时至少登记自身为 `主`。\n",
         "story-import-self-benchmark-copy": (
-            "把 `拆文库/{书名}/` 复制到 `{项目}/对标/{书名}/`。\n"
-            "短篇复制到 `{标题}/对标/{书名}/`。\n"
+            "把 `작품분석실/{书名}/` 复制到 `{项目}/비교작품/{书名}/`。\n"
+            "短篇复制到 `{标题}/비교작품/{书名}/`。\n"
         ),
         "story-import-self-benchmark-summary": "## 对标摘要：{原书名}\n",
         "story-import-self-benchmark-fields": (
-            "把 `拆文报告.md` 的故事核/题材/对标字段映射进本书设定。\n"
+            "把 `작품분석보고서.md` 的故事核/题材/对标字段映射进本书设定。\n"
         ),
         "story-import-import-title-benchmark-target": (
-            "将 `拆文库/{导入书名}/` 整体复制到项目 `对标/`。\n"
+            "将 `작품분석실/{导入书名}/` 整体复制到项目 `비교작품/`。\n"
         ),
     }
     with tempfile.TemporaryDirectory() as tmp:
@@ -543,7 +543,7 @@ def test_story_import_keeps_self_out_of_benchmarks() -> None:
             if r.code == "story-import-import-title-benchmark-target"
         )
         target.write_text(
-            "不得把 `拆文库/{导入书名}/` 整体复制进 `对标/`。\n",
+            "不得把 `작품분석실/{导入书名}/` 整体复制进 `비교작품/`。\n",
             encoding="utf-8",
         )
         require(
@@ -625,7 +625,7 @@ def test_author_note_preflight_keeps_engine_words_in_tech_note() -> None:
         ),
         "a Skill without a 技术备注 route must be flagged",
     )
-    # 换个动词、换个冒号就能绕开「报告 `Fallback:`」固定句式；只要同一句没写进技术备注都要拦。
+    # 동사나 콜론만 바꾸면 ‘보고 `Fallback:`’ 고정 문형을 우회할 수 있다. 같은 문장에서 기술 참고로 보낸다고 명시하지 않으면 차단해야 한다.
     for evasion in (
         "降级时报 `Fallback: project custom agents unavailable -> solo`。汇报末行写技术备注：…\n",
         "报告：`Notice: agents bundle 版本不匹配`。技术备注：…\n",
@@ -642,7 +642,7 @@ def test_author_note_preflight_keeps_engine_words_in_tech_note() -> None:
         not VALIDATOR.author_note_preflight_findings(routed, Path("routed-fixture.md")),
         "a Fallback routed into 技术备注 in the same sentence must pass",
     )
-    # 路由和导入也有版本与降级提示，名单漏掉它们时原文会被念给作者。
+    # 라우팅과 가져오기에도 버전/대체 처리 알림이 있다. 목록에서 빠지면 원문을 작가에게 그대로 읽어 주게 된다.
     for entry in ("skills/story/SKILL.md", "skills/story-import/SKILL.md"):
         require(
             entry in VALIDATOR.AUTHOR_NOTE_PREFLIGHT_SKILLS,
@@ -714,10 +714,10 @@ def test_p1_deletion_guards() -> None:
 
 
 def test_analyze_portability_guards() -> None:
-    """Stage 6 的样本路径与 Stage 0 的章号连续性校验都必须留在文档里。
+    """Stage 6 표본 경로와 Stage 0 장 번호 연속성 검사는 모두 문서에 남아 있어야 한다.
 
-    /tmp 绝对路径要探到 Windows 原生 python 才炸；章号校验目前没有运行时回归。
-    目录块剔除已由 test-long-analyze-runtime-refactor.py 的带目录原文用例覆盖。
+    /tmp 절대 경로는 Windows 네이티브 Python까지 도달해야 실패하며 장 번호 검사에는 아직 런타임 회귀가 없다.
+    목차 블록 제거는 test-long-analyze-runtime-refactor.py의 목차 포함 원문 사례로 이미 검증한다.
     """
 
     rule = next(
@@ -734,7 +734,7 @@ def test_analyze_portability_guards() -> None:
             "the POSIX /tmp sample path must be rejected",
         )
         path.write_text(
-            "把 3 段拼接写入 `拆文库/{书名}/_style-sample.txt`。\n", encoding="utf-8"
+            "把 3 段拼接写入 `작품분석실/{书名}/_style-sample.txt`。\n", encoding="utf-8"
         )
         require(
             not VALIDATOR.check_absent_rule(root, rule),
@@ -765,7 +765,7 @@ def test_analyze_portability_guards() -> None:
 
 
 def test_rubric_parity_guard() -> None:
-    """两份通用 rubric 必须同维度；两边都读不到时不能算通过。"""
+    """두 공통 평가 기준은 같은 항목을 써야 하며 양쪽 모두 읽을 수 없으면 통과로 처리하면 안 된다."""
 
     rubric = (
         "## 核心维度\n\n"
@@ -794,7 +794,7 @@ def test_rubric_parity_guard() -> None:
             not VALIDATOR.rubric_parity_findings(root),
             "matching rubric dimensions must pass",
         )
-        # 发布门槛表不是维度表，不能被算进来
+        # 게시 기준 표는 평가 항목 표가 아니므로 포함하면 안 된다.
         table, _ = VALIDATOR.rubric_dimension_names(root)
         require(
             table == ["核心卖点", "标点节奏"],
@@ -813,7 +813,7 @@ def test_rubric_parity_guard() -> None:
             "a dimension present only in the file must fail",
         )
 
-        # 整块删掉时两边都是空列表——空集相等，必须显式拦成读取失败而不是静默通过
+        # 블록 전체를 지우면 양쪽 모두 빈 목록이라 같다고 판단한다. 조용히 통과시키지 말고 명시적인 읽기 실패로 차단해야 한다.
         build(root, rubric, "没有内置 rubric 了\n")
         require(
             finding_codes(VALIDATOR.rubric_parity_findings(root)) == {"rubric-parity-unreadable"},
@@ -822,11 +822,11 @@ def test_rubric_parity_guard() -> None:
 
 
 def test_style_profile_is_not_a_book_existence_probe() -> None:
-    """文风.md 兼任目录探针会把「书在但缺文风」判成「书不存在」。
+    """문체.md를 디렉터리 탐침으로 겸용하면 책은 있지만 문체가 없는 경우를 책 자체가 없는 것으로 판단한다.
 
-    explorer 在步骤 3 就提前返回 benchmark_book_missing，步骤 6 的 profile_missing 变成
-    不可达，调用方 profile_missing + custom_style 的降级续写分支被整条吞掉——是功能回退，
-    不是措辞问题，所以旧探针写法必须硬拦。
+    explorer가 3단계에서 benchmark_book_missing을 조기 반환해 6단계의 profile_missing이 도달 불가능해지고
+    호출자의 profile_missing + custom_style 대체 집필 분기가 사라진다. 표현 문제가 아닌 기능 회귀이므로
+    기존 탐침 방식은 반드시 차단해야 한다.
     """
 
     rules = {rule.code: rule for rule in VALIDATOR.LEGACY_RULES}
@@ -834,11 +834,11 @@ def test_style_profile_is_not_a_book_existence_probe() -> None:
     cases = {
         "style-profile-as-book-existence-probe": (
             explorer,
-            "3. **对标书路径查找**：优先探 `{项目}/对标/{书名}/文风.md`，"
-            "回退探 `拆文库/{书名}/文风.md`；探针是文件不是目录\n",
+            "3. **对标书路径查找**：优先探 `{项目}/비교작품/{书名}/문체.md`，"
+            "回退探 `작품분석실/{书名}/문체.md`；探针是文件不是目录\n",
             "3. **对标书路径查找（只判书目录有效性，不判文风）**："
-            "优先探 `{项目}/对标/{书名}/**/*`，回退探 `拆文库/{书名}/**/*`；"
-            "**不得用 `文风.md` 兼作目录存在性探针**\n",
+            "优先探 `{项目}/비교작품/{书名}/**/*`，回退探 `작품분석실/{书名}/**/*`；"
+            "**不得用 `문체.md` 兼作目录存在性探针**\n",
         ),
         "forbidden-outline-numeric-capacity": (
             "skills/story-long-write/references/workflow-outline.md",
@@ -863,24 +863,24 @@ def test_style_profile_is_not_a_book_existence_probe() -> None:
                 "{} must accept the canonical wording".format(code),
             )
 
-    # 未登记主对标的枚举回退同样不能拿文风.md 当候选过滤器：缺文风但资料完整的书会被
-    # 算成 no_benchmark，和「一本对标都没有」混为一谈。
+    # 주 벤치마크가 미등록일 때의 열거 대체 처리도 문체.md를 후보 필터로 쓰면 안 된다. 문체 파일만 없고 자료는 완전한 책을
+    # no_benchmark로 분류해 ‘벤치마크가 한 권도 없음’과 혼동하게 된다.
     probe_rule = rules["style-profile-as-book-existence-probe"]
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         path = root / explorer
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            "若字段缺失或已忽略 → `Glob 对标/*/文风.md`，取字典序第一个\n",
+            "若字段缺失或已忽略 → `Glob 비교작품/*/문체.md`，取字典序第一个\n",
             encoding="utf-8",
         )
         require(
             finding_codes(VALIDATOR.check_absent_rule(root, probe_rule))
             == {"style-profile-as-book-existence-probe"},
-            "benchmark enumeration must not filter candidates by 文风.md",
+            "benchmark enumeration must not filter candidates by 문체.md",
         )
 
-    # 显式禁止旧字段的说明文字本身不算违规，否则规则没法写进文档。
+    # 이전 필드를 명시적으로 금지하는 설명 자체는 위반이 아니다. 그렇지 않으면 규칙을 문서에 쓸 수 없다.
     budget_rule = rules["forbidden-outline-numeric-capacity"]
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -894,10 +894,10 @@ def test_style_profile_is_not_a_book_existence_probe() -> None:
 
 
 def test_outline_total_and_profile_gap_parity() -> None:
-    """跨文件契约必须在真仓库上真命中。
+    """파일 간 계약은 실제 저장소에서 실제로 일치해야 한다.
 
-    require_pattern 在路径写错时会退化成同 code 的 `cannot read required file`，所以
-    「这些 code 一个都不出现」同时证明了目标文件存在、且正则确实匹配上了内容。
+    경로가 틀리면 require_pattern이 같은 code의 `cannot read required file`로 바뀐다. 따라서 이 code들이
+    하나도 나오지 않으면 대상 파일이 존재하고 정규식이 내용과 실제 일치함을 동시에 입증한다.
     """
 
     manifest = repository_manifest()
@@ -916,7 +916,7 @@ def test_outline_total_and_profile_gap_parity() -> None:
 
 
 def test_author_facing_templates_stay_plain() -> None:
-    """拆文给作者看的模板里，一个真实报告出现过的工程词都不能漏过。"""
+    """작가용 분석 템플릿에서 실제 보고서에 나타났던 개발 용어는 하나도 놓치면 안 된다."""
 
     real_path = REPO_ROOT / "skills/story-long-analyze/references/author-facing.md"
     require(not VALIDATOR.author_facing_findings(real_path), "author-facing templates must stay plain")
@@ -952,7 +952,7 @@ def test_author_facing_templates_stay_plain() -> None:
 
 
 def test_analyze_moments_route_and_default_dispatch() -> None:
-    """拆文按时刻读：入口路由表缺一份阶段文件就报；停下来问时不把派发方式丢给作者选。"""
+    """분석의 시점별 읽기: 진입점 경로 표에서 단계 파일 하나라도 빠지면 오류를 내며 중단 후 질문할 때 배정 방식을 작가에게 선택시키지 않는다."""
 
     require(not VALIDATOR.analyze_moment_routing_findings(REPO_ROOT), "real analyze skills must route every moment file")
     real_facing = REPO_ROOT / "skills/story-long-analyze/references/author-facing.md"

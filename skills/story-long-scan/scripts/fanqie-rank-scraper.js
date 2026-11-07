@@ -1,22 +1,17 @@
 #!/usr/bin/env node
 /**
- * 番茄小说排行榜采集脚本
- *
- * 配合 browser-cdp skill 使用。先启动 Chrome CDP 环境，再运行本脚本。
- * 采集策略：从榜单页 __INITIAL_STATE__ 取结构化列表，再逐本请求详情页解码真实
- * 书名/作者/简介/题材/标签（番茄列表页有字体反爬，详情页 HTML 里是明文）。
- * 输出的榜单 Markdown 格式见 aggregate-rank.js 文件头，聚合按它解析。
- *
- * 用法：
- *   node fanqie-rank-scraper.js --channel 1 --type 2              # 男频阅读榜
- *   node fanqie-rank-scraper.js --channel 0 --type 1              # 女频新书榜
- *   node fanqie-rank-scraper.js --channel 1 --type 2 --outdir ./  # 指定输出目录
- *   node fanqie-rank-scraper.js --channel all                     # 全部采集
- *   node fanqie-rank-scraper.js --channel 1 --top 15              # 每题材只取前 15 本
- *   node fanqie-rank-scraper.js --source library --channel all     # 书库「最热」：连载中、30 万字以下
- *   node fanqie-rank-scraper.js --source library --channel mix --pages 5  # 不分男女，取 5 页
- *
- * 前置：
+ * 판체 소설 순위 수집기. browser-cdp로 Chrome CDP 환경을 먼저 시작한다.
+ * 순위 페이지의 __INITIAL_STATE__에서 구조화 목록을 얻고 작품별 상세 페이지에서 실제 제목·작가·소개·장르·태그를 해석한다.
+ * 목록은 글꼴 기반 수집 방지를 사용하지만 상세 HTML은 평문이다. 출력 형식은 aggregate-rank.js 머리 주석을 따른다.
+ * 사용법:
+ *   node fanqie-rank-scraper.js --channel 1 --type 2              # 남성향 읽기 순위
+ *   node fanqie-rank-scraper.js --channel 0 --type 1              # 여성향 신작 순위
+ *   node fanqie-rank-scraper.js --channel 1 --type 2 --outdir ./   # 출력 디렉터리
+ *   node fanqie-rank-scraper.js --channel all                    # 전체 수집
+ *   node fanqie-rank-scraper.js --channel 1 --top 15              # 장르별 상위 15권
+ *   node fanqie-rank-scraper.js --source library --channel all    # 라이브러리 인기순: 연재 중, 30만 자 미만
+ *   node fanqie-rank-scraper.js --source library --channel mix --pages 5 # 성별 구분 없이 5페이지
+ * 사전 실행:
  *   node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
  */
 
@@ -24,15 +19,15 @@ const fs = require("fs");
 const path = require("path");
 const { ab, sleep, evalJSONBase64, scrollLoad, getArg, localDateStamp, runCli } = require("./cdp-utils");
 
-// 一次详情请求的并发批大小。番茄详情页用同步 XHR 拉取，批太大会撞上
-// cdp-utils 里 ab() 的 20s 超时；超时会显式失败，这里分批是为了避免整个题材被中断。
+// 상세 요청 한 번의 동시 배치 크기. 동기 XHR을 쓰므로 너무 크면
+// cdp-utils ab()의 20초 제한에 걸려 명시적으로 실패한다. 배치 분할은 장르 전체 중단을 피하기 위한 것이다.
 const DETAIL_CHUNK = 5;
 
 // ---------------------------------------------------------------------------
-// 页面提取
+// 페이지 추출
 // ---------------------------------------------------------------------------
 
-/** 连通性 + 页面就绪自检 */
+/** 연결·페이지 준비 상태 자체 검사. */
 function probePage(port) {
   return evalJSONBase64(
     port,
@@ -40,7 +35,7 @@ function probePage(port) {
   );
 }
 
-/** 构建：提取侧边菜单品类链接的浏览器 JS */
+/** 사이드 메뉴 분류 링크를 추출하는 브라우저 JS를 만든다. */
 function buildCategoriesJS(prefix) {
   return `JSON.stringify((function(){
     var prefix=${JSON.stringify(prefix)};
@@ -57,15 +52,15 @@ function buildCategoriesJS(prefix) {
   })())`;
 }
 
-/** 提取侧边菜单品类链接 */
+/** 사이드 메뉴 분류 링크를 추출한다. */
 function extractCategories(port, channel, type) {
   const prefix = `/rank/${channel}_${type}_`;
   return evalJSONBase64(port, buildCategoriesJS(prefix)) || [];
 }
 
 /**
- * 从 __INITIAL_STATE__ 提取当前品类页的作品列表。
- * 多路径尝试 + 深度兜底扫描，并把字段名归一，避免站点改 state 结构就全盘失败。
+ * __INITIAL_STATE__에서 현재 분류의 작품 목록을 얻는다.
+ * 여러 경로와 심층 대체 탐색을 시도하고 필드 이름을 정규화해 state 구조 변경으로 전체가 실패하지 않게 한다.
  */
 function buildBookListJS() {
   return `JSON.stringify((function(){
@@ -105,15 +100,12 @@ function extractBookList(port) {
 }
 
 /**
- * 解析一本书的详情页 HTML。buildDetailJS 用 toString 把它拼进浏览器端脚本，
- * 所以必须自包含：不引用模块作用域里的任何东西，也不能含反引号。
- * 番茄列表页书名/作者被字体反爬，详情页 HTML 内嵌 JSON 与 <title> 是明文。
- * 字段名以真实 SSR(__INITIAL_STATE__) 为准：bookName/author/abstract 明文，
- * 题材在 categoryV2(转义 JSON 数组的首个 Name)，readCount/wordNumber 可能是数字或字符串。
- * 详情页里可能先出现推荐书对象（同样带 bookName/readCount/lastChapterTitle），
- * 所以书名、作者、数字和最新章节只从「正文这本书」的对象里取：先按 bookId 定位，
- * 定位不到再按 <title> 里的书名定位；都定位不到时书名作者退回 <title>/meta，数字留空，
- * 宁可「未知」也不把推荐书的数字记到这本书头上。
+ * 작품 상세 HTML을 파싱한다. buildDetailJS가 toString으로 브라우저 스크립트에 넣으므로 모듈 범위를 참조하거나 백틱을 포함하면 안 된다.
+ * 목록의 제목·작가는 글꼴로 보호되지만 상세 HTML의 JSON과 <title>은 평문이다.
+ * 실제 SSR(__INITIAL_STATE__)의 bookName/author/abstract를 쓰며 장르는 categoryV2(이스케이프된 JSON 배열 첫 Name)에 있다.
+ * readCount/wordNumber는 숫자 또는 문자열이다. 추천 작품 객체도 bookName/readCount/lastChapterTitle을 포함해 먼저 나올 수 있으므로
+ * 제목·작가·숫자·최신 장은 현재 작품 객체에서만 얻는다. bookId로 먼저 찾고 실패하면 <title> 제목으로 찾는다.
+ * 둘 다 실패하면 제목·작가는 <title>/meta로 대체하고 숫자는 비운다. 추천 작품의 수치를 잘못 기록하는 대신 미상으로 둔다.
  */
 function parseDetailHtml(h, id) {
   function pick(src, res) {
@@ -136,7 +128,7 @@ function parseDetailHtml(h, id) {
     var m = src.match(new RegExp('"' + key + '"\\s*:\\s*"?([0-9]+)'));
     return m ? m[1] : "";
   }
-  // 从 JSON 起点按字符串感知扫描，返回包住 pos 的最内层对象文本。
+  // JSON 시작부터 문자열을 구분해 탐색하고 pos를 포함한 가장 안쪽 객체 텍스트를 반환한다.
   function enclosingObject(src, pos) {
     var start = src.lastIndexOf("__INITIAL_STATE__", pos);
     if (start >= 0) {
@@ -194,24 +186,24 @@ function parseDetailHtml(h, id) {
   var title = (region && jsonString(region, "bookName")) || titleTag;
   var author = (region && (jsonString(region, "author") || jsonString(region, "authorName"))) ||
     pick(h, [/<meta[^>]+property="og:novel:author"[^>]+content="([^"]+)"/]);
-  // abstract(真实简介)优先；meta description 是平台模板("番茄小说提供...")，
-  // 且常带 data-rh 属性，故用宽松属性匹配兜底。
+  // 실제 소개인 abstract를 우선한다. meta description은 플랫폼 템플릿(‘番茄小说提供...’)이며
+  // data-rh 속성이 흔히 있으므로 느슨한 속성 일치를 대안으로 쓴다.
   var abs = region ? jsonString(region, "abstract") : "";
   if (abs.length < 6) abs = "";
   var desc = abs || pick(h, [
     /<meta[^>]+name="description"[^>]+content="([^"]+)"/,
     /<meta[^>]+property="og:description"[^>]+content="([^"]+)"/,
   ]);
-  // 题材：category 常为空字符串，真实题材在 categoryV2(转义 JSON)首个 Name。
+  // 장르: category는 빈 문자열인 경우가 많으며 실제 값은 categoryV2의 이스케이프 JSON 첫 Name이다.
   var category = (region && pick(region, [
     /"categoryV2":"\[\{[\s\S]*?\\"Name\\":\\"([^"\\]+)/,
     /"category"\s*:\s*"([^"]{1,20})"/,
   ])) || pick(h, [/<meta[^>]+property="og:novel:category"[^>]+content="([^"]+)"/]);
-  // 标签：番茄简介开头常带【tag+tag+...】，是题材细分的真实信号。
+  // 태그: 판체 소개 시작의 【tag+tag+...】는 장르 세분화의 실제 신호다.
   var tags = "";
   var bm = (abs || desc || "").match(/[【\[]([^】\]]{2,40})[】\]]/);
   if (bm) tags = bm[1].split(/[+、,\/\s]+/).filter(Boolean).slice(0, 6).join("、");
-  // 书库列表的在读数、字数也被字体反爬，详情页的 SSR 数字是明文。
+  // 라이브러리 목록의 읽는 중 수·글자 수도 글꼴로 보호되며 상세 SSR 숫자는 평문이다.
   return {
     title: title,
     author: author,
@@ -226,8 +218,8 @@ function parseDetailHtml(h, id) {
 }
 
 /**
- * 批量解码详情：逐本同步 XHR 请求 /page/{id}，交给 parseDetailHtml 解析。
- * 返回 { id: {title, author, desc, category, tags, readCount, wordNumber, creationStatus, lastChapterTitle} }。
+ * 상세 정보 일괄 해석: 작품별 동기 XHR로 /page/{id}를 요청하고 parseDetailHtml에 전달한다.
+ * { id: {title, author, desc, category, tags, readCount, wordNumber, creationStatus, lastChapterTitle} } 반환.
  */
 function buildDetailJS(ids) {
   return `JSON.stringify((function(){
@@ -253,7 +245,7 @@ function fetchDetailsChunk(port, ids) {
   return evalJSONBase64(port, buildDetailJS(ids)) || {};
 }
 
-/** 分批解码，避免单次 eval 超时；返回合并后的 map */
+/** 한 번의 eval 시간 초과를 피하도록 나누어 해석하고 합친 map을 반환한다. */
 function fetchDetails(port, bookIds) {
   const map = {};
   for (let i = 0; i < bookIds.length; i += DETAIL_CHUNK) {
@@ -266,7 +258,7 @@ function fetchDetails(port, bookIds) {
 }
 
 // ---------------------------------------------------------------------------
-// 格式化
+// 형식화
 // ---------------------------------------------------------------------------
 
 function fmtReads(count) {
@@ -292,11 +284,11 @@ function fmtStatus(s) {
   return s ? String(s) : "未知";
 }
 
-/** 清洗简介：去平台模板文本 → 折叠空白 → 句末截断 100 字 */
+/** 소개 정리: 플랫폼 템플릿 제거 → 공백 압축 → 문장 끝 기준 100자 절단. */
 function cleanDesc(raw) {
   if (!raw) return "";
   let d = String(raw)
-    // 简介取自 JSON 字符串原文，先还原常见转义（\n \uXXXX \" 等）
+    // 소개는 원본 JSON 문자열이므로 일반 이스케이프(\n \uXXXX \" 등)를 먼저 복원한다.
     .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
     .replace(/\\[nrt]/g, " ")
     .replace(/\\"/g, '"')
@@ -311,7 +303,7 @@ function cleanDesc(raw) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -338,13 +330,13 @@ function scrapeChannel(ch, type) {
   const tyLabel = typeLabel(type);
   console.log(`\n→ 采集 ${chLabel}${tyLabel}...`);
 
-  // 用已知品类 ID 作为入口，确保菜单只显示当前频道/类型的品类
-  const initCatId = ch === "1" ? "1141" : "1139"; // 男频:西方奇幻 / 女频:古风世情
+  // 알려진 분류 ID로 진입해 메뉴가 현재 채널·유형의 분류만 표시하게 한다.
+  const initCatId = ch === "1" ? "1141" : "1139"; // 남성향: 서양 판타지 / 여성향: 고풍 세태물
   const initUrl = `https://fanqienovel.com/rank/${ch}_${type}_${initCatId}`;
   ab(PORT, "open", initUrl);
   sleep(3000);
 
-  // 连通性自检：把"静默写出一堆 bookId"变成可操作的报错
+  // 연결 자체 검사: bookId만 조용히 나열하는 대신 대응 가능한 오류를 준다.
   const probe = probePage(PORT);
   if (!probe) {
     throw new Error(`CDP 无响应。请确认已用 browser-cdp 启动 Chrome（端口 ${PORT}），且 agent-browser 可用`);
@@ -358,13 +350,13 @@ function scrapeChannel(ch, type) {
 
   let categories = extractCategories(PORT, ch, type);
   if (!categories.length) {
-    // 菜单可能懒加载，滚动后重试一次
+    // 메뉴가 지연 로딩될 수 있어 스크롤 후 한 번 재시도한다.
     scrollLoad(PORT, 2);
     sleep(1000);
     categories = extractCategories(PORT, ch, type);
   }
   if (!categories.length) {
-    // 仍失败：降级为只采当前入口页，至少产出数据而不是空跑
+    // 계속 실패하면 현재 진입 페이지만 수집해 빈 실행 대신 최소한의 데이터를 얻는다.
     console.log(`  ⚠ 未提取到品类菜单，降级为单题材采集（入口页）`);
     categories = [{ name: "全部（入口页）", href: `/rank/${ch}_${type}_${initCatId}` }];
   } else {
@@ -403,7 +395,7 @@ function scrapeChannel(ch, type) {
       }
       if (books.length > TOP) books = books.slice(0, TOP);
 
-      // 分批解码真实书名/作者/简介/题材/评分/标签
+      // 실제 제목·작가·소개·장르·평점·태그를 나누어 해석한다.
       const bookIds = books.map((b) => String(b.bookId));
       const details = fetchDetails(PORT, bookIds);
 
@@ -448,12 +440,12 @@ function scrapeChannel(ch, type) {
     }
   }
 
-  // 一本都没采到时不写文件、计为失败：空榜单进了聚合只会让结论悄悄少一块。
+  // 한 권도 수집하지 못하면 파일을 쓰지 않고 실패로 센다. 빈 순위가 집계에 들어가면 결론 일부가 조용히 빠진다.
   if (totalBooks === 0) {
     throw new Error("所有题材一本都没采到（页面结构可能变了，或被登录/验证页拦住）");
   }
 
-  // 质量状态：标题解析比例是番茄采集成败的核心信号
+  // 품질 상태: 제목 해석 비율이 판체 수집 성공 여부의 핵심 신호다.
   const ratio = resolvedTitles / totalBooks;
   const quality = ratio < 0.5 ? "[标题解析异常]" : "[OK]";
   lines.splice(5, 0,
@@ -477,13 +469,13 @@ function scrapeChannel(ch, type) {
 
 
 // ---------------------------------------------------------------------------
-// 书库「最热」：/library/{筛选}/page_{n}?sort=hottes，每页 18 本，按热度排序
+// 라이브러리 인기순: /library/{필터}/page_{n}?sort=hottes, 페이지당 18권, 인기도순.
 // ---------------------------------------------------------------------------
 
 const LIB_STAT = { "1": "连载中", "0": "已完结", any: "" };
 const LIB_COUNT = { "0": "30万字以下", "1": "30-50万字", "2": "50-100万字", "3": "100-200万字", "4": "200万字以上", any: "" };
 
-/** 书库筛选段：audience1=男生、audience0=女生，stat1=连载中，count0=30万字以下；全不选时站点用 all。 */
+/** 라이브러리 필터: audience1=남성, audience0=여성, stat1=연재 중, count0=30만 자 미만. 모두 미선택이면 all. */
 function libraryPath(ch) {
   const segs = [];
   if (ch !== "mix") segs.push(`audience${ch}`);
@@ -498,7 +490,7 @@ function libraryLabel(ch) {
   return { who, filters };
 }
 
-/** 列表页书名、在读数都被字体反爬；只按页面顺序取 bookId，其余字段由详情页解码。 */
+/** 목록 제목·읽는 중 수는 글꼴 보호 대상이다. 페이지순 bookId만 얻고 나머지는 상세 페이지에서 해석한다. */
 function buildLibraryIdsJS() {
   return `JSON.stringify((function(){
     var seen={},out=[];
@@ -544,7 +536,7 @@ function scrapeLibrary(ch) {
   }
 
   if (!ids.length) {
-    // 一本都没抓到时不写空文件：空文件进了聚合只会让结论悄悄少一块。
+    // 한 권도 못 얻으면 빈 파일을 쓰지 않는다. 빈 파일을 집계하면 결론 일부가 조용히 빠진다.
     throw new Error("书库列表页一本都没抓到（可能被登录/验证页拦住，或页面改版）");
   }
   const details = fetchDetails(PORT, ids);
@@ -569,7 +561,7 @@ function scrapeLibrary(ch) {
   if (resolved / ids.length < 0.5) {
     console.error(`  ⚠ 标题解析率偏低（${resolved}/${ids.length}），请在 Chrome 内手动打开任一作品页确认不是验证页。`);
   }
-  // 列表名带「新书」：连载中、30 万字以下按热度排，本质是新书热度，聚合时进「新书榜」列。
+  // 목록명에 ‘新书’를 넣는다. 연재 중·30만 자 미만의 인기순은 사실상 신작 인기도이므로 집계의 신작 순위 열로 들어간다.
   const listName = `${who}书库最热${COUNT === "0" && STAT === "1" ? "新书" : ""}`;
   const head = [
     `# 番茄 · ${listName}`,
@@ -610,7 +602,7 @@ function mainLibrary() {
   return outcome(channels.length, written, failures);
 }
 
-/** 按 runCli 的结构报结果：一份没写出就整体失败，部分失败 exit 2 并列原因。 */
+/** runCli 형식으로 보고한다. 아무 파일도 못 쓰면 전체 실패, 일부 실패는 exit 2와 사유 목록이다. */
 function outcome(planned, written, failures) {
   if (!written) throw new Error(failures.join("；") || "no output was written");
   return { planned, written, failed: failures.length, partialReasons: failures };

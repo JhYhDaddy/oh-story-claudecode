@@ -1,8 +1,8 @@
 ---
-description: 浏览器操控。通过 CDP 复用 Chrome 登录态执行浏览器自动化。
+description: 브라우저 제어. CDP로 Chrome 로그인 상태를 재사용하여 브라우저 작업을 자동화한다.
 skills: browser-cdp
 ---
 
-调用 `$browser-cdp`，根据用户参数执行浏览器 CDP 操作。
+`$browser-cdp`를 호출하여 사용자 매개변수에 따른 브라우저 CDP 작업을 수행한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

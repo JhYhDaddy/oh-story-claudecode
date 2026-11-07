@@ -23,7 +23,7 @@ function body(charsPerSection = 1000, sections = 6, style = 'numeric') {
 function writeCase(name, text) {
   const dir = path.join(tmpRoot, name)
   fs.mkdirSync(dir, { recursive: true })
-  if (text !== null) fs.writeFileSync(path.join(dir, '正文.md'), text, 'utf8')
+  if (text !== null) fs.writeFileSync(path.join(dir, '본문.md'), text, 'utf8')
   return dir
 }
 
@@ -61,7 +61,7 @@ try {
       if (actual < floor) assert.strictEqual(result.report.failures[0].actual_chars, actual)
     }
   }
-  // Marker text and whitespace do not satisfy the body floor; Unicode code points do.
+  // 표식 텍스트와 공백은 본문 최소 분량에 포함하지 않고 유니코드 코드 포인트로 센다.
   const unicode = run(writeCase('unicode-floor', '###1.\n😀 甲\n'), ['1', '100', '1'], 2)
   assert.strictEqual(unicode.status, 0, unicode.stdout + unicode.stderr)
   for (const value of ['0', '-1', '1.5', 'bad']) {
@@ -94,7 +94,7 @@ try {
   assert.strictEqual(blankLines.status, 1)
   assert(failureIds(blankLines).includes('delivery.blank-lines'))
 
-  // 文件末尾的空行只是落盘习惯，不算段间空行。
+  // 파일 끝 빈 줄은 저장 관행일 뿐 문단 사이 빈 줄로 세지 않는다.
   const trailingBlank = run(writeCase('trailing-blank', `${body()}\n\n`))
   assert.strictEqual(trailingBlank.status, 0, trailingBlank.stdout + trailingBlank.stderr)
   assert.strictEqual(trailingBlank.report.ok, true)
@@ -109,13 +109,13 @@ try {
   const preflight = run(preflightDir, ['6000', '8000', '6'], 800, true)
   assert.strictEqual(preflight.status, 0, preflight.stdout + preflight.stderr)
   assert.strictEqual(preflight.report.scope, 'parameters-only')
-  assert.strictEqual(fs.existsSync(path.join(preflightDir, '正文.md')), false)
+  assert.strictEqual(fs.existsSync(path.join(preflightDir, '본문.md')), false)
   assert.strictEqual(run(preflightDir, ['1', '3000', '6'], 800, true).status, 2)
-  // Even the shortest permitted marker counts in the total: floor 800 + "1." = 802.
+  // 허용된 가장 짧은 표식도 전체 분량에 포함한다. 최소 본문 800 + "1." = 802.
   const markerBudget = run(writeCase('impossible-marker-budget', body(800, 1)), ['1', '801', '1'], 800)
   assert.strictEqual(markerBudget.status, 2)
 
-  // Marker characters consume the total budget even without an opt-in body floor.
+  // 본문 최소 분량을 선택적으로 지정하지 않아도 표식 문자는 전체 예산을 소비한다.
   for (const [sections, markerChars] of [[6, 12], [10, 21]]) {
     const markersOnly = Array.from({ length: sections }, (_, index) => `${index + 1}.`).join('\n')
     const dir = writeCase(`default-marker-budget-${sections}`, markersOnly)

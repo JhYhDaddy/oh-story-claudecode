@@ -1,115 +1,115 @@
 ---
 name: output-contract
-description: story-short-analyze 输出契约。定义 Stage → 文件映射、_meta.json schema、写入顺序、Resume 与验收接入点；写作侧维护产出的读取方式。
+description: story-short-analyze 출력 계약. Stage와 파일의 대응, _meta.json 스키마, 기록 순서, 재개·검수 연결점을 정의한다. 산출물 읽기는 집필 측에서 관리한다.
 ---
 
-# 输出契约：story-short-analyze ↔ story-short-write
+# 출력 계약: story-short-analyze ↔ story-short-write
 
-`story-short-analyze` 将短篇拆文产出存入 `拆文库/{书名}/`。`story-short-write` 构思新篇时结合报告、节点、手法与原文建立对标，正文阶段从已落盘的对标摘要召回。
+`story-short-analyze`는 단편 분석 산출물을 `작품분석실/{书名}/`에 저장한다. `story-short-write`는 새 작품 구상 시 보고서·노드·기법·원문을 함께 참조해 비교 기준을 세우며, 본문 집필 단계에서는 이미 저장한 비교 요약을 불러온다.
 
 ---
 
-## 输出目录与文件树
+## 출력 디렉터리와 파일 트리
 
 ```
-拆文库/{书名}/
-├── 原文/                  # 管道前置步骤产出，存放源文件备份
-├── 拆文报告.md             # 人类可读综合报告（Stage 2-6 综合）
-├── 情节节点.md             # Stage 2 情节节点清单
-├── 写作手法.md             # Stage 4 写作手法分析
-└── _meta.json             # 管道元数据 + 结构计数（resume + 验收数值依据）
+작품분석실/{书名}/
+├── 원문/                  # 처리 절차의 선행 단계가 생성하는 원본 백업
+├── 작품분석보고서.md             # 사람이 읽는 종합 보고서(Stage 2-6 통합)
+├── 사건노드.md             # Stage 2 사건 노드 목록
+├── 집필기법.md             # Stage 4 작법 기법 분석
+└── _meta.json             # 처리 메타데이터 + 구조 집계(재개·수치 검수 근거)
 ```
 
-**文件名约定**：`story-short-write` 按 `拆文报告.md / 情节节点.md / 写作手法.md` 定位产物，不可重命名。分析正文写入 Markdown，结构计数与反转枚举写入 `_meta.json.structure_counts`；具体读取范围与顺序按写作侧参考文件执行。
+**파일명 규칙**: `story-short-write`는 `작품분석보고서.md / 사건노드.md / 집필기법.md`로 산출물을 찾으므로 이름을 바꾸지 않는다. 분석 본문은 Markdown에, 구조 집계와 반전 열거값은 `_meta.json.structure_counts`에 쓴다. 구체적인 읽기 범위와 순서는 집필 측 참조 파일을 따른다.
 
 ---
 
-## Stage → 文件映射
+## Stage → 파일 대응
 
-| Stage | 名称 | 落地文件 | 主要内容 |
+| Stage | 이름 | 저장 파일 | 주요 내용 |
 |-------|------|----------|---------|
-| 2 | 结构+情节节点 | `拆文报告.md`（题材/故事核/结构/梗概段） + `情节节点.md` | 题材 / 故事核 / 结构划分（含开端/发展/高潮/结局） / 故事梗概 / 情节节点清单（每个节点带位置：节号 + 约第几字） |
-| 3 | 情感线+爆点 | `拆文报告.md`（情感曲线段+钩子段+爆点段） | 情感曲线 / 钩子与付费断点 / 爆点 6 维度 / 期待感 |
-| 4 | 反转+写作手法 | `拆文报告.md`（反转段） + `写作手法.md` | 前置反转检查 / 反转分析（铺垫线索逐条带位置） / 写作手法 ≥5 项维度 |
-| 5 | 人物+开头结尾 | `拆文报告.md`（人物段+首尾段） | 人物分类+功能评估 / 开头分析 / 结尾分析 / 首尾呼应 |
-| 6 | 综合评估 | `拆文报告.md`（综合段） + `_meta.json`（写 structure_counts） | 五维评分 / 爆点性 / 话题性 / 共鸣 ≥3 层 / 主结构 / 投稿层 / 可复用结构（含失败条件） / 节奏速报 |
+| 2 | 구조+사건 노드 | `작품분석보고서.md`(소재/이야기 핵심/구조/줄거리 구간) + `사건노드.md` | 소재 / 이야기 핵심 / 구조 구분(발단/전개/절정/결말 포함) / 줄거리 / 사건 노드 목록(각 위치: 절 번호 + 대략 몇 번째 글자인지) |
+| 3 | 감정선+폭발 지점 | `작품분석보고서.md`(감정 곡선+훅+폭발 지점 구간) | 감정 곡선 / 훅과 유료 전환 지점 / 폭발 분석 6개 항목 / 기대감 |
+| 4 | 반전+작법 기법 | `작품분석보고서.md`(반전 구간) + `집필기법.md` | 선행 반전 확인 / 반전 분석(단서마다 위치) / 작법 기법 ≥5개 항목 |
+| 5 | 인물+도입·결말 | `작품분석보고서.md`(인물+도입·결말 구간) | 인물 분류+기능 평가 / 도입 분석 / 결말 분석 / 수미상관 |
+| 6 | 종합 평가 | `작품분석보고서.md`(종합 구간) + `_meta.json`(structure_counts 기록) | 다섯 항목 평가 / 폭발력 / 화제성 / 공감 ≥3개 층위 / 주 구조 / 투고 측면 / 재사용 구조(실패 조건 포함) / 리듬 요약 |
 
 ---
 
 ## `_meta.json` schema
 
-`_meta.json` 保存来源字数、题材、时间、阶段进度及结构计数，供续跑与验收使用；分析正文写入 `拆文报告.md`。
+`_meta.json`은 원문 글자 수·소재·시간·단계 진행·구조 집계를 저장해 재개와 검수에 사용한다. 분석 본문은 `작품분석보고서.md`에 쓴다. 아래 키·열거값은 실행 계약이므로 원형을 유지한다. 시간 자리표시자는 실제 기록 시 UTC 시각으로 대체한다.
 
 ```jsonc
 {
   "version": "2.0",
-  "word_count": 5234,                   // 源文字数（Phase 1 Step 2 数出）
-  "genre_detected": "追妻",             // Phase 1 Step 3 题材识别，取值见下方 Step 2 表
-  "created_at": "{ISO8601 时间戳}",      // 拆文启动时间，写入时填当前 UTC
-  "stages_completed": [2, 3, 4, 5],     // 已完成 Stage，按完成顺序 append
-  "last_stage_in_progress": null,       // 当前正在执行的 Stage；空闲为 null
+  "word_count": 5234,                   // 원문 글자 수(Phase 1 Step 2에서 집계)
+  "genre_detected": "追妻",             // Phase 1 Step 3의 소재 판별. 값은 아래 Step 2 표 참조
+  "created_at": "{ISO8601 时间戳}",      // 분석 시작 시각. 기록할 때 현재 UTC 입력
+  "stages_completed": [2, 3, 4, 5],     // 완료한 Stage를 완료 순서대로 append
+  "last_stage_in_progress": null,       // 현재 실행 중인 Stage. 유휴 상태면 null
 
-  "structure_counts": {                 // Stage 6 内容写完时一次性写入；计数照实填，可以为 0
-    "beats": 5,                         // 结构段数（结构划分，含开端/发展/高潮/结局，Stage 2）
-    "hooks": 4,                         // 钩子数（钩子标尺的功能类型，Stage 3）
-    "setup_clues": 3,                   // 反转铺垫线索数（Stage 4）；无反转填 0
-    "character_archetypes": 1,          // 有反差人物数（Stage 5）
-    "reusable_structures": 2,           // 可复用结构条数（Stage 6）
-    "reversal_type": "视角反转"          // 反转类型枚举（视角/身份/动机/时间线/信息/认知/无反转）；甜宠/喜剧/报应型填「无反转」；多层反转取对结局影响最大的一层
+  "structure_counts": {                 // Stage 6 내용 작성 후 한 번에 기록. 실제 수량이며 0 가능
+    "beats": 5,                         // 구조 구간 수(발단/전개/절정/결말 포함, Stage 2)
+    "hooks": 4,                         // 훅 수(훅 기준의 기능 유형, Stage 3)
+    "setup_clues": 3,                   // 반전 사전 단서 수(Stage 4). 반전 없으면 0
+    "character_archetypes": 1,          // 대비가 있는 인물 수(Stage 5)
+    "reusable_structures": 2,           // 재사용 가능한 구조 수(Stage 6)
+    "reversal_type": "视角反转"          // 시점/신분/동기/시간선/정보/인식/반전 없음의 원문 열거값. 달콤한 로맨스·코미디·응보형은 无反转. 다층 반전은 결말 영향이 가장 큰 층
   }
 }
 ```
 
-### 写入顺序（中断后可续）
+### 기록 순서: 중단 후 재개 가능
 
-1. **Stage N 开始前**：`last_stage_in_progress = N`，写盘。
-2. **Stage N 文件写完后**：检查文件非空、新增内容长度合理（如 `拆文报告.md` 新增段 ≥ 200 字）。
-3. **通过**：Stage 2–5 清空 `last_stage_in_progress`，将 `N` 追加到 `stages_completed[]`；Stage 6 须先通过下方验收。
-4. **失败**：`stages_completed` 不动，`last_stage_in_progress` 保留为 `N`。
-5. **Stage 6 内容写完后**：一次性算出 `structure_counts` 并写入 `_meta.json`，再进入验收。
+1. **Stage N 시작 전**: `last_stage_in_progress = N`으로 저장한다.
+2. **Stage N 파일 작성 후**: 파일이 비어 있지 않고 추가 내용의 길이가 적절한지 검사한다(예: `작품분석보고서.md`의 새 구간 ≥ 200자).
+3. **통과**: Stage 2–5는 `last_stage_in_progress`를 비우고 `stages_completed[]`에 `N`을 추가한다. Stage 6은 아래 검수를 먼저 통과해야 한다.
+4. **실패**: `stages_completed`는 바꾸지 않고 `last_stage_in_progress`는 `N`으로 유지한다.
+5. **Stage 6 내용 작성 후**: `structure_counts`를 한 번에 계산해 `_meta.json`에 기록하고 검수로 넘어간다.
 
-### Resume 协议
+### Resume 규약
 
-- `last_stage_in_progress` 非空 → 该 Stage 上次中断，**从头**重跑，不复用半成品；Stage 6 内容已齐、仅验收未过时按下方例外处理。
-- `last_stage_in_progress` 为空且 `stages_completed` 不含 `6` → 从 `max(stages_completed) + 1` 开始；尚无完成阶段时从 Stage 2 开始。
-- `stages_completed` 含 6 → 已完成，只询问用户覆盖或取消。
+- `last_stage_in_progress`가 비어 있지 않으면 해당 Stage가 중단된 것이다. 미완성 산출물을 재사용하지 않고 **처음부터** 다시 실행한다. Stage 6의 내용은 모두 있고 검수만 통과하지 못했으면 아래 예외를 적용한다.
+- `last_stage_in_progress`가 비어 있고 `stages_completed`에 `6`이 없으면 `max(stages_completed) + 1`부터 시작한다. 완료 단계가 없으면 Stage 2부터 시작한다.
+- `stages_completed`에 6이 있으면 완료된 상태다. 사용자에게 덮어쓰기 또는 취소만 묻는다.
 
-**Stage 6 完成须同时满足内容写完与验收通过**。验收未过前，`last_stage_in_progress` 保持 `6`，`stages_completed` 不含 `6`。续跑时若综合段与 `structure_counts` 已完整落盘，只重跑验收；验收发现内容缺失则补足对应产出。
+**Stage 6 완료에는 내용 작성 완료와 검수 통과가 모두 필요하다**. 검수 전에는 `last_stage_in_progress`를 `6`으로 유지하고 `stages_completed`에 `6`을 넣지 않는다. 재개 시 종합 구간과 `structure_counts`가 모두 저장되어 있으면 검수만 다시 실행한다. 검수에서 내용 누락을 찾으면 해당 산출물을 보충한다.
 
 ---
 
-## 验收接入点
+## 검수 연결점
 
-Stage 6 内容写完后、将 `6` 追加到 `stages_completed[]` 前，依次跑三道检查，通过后执行 Step 4：
+Stage 6 내용을 쓴 뒤, `stages_completed[]`에 `6`을 추가하기 전에 세 검사를 순서대로 수행하고 통과하면 Step 4를 실행한다.
 
-### Step 1：拆文报告表达自检
+### Step 1: 분석 보고서 표현 자체 점검
 
-按拆文流程本地加载的报告表达规则检查 `拆文报告.md`，跳过源文引用，只修报告本身的证据不足、空转套话与越界推测。发现问题时暂不将 `6` 追加到 `stages_completed[]`，修订后重扫。成稿去 AI 味由写作流程维护，不在此评判源文是否由 AI 写成。
+분석 절차가 로컬에서 읽은 보고서 표현 규칙으로 `작품분석보고서.md`를 점검한다. 원문 인용은 건너뛰고 보고서 자체의 증거 부족·내용 없는 상투어·범위를 벗어난 추측만 수정한다. 문제가 있으면 아직 `stages_completed[]`에 `6`을 추가하지 않고 수정 후 다시 검사한다. 완성 원고의 AI 문체 제거는 집필 절차에서 관리하며, 여기서는 원문이 AI가 쓴 것인지 판정하지 않는다.
 
-### Step 2：`_meta.json.structure_counts` 校验
+### Step 2: `_meta.json.structure_counts` 검증
 
-计数反映源文实际有多少，不设最低值：源文没有的写 0，并在报告对应段写明「源文没有」。阻断只看字段是否写齐、取值是否合法：
+집계는 원문에 실제로 있는 수량을 반영하며 최솟값을 두지 않는다. 없는 것은 0을 쓰고 보고서 해당 구간에 ‘원문에 없음’을 명시한다. 차단은 필드 완비 여부와 값의 적법성으로만 판단한다. 구조 구간 수 `beats`에는 아래의 별도 기준이 적용된다.
 
-| 字段 | 要求 | 不达标 |
+| 필드 | 요구 사항 | 미달 시 |
 |------|------|--------|
-| `structure_counts.beats` | ≥ 4（结构划分含开端/发展/高潮/结局）| 阻断 |
-| `hooks` / `setup_clues` / `character_archetypes` / `reusable_structures` | 已写入非负整数，与报告对应段一致 | 阻断 |
-| `structure_counts.reversal_type` | 在枚举内（含「无反转」）| 阻断 |
-| `genre_detected` | 追妻、重生复仇、死人文学、小三、世情、豪门、宫斗宅斗、民俗、悬疑、甜宠、双男主、沙雕、仙侠之一，或「通用」 | 阻断 |
+| `structure_counts.beats` | ≥ 4(발단/전개/절정/결말 포함) | 차단 |
+| `hooks` / `setup_clues` / `character_archetypes` / `reusable_structures` | 음이 아닌 정수로 기록하고 보고서 해당 구간과 일치 | 차단 |
+| `structure_counts.reversal_type` | 열거값 범위 안(`无反转` 포함) | 차단 |
+| `genre_detected` | 追妻、重生复仇、死人文学、小三、世情、豪门、宫斗宅斗、民俗、悬疑、甜宠、双男主、沙雕、仙侠 중 하나 또는 `通用` | 차단 |
 
-> 情节节点数不设阈值，按 `情节节点.md` 的语义变化边界提取，不在本表。`beats` 是结构段数，不是情节节点数。
+> 사건 노드 수에는 기준값을 두지 않는다. `사건노드.md`의 의미 변화 경계에 따라 추출하며 이 표에 포함되지 않는다. `beats`는 구조 구간 수이며 사건 노드 수가 아니다.
 
-### Step 3：`story-short-analyze` BLOCK 项扫描
+### Step 3: `story-short-analyze` BLOCK 항목 검사
 
-扫拆文流程本地质量检查清单的全部 `[BLOCK]` 项，确认对应产出均已写出。
-任一缺失 → 阻断。`[WARN]` 项 → 写入拆文报告末尾「待补」清单，不阻断。
+분석 절차의 로컬 품질 점검 목록에서 모든 `[BLOCK]` 항목을 검사하고 해당 산출물이 작성되었는지 확인한다.
+하나라도 누락되면 차단한다. `[WARN]` 항목은 분석 보고서 끝의 ‘보충 필요’ 목록에 기록하고 차단하지 않는다.
 
-### Step 4：通过
+### Step 4: 통과
 
-清空 `_meta.json.last_stage_in_progress`，将 `6` 追加到 `stages_completed[]`，按拆文流程 SKILL 的完成汇报告诉作者。
+`_meta.json.last_stage_in_progress`를 비우고 `stages_completed[]`에 `6`을 추가한다. 분석 절차 SKILL의 완료 보고에 따라 작가에게 알린다.
 
 ---
 
-## 版本约定
+## 버전 규칙
 
-`_meta.json.version` 跟本契约走：字段改名、类型或必填变更升 major，新增可选字段升 minor。
+`_meta.json.version`은 이 계약을 따른다. 필드명·유형·필수 여부 변경은 major를, 선택 필드 추가는 minor를 올린다.

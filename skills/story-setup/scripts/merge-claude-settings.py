@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Merge current story-setup Claude hooks without preserving stale matchers.
+"""오래된 매처를 남기지 않고 현재 story-setup Claude 훅을 병합한다.
 
-Only registrations whose command invokes a known story-setup hook script are
-managed. They are removed from their historical event/matcher block before the
-current template is appended; unrelated hooks and top-level settings survive.
+명령이 알려진 story-setup 훅 스크립트를 호출하는 등록만 관리한다.
+기존 이벤트/매처 블록에서 이를 제거한 뒤 현재 템플릿을 추가한다.
+관련 없는 훅과 최상위 설정은 보존한다.
 """
 
 from __future__ import annotations

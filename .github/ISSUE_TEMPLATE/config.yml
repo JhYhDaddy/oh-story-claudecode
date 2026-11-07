@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 使用问题与流程求助
+  - name: "사용법과 작업 절차 질문"
     url: https://github.com/zenstory-ai/oh-story-claudecode/discussions/categories/q-a
-    about: 不确定如何使用、配置或选择 Skill 时，请先在 Q&A 提问。
-  - name: 社区交流与经验分享
+    about: "스킬 사용법·설정·선택이 불확실하면 먼저 Q&A에 질문해 주세요."
+  - name: "커뮤니티 소통과 경험 공유"
     url: https://github.com/zenstory-ai/oh-story-claudecode/discussions
-    about: 分享工作流、讨论想法或展示作品。
+    about: "작업 흐름을 공유하거나 아이디어를 논의하거나 작품을 소개해 주세요."

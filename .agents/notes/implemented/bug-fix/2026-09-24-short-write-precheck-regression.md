@@ -1,30 +1,30 @@
-# Agent Note: 短篇写前参数验收回归：Phase 3 文件自带命令，交付说明改给作者看
+# Agent Note: 단편 집필 전 매개변수 검수 회귀: Phase 3 파일에 명령을 직접 넣고 전달 보고를 작가 중심으로 변경
 
 Status: implemented
 
 ## Problem
 
-v0.7.10（#402）加了写前参数验收：生成正文前先确认总字数、节数和用户给的逐节下限能同时满足。#418 把 story-short-write 的 Phase 3 / 4 拆到 `workflow-draft.md` / `workflow-revision.md` 后，`workflow-draft.md` 只写「给 Phase 4 的交付命令加 `--check-contract` 先运行」，而命令本体只在 `workflow-revision.md`；`SKILL.md` 又规定 `workflow-revision.md` 到 Phase 4 才读。真实 Claude Code 会话里，模型第 23 次工具调用就写了正文，第 29 次才读 `workflow-revision.md`，全程没跑写前验收；随后花约 40 轮自写 Python 数字数、改稿，才挤进 4000-5000 的范围（落在 4010）。
+v0.7.10(#402)에서는 본문을 생성하기 전에 전체 글자 수, 절 수, 사용자가 정한 절별 최솟값을 동시에 충족할 수 있는지 확인하는 매개변수 검수를 추가했다. #418에서 story-short-write의 Phase 3 / 4를 `workflow-draft.md` / `workflow-revision.md`로 나눈 뒤 `workflow-draft.md`에는 “Phase 4 전달 명령에 `--check-contract`를 추가해 먼저 실행”이라고만 적혔다. 명령 본체는 `workflow-revision.md`에만 있었고 `SKILL.md`는 Phase 4에 가서야 `workflow-revision.md`를 읽도록 했다. 실제 Claude Code 세션에서 모델은 23번째 도구 호출에 본문을 쓰고 29번째에 `workflow-revision.md`를 읽었으며 집필 전 검수는 한 번도 실행하지 않았다. 이후 약 40턴 동안 직접 Python을 작성해 글자 수를 세고 수정한 끝에 4000–5000자 범위에 겨우 들어갔다(4010자).
 
-同一次会话的交付报告逐条列出 `check-phase2-contract.js` 等五个脚本的通过结果和「固定 12 列小节大纲」，作者看到的是工程日志而不是故事。
+같은 세션의 전달 보고는 `check-phase2-contract.js` 등 스크립트 다섯 개의 통과 결과와 “고정 12열 절별 개요”를 나열했다. 작가가 본 것은 이야기가 아니라 개발 로그였다.
 
 ## Decision
 
-- `workflow-draft.md` 的「写前参数验收」自带完整命令 `node {skill 根}/scripts/check-delivery-contract.js --json --check-contract --min-chars {MIN} --max-chars {MAX} --sections {N} [--min-section-chars …] {短篇目录}`，标明在锁定参数后、写 `正文.md` 前必跑，位置在「写前准备」之前。exit 0 只说明参数能同时满足；exit 2 即冲突，停在写前用中文请用户选调整项。
-- 批中测字数改为去掉 `--check-contract` 重跑同一命令，取其非空白字符数作整篇累计值（未写完 exit 1 属正常），各节分布仍用 `short-format.md`「字数统计」；明写不自写 Python 计数。写作中与交付时因此是同一把尺。
-- Phase 4 的最终交付验收仍在 `workflow-revision.md`，不变。
-- `workflow-revision.md` 新增「交付说明（给作者看）」：写了什么（标题、核心钩子或反转、字数、节数）、要作者拍板的事（一句问题附推荐默认）、下一步可选；自查结果收成一句大白话，不写脚本名、检查 ID、字段名、参数或大纲表格格式。交付验收失败也按这份说明告诉作者差在哪里。`workflow-design.md` 的 Phase 2 门禁同理：失败时说设计还缺什么，汇报构思只讲故事与待拍板问题。
-- `scripts/check-reference-gates.js` 钉住：首屏门禁与 Phase 3 / 4 小节分别路由 `workflow-draft.md` / `workflow-revision.md`；`workflow-draft.md` 含带 `--check-contract` 与三项参数的字面命令且位于「写前准备」之前，不再出现「Phase 4 的交付命令」；`workflow-revision.md` 保留不带 `--check-contract` 的最终验收命令。旧版 `workflow-draft.md` 在该守卫下失败。
-- 预算显式上调：`workflow-draft.md` 4600→4750、`workflow-revision.md` 1700→1850、`workflow-design.md` 2350→2400、「短篇执行指令」路径 11500→11950，理由登记在 `scripts/doc-budget.json`。
+- `workflow-draft.md`의 “집필 전 매개변수 검수”에 전체 명령 `node {skill 根}/scripts/check-delivery-contract.js --json --check-contract --min-chars {MIN} --max-chars {MAX} --sections {N} [--min-section-chars …] {短篇目录}`를 넣는다. 매개변수를 고정한 뒤 `正文.md`를 쓰기 전에 반드시 실행하도록 명시하고 “집필 전 준비” 앞에 둔다. exit 0은 매개변수를 동시에 충족할 수 있다는 뜻일 뿐이다. exit 2는 충돌이므로 집필 전에 멈춰 중국어로 조정할 항목을 선택해 달라고 요청한다.
+- 작업 도중 글자 수는 같은 명령에서 `--check-contract`를 빼고 다시 실행한다. 공백 제외 문자 수를 전체 누적값으로 사용하며 미완성 상태의 exit 1은 정상이다. 절별 분포는 계속 `short-format.md`의 “글자 수 집계”를 사용한다. Python 계수기를 직접 작성하지 말라고 명시한다. 이로써 집필 중과 최종 전달에 같은 기준을 쓴다.
+- Phase 4의 최종 전달 검수는 기존대로 `workflow-revision.md`에 둔다.
+- `workflow-revision.md`에 “전달 설명(작가용)”을 추가한다. 작성한 내용(제목, 핵심 훅 또는 반전, 글자 수, 절 수), 작가 결정이 필요한 사항(추천 기본값을 포함한 한 문장 질문), 선택 가능한 다음 단계를 설명한다. 자체 검사 결과는 쉬운 말 한 문장으로 요약하고 스크립트 이름, 검사 ID, 필드 이름, 매개변수, 개요 표 형식을 쓰지 않는다. 전달 검수가 실패해도 이 형식으로 부족한 점을 알린다. `workflow-design.md`의 Phase 2 관문도 실패하면 설계에 무엇이 부족한지 설명하고 구상 보고에는 이야기와 결정할 질문만 담는다.
+- `scripts/check-reference-gates.js`는 첫 화면 관문과 Phase 3 / 4 절이 각각 `workflow-draft.md` / `workflow-revision.md`로 연결되는지 고정한다. `workflow-draft.md`에는 `--check-contract`와 매개변수 세 개를 포함한 실제 명령이 “집필 전 준비” 앞에 있어야 하며 “Phase 4의 전달 명령”이라는 표현은 없어야 한다. `workflow-revision.md`에는 `--check-contract` 없는 최종 검수 명령이 남아야 한다. 이전 `workflow-draft.md`는 이 검사에서 실패한다.
+- 예산을 명시적으로 상향한다. `workflow-draft.md` 4600→4750, `workflow-revision.md` 1700→1850, `workflow-design.md` 2350→2400, “단편 실행 지침” 경로 11500→11950. 사유는 `scripts/doc-budget.json`에 등록한다.
 
 ## Alternatives considered
 
-- **把 `workflow-revision.md` 的读取提前到 Phase 3**——最强理由：一字不增，命令本来就写在那里。否：Phase 3 要多付整份精修细则的上下文，拆分的意义就没了；而且「读 A 文件去找 B 阶段的命令」本身就是这次漏跑的根因。
-- **在 `SKILL.md` 首屏门禁里放命令**——最强理由：入口是唯一保证被读的文件。否：`SKILL.md` 只留路由，命令放进入口会让每个场景（含只构思）都付这段文本；Phase 3 本就要求完整读取 `workflow-draft.md`，放那里足够且位置更贴近动笔时刻。
-- **交付说明只删掉脚本名、不给模板**——最强理由：改动最小、预算最省。否：只禁不立，模型会换成别的工程说法（检查 ID、字段名）；给出三块结构和一句总括范例才能稳定落到作者视角。
+- **`workflow-revision.md`를 Phase 3에서 미리 읽음** — 글자를 늘리지 않아도 명령은 이미 그 파일에 있다. 그러나 Phase 3에서 교정 세부 규칙 전체의 컨텍스트 비용을 부담해 분할 의미가 사라진다. “A 파일을 읽어 B 단계 명령을 찾음” 자체가 이번 누락의 원인이기도 하다.
+- **`SKILL.md` 첫 화면 관문에 명령 배치** — 진입 파일은 유일하게 읽기를 보장할 수 있다. 그러나 `SKILL.md`에는 라우팅만 남기기로 했으며 명령을 넣으면 구상만 하는 상황까지 모두 비용을 부담한다. Phase 3는 원래 `workflow-draft.md` 완독을 요구하므로 그곳이면 충분하고 실제 집필 시점에도 가깝다.
+- **전달 설명에서 스크립트 이름만 제거하고 템플릿은 제공하지 않음** — 변경과 예산이 가장 작다. 그러나 금지만 하면 모델이 검사 ID나 필드 이름 같은 다른 개발 용어로 바꾼다. 세 블록 구조와 한 문장 요약 예시가 있어야 작가 관점을 안정적으로 유지한다.
 
 ## Consequences
 
-- 收益：写前验收有可直接执行的命令且排在动笔前，参数冲突能在写正文前暴露；写作中与交付用同一计数口径，不再靠自写脚本反复数字数；作者收到的交付说明只讲故事、字数、待拍板问题和下一步。
-- 代价：四处预算合计上调约 800 字，每次短篇 Phase 3 / 4 会话多付约 450 字；守卫钉的是命令字面与相对位置，只证明文本在，不证明模型照做，遵从度仍需真实写作回放验证。
-- `short-format.md`「字数统计」的整篇命令仍按码位计数（含换行），与交付口径的非空白字符不同；该命令与 `scripts/test-charcount-portable.sh` 及其他 skill 逐字绑定，本次只在 `workflow-draft.md` 把整篇累计值改走交付验收脚本，未动共享命令。
+- 이점: 집필 전 검수에 바로 실행할 명령이 있으며 집필보다 먼저 배치되어 매개변수 충돌을 본문 작성 전에 발견할 수 있다. 집필 중과 최종 전달에서 같은 계수 기준을 사용하므로 직접 만든 스크립트로 반복 측정하지 않는다. 작가는 이야기, 글자 수, 결정할 질문과 다음 단계만 전달받는다.
+- 비용: 네 예산을 합해 약 800자 올리고 단편 Phase 3 / 4 세션마다 약 450자를 더 부담한다. 검사는 명령 문자와 상대 위치만 고정하므로 텍스트가 있다는 사실만 입증하며 모델의 실행 여부는 입증하지 않는다. 준수율은 실제 집필 기록 재생으로 검증해야 한다.
+- `short-format.md`의 “글자 수 집계” 전체 명령은 여전히 줄바꿈을 포함한 코드 포인트 수를 세며 전달 검수의 공백 제외 문자 수와 다르다. 이 명령은 `scripts/test-charcount-portable.sh` 및 다른 스킬과 문자 단위로 연결되어 있다. 이번에는 `workflow-draft.md`의 전체 누적값만 전달 검수 스크립트를 사용하게 하고 공유 명령은 바꾸지 않았다.

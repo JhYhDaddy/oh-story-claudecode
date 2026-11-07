@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 /**
- * 七猫小说排行榜采集脚本
- *
- * 配合 browser-cdp skill 使用。先启动 Chrome CDP 环境，再运行本脚本。
- * 采集策略：tab 切换男生榜/女生榜和榜单类型，滚动加载后从页面文本解析结构化数据。
- * 输出的榜单 Markdown 格式见 aggregate-rank.js 文件头，聚合按它解析。
- *
- * 用法：
- *   node qimao-rank-scraper.js --channel male --type hot --period day    # 男生大热榜日榜
- *   node qimao-rank-scraper.js --channel male --type hot --period month  # 男生大热榜月榜
- *   node qimao-rank-scraper.js --channel male --type hot --period all    # 日榜+月榜
- *   node qimao-rank-scraper.js --channel female --type new      # 女生新书榜
- *   node qimao-rank-scraper.js --channel all --type all         # 全部采集
- *   node qimao-rank-scraper.js --source library --pages 3       # 书库筛选页：点击量前 3 页新书
- *
- * 前置（排行榜）：
+ * 치마오 소설 순위 수집기. 순위 경로는 browser-cdp로 Chrome CDP를 먼저 시작한다.
+ * 탭으로 남성·여성 및 순위 유형을 바꾸고 스크롤 로딩 후 페이지 텍스트에서 구조화 데이터를 파싱한다.
+ * 출력 Markdown 형식은 aggregate-rank.js 머리 주석을 따른다.
+ * 사용법:
+ *   node qimao-rank-scraper.js --channel male --type hot --period day   # 남성 인기 일간
+ *   node qimao-rank-scraper.js --channel male --type hot --period month # 남성 인기 월간
+ *   node qimao-rank-scraper.js --channel male --type hot --period all   # 일간+월간
+ *   node qimao-rank-scraper.js --channel female --type new             # 여성 신작
+ *   node qimao-rank-scraper.js --channel all --type all                # 전체
+ *   node qimao-rank-scraper.js --source library --pages 3              # 조회순 신작 첫 3페이지
+ * 순위 수집 전 실행:
  *   node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
- * 书库筛选页是服务端渲染，直接走 HTTPS，不需要 Chrome。
+ * 라이브러리 필터는 서버 렌더링이므로 직접 HTTPS를 사용하며 Chrome이 필요 없다.
  */
 
 const fs = require("fs");
@@ -26,7 +22,7 @@ const { ab, sleep, evalJSONBase64, scrollLoad, getArg, localDateStamp, runCli } 
 
 const RANK_URL = "https://www.qimao.com/paihang";
 
-/** 连通性 + 页面就绪自检 */
+/** 연결·페이지 준비 상태 자체 검사. */
 function probePage(port) {
   return evalJSONBase64(
     port,
@@ -53,7 +49,7 @@ const PERIODS = [
 ];
 
 // ---------------------------------------------------------------------------
-// 页面操作
+// 페이지 조작
 // ---------------------------------------------------------------------------
 
 function rankUrl(channelId, rankTypeId, periodId) {
@@ -64,7 +60,7 @@ function rankUrl(channelId, rankTypeId, periodId) {
   return `${RANK_URL}/${channel.path}/${rankType.path}/${period.path}/`;
 }
 
-/** 读取页面实际 active 状态；输出文件标签必须由该状态校验后才能使用。 */
+/** 페이지의 실제 active 상태를 읽고 검증한 뒤에만 출력 파일 레이블로 사용한다. */
 function extractObservedSelection(port) {
   const js = `JSON.stringify((function(){
     function text(selector){var e=document.querySelector(selector);return e?(e.textContent||'').replace(/\\s+/g,'').trim():'';}
@@ -91,9 +87,9 @@ function selectionMatches(observed, channelId, rankTypeId, periodId) {
 }
 
 /**
- * 从 DOM 获取书籍链接。每本书有多个 anchor（排名数字/书名/最近更新），
- * 按 bookId 聚合后取最像书名的文本（非纯数字、非"最近更新"前缀、最长），
- * 否则书名会被排名数字 anchor 覆盖，导致后续按书名回填链接全失败。
+ * DOM에서 작품 링크를 얻는다. 작품에는 순위 숫자·제목·최신 갱신 등 여러 anchor가 있다.
+ * bookId로 묶어 숫자 전용·최근 갱신 접두사를 제외한 가장 긴 텍스트를 제목으로 선택한다.
+ * 그렇지 않으면 숫자 anchor가 제목을 덮어 제목별 링크 보충이 모두 실패한다.
  */
 function extractBookUrls(port) {
   const js = `JSON.stringify((function(){
@@ -113,15 +109,12 @@ function extractBookUrls(port) {
   return evalJSONBase64(port, js) || [];
 }
 
-/**
- * 从页面 innerText 解析结构化书籍数据。
- * 七猫页面文本结构固定：排名→书名→作者→题材→子分类→状态→字数→简介→更新→热度
- */
+/** 페이지 innerText를 구조화 작품 데이터로 파싱한다. 고정 순서는 순위→제목→작가→장르→하위 분류→상태→글자 수→소개→갱신→인기도다. */
 function extractBooksFromText(port) {
   const js =
     "JSON.stringify((()=>{" +
     "var text=document.body.innerText||'';" +
-    // 找到榜单数据起始位置
+    // 순위 데이터 시작 위치를 찾는다.
     "var start=-1;" +
     "['日榜','月榜'].forEach(function(m){if(start<0)start=text.indexOf(m)});" +
     "if(start<0)return[];" +
@@ -130,33 +123,33 @@ function extractBooksFromText(port) {
     "for(var i=0;i<lines.length;i++){" +
     "  var line=lines[i].trim();" +
     "  if(!line)continue;" +
-    // 排行数据结束后的分页器/页脚必须立刻截断；否则“5 / 下一页 / 跳转 / 友情链接”
-    // 会被串成一条字段齐全的假书目。
+    // 순위 뒤 페이지 탐색기·푸터는 즉시 잘라야 한다. 아니면 ‘5 / 下一页 / 跳转 / 友情链接’가
+    // 모든 필드를 갖춘 가짜 작품으로 이어진다.
     "  if(/^(上一页|下一页|跳转|友情链接[:：]?)$/.test(line)){if(cur&&cur.title)books.push(cur);cur=null;break}" +
-    // 排名标记：独立数字 1-99
+    // 순위 표식: 독립 숫자 1–99.
     "  if(/^\\d{1,2}$/.test(line)&&parseInt(line)<100){" +
     "    if(cur&&cur.title)books.push(cur);" +
     "    cur={rank:parseInt(line),title:'',author:'',genre:'',subGenre:'',status:'',words:'',heat:'',update:'',desc:''};" +
     "    fieldIdx=0;continue" +
     "  }" +
     "  if(!cur)continue;" +
-    // 跳过 UI 文字
+    // UI 텍스트 건너뛰기
     "  if(/^(加入书架|立即阅读|蝉联|榜首)/.test(line))continue;" +
-    // 热度
+    // 인기도
     "  var hm=line.match(/([\\d.]+)\\s*万\\s*热度/);" +
     "  if(hm){cur.heat=hm[1]+'万';continue}" +
-    // 最新更新
+    // 최신 갱신
     "  if(line.indexOf('最近更新')===0){cur.update=line.replace(/^最近更新\\s*/,'');continue}" +
-    // 状态
+    // 상태
     "  if(/^(连载中|已完结)$/.test(line)){cur.status=line;continue}" +
-    // 字数
+    // 글자 수
     "  if(/^[\\d.]+万字$/.test(line)){cur.words=line;continue}" +
-    // 按序填充：书名→作者→题材→子分类
+    // 제목→작가→장르→하위 분류 순서로 채운다.
     "  if(fieldIdx===0){cur.title=line;fieldIdx=1;continue}" +
     "  if(fieldIdx===1){cur.author=line;fieldIdx=2;continue}" +
     "  if(fieldIdx===2){cur.genre=line;fieldIdx=3;continue}" +
     "  if(fieldIdx===3){cur.subGenre=line;fieldIdx=4;continue}" +
-    // 其余为简介
+    // 나머지는 소개다.
     "  cur.desc+=(cur.desc?' ':'')+line" +
     "}" +
     "if(cur&&cur.title)books.push(cur);" +
@@ -166,8 +159,8 @@ function extractBooksFromText(port) {
 }
 
 /**
- * 排除分页器等被正文文本解析器误认成的伪书目。
- * 七猫榜单尾部会出现“5 / 下一页”这类纯 UI 文本；有效条目必须同时有正排名、书名和作者。
+ * 본문 파서가 작품으로 오인한 페이지 탐색기 등을 제외한다.
+ * 순위 끝에 ‘5 / 下一页’ 같은 UI가 있으므로 유효 항목에는 양수 순위·제목·작가가 모두 필요하다.
  */
 function isUsableBook(book) {
   return !!(
@@ -272,13 +265,13 @@ function renderMarkdown(ch, rt, period, url, books, rawCount, now = new Date().t
 }
 
 // ---------------------------------------------------------------------------
-// 书库筛选页（--source library）
-// 全部频道 · 30万字以下 · 3天内更新 · 连载中 · 按点击量。页面服务端渲染，Node 直接取 HTML，
-// 不开 Chrome。页面没有热度数字，名次就是点击量页序；只有子分类，主类另查分类页标题。
+// 라이브러리 필터 페이지(--source library).
+// 전체 채널·30만 자 미만·3일 내 갱신·연재·조회순. 서버 렌더링 HTML을 Node가 직접 읽어
+// Chrome을 열지 않는다. 인기도 숫자 없이 조회순 페이지 순서를 쓰며 하위 분류만 있어 주분류는 분류 페이지 제목에서 얻는다.
 // ---------------------------------------------------------------------------
 
 const LIBRARY_ID = "library";
-const LIBRARY_LIST = "全站书库点击新书"; // 带「新书」：聚合时进「新书榜」列
+const LIBRARY_LIST = "全站书库点击新书"; // ‘新书’를 포함해 집계의 신작 순위 열에 넣는다.
 const LIBRARY_HOST = "www.qimao.com";
 const LIBRARY_TITLE_MARKS = ["3天内更新", "30万以下", "连载中"];
 const LIBRARY_SORT = "按点击量";
@@ -297,17 +290,17 @@ const DESKTOP_HEADERS = {
 };
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 
-/** 书库第 page 页。段位依次是频道-主类-子类-字数-更新-?-状态-排序-页码，a 表示不限。 */
+/** 라이브러리 page 페이지. 경로 구간은 채널-주분류-하위분류-글자수-갱신-?-상태-정렬-페이지이며 a는 제한 없음이다. */
 function libraryPageUrl(page) {
   return `https://${LIBRARY_HOST}/shuku/a-a-a-1-1-a-0-click-${page}/`;
 }
 
-/** 只按主类筛选的书库页；它的 <title> 以「{主类}小说-」开头。 */
+/** 주분류만 필터링한 라이브러리 페이지. <title>은 ‘{주분류}小说-’로 시작한다. */
 function categoryUrl(mainId) {
   return `https://${LIBRARY_HOST}/shuku/a-${mainId}-a-a-a-a-a-click-1/`;
 }
 
-/** 校验 --pages：1 到 10 的整数，默认 3。 */
+/** --pages 검증: 1–10 정수, 기본 3. */
 function parseLibraryPages(raw) {
   if (raw === null || raw === undefined) return LIBRARY_DEFAULT_PAGES;
   const text = String(raw).trim();
@@ -319,10 +312,10 @@ function parseLibraryPages(raw) {
 }
 
 /**
- * 取一页 HTML：桌面 UA、不压缩、15 秒超时、最多跟 3 次站内重定向；
- * 跳出 www.qimao.com/shuku/ 或状态码不是 200 都算这一页失败。
- * 七猫的响应头有折行（行首带空格的 content-security-policy 等），Node 默认的严格解析器会
- * 直接报 Parse Error，所以这一个请求放宽头部解析；只读公开页面，不影响别的请求。
+ * HTML 한 페이지: 데스크톱 UA·무압축·15초 제한·사이트 내부 리디렉션 최대 3회.
+ * www.qimao.com/shuku/를 벗어나거나 상태가 200이 아니면 해당 페이지 실패다.
+ * 응답 헤더에는 앞 공백이 있는 content-security-policy 등 접힌 행이 있어 Node의 엄격한 파서가 Parse Error를 낸다.
+ * 이 요청만 헤더 파싱을 완화한다. 공개 페이지 읽기 전용이며 다른 요청에 영향은 없다.
  */
 function fetchQimaoHtml(url, redirects = 3) {
   return new Promise((resolve, reject) => {
@@ -381,14 +374,14 @@ function decodeEntities(text) {
   });
 }
 
-/** 去标签、解实体、压空白：先去标签再解实体，&lt;b&gt; 这样的书名原样保留。
- *  注释和标签反复删到不再变化，再删掉散落的尖括号：「<!<!---->--」这类嵌套、没闭合的写法
- *  删一遍会拼出新的「<!--」。正文里真正的尖括号在源码中都是实体，最后解码才还原，不会误删。 */
+/** 태그 제거→엔티티 해석→공백 압축 순서로 &lt;b&gt; 같은 제목을 보존한다.
+ * 주석·태그를 변화가 없을 때까지 제거한 뒤 남은 꺾쇠를 없앤다. ‘<!<!---->--’ 같은 중첩·미종결 형태는 한 번 제거하면 새 ‘<!--’가 된다.
+ * 실제 본문 꺾쇠는 소스에서 엔티티이므로 마지막 해석 때 복원되어 잘못 삭제되지 않는다. */
 function htmlText(html) {
   let stripped = String(html || "");
   for (let previous = null; stripped !== previous; ) {
     previous = stripped;
-    // 没闭合的注释照 HTML 规则一直注释到结尾
+    // 닫히지 않은 주석은 HTML 규칙대로 끝까지 주석 처리한다.
     stripped = stripped.replace(/<!--[\s\S]*?(?:-->|$)/g, "").replace(/<[^>]*>/g, " ");
   }
   return decodeEntities(stripped.replace(/[<>]/g, "")).replace(/\s+/g, " ").trim();
@@ -402,7 +395,7 @@ function attrValue(attrs, name) {
   return decodeEntities(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);
 }
 
-/** 所有 class 同时含 classNames 的元素（Vue 的 data-v-xxx 属性照常容忍）。 */
+/** classNames를 모두 포함한 요소. Vue의 data-v-xxx 속성도 허용한다. */
 function findByClass(html, classNames, limit = Infinity) {
   const wanted = [].concat(classNames);
   const found = [];
@@ -434,9 +427,9 @@ function normalizeWords(text) {
 }
 
 /**
- * 解析一页书库 HTML。每个 li.qm-cover-text-item 是一本书：
- * .s-tit a（书名、/shuku/{bookId}/）、.s-category（子分类，链接里带主类 id）、
- * .s-status、.s-words-num、.s-desc、.s-author、.s-update-time。
+ * 라이브러리 HTML 한 페이지 파싱. li.qm-cover-text-item 하나가 작품 하나다.
+ * .s-tit a(제목, /shuku/{bookId}/), .s-category(하위 분류, 링크에 주분류 id),
+ * .s-status, .s-words-num, .s-desc, .s-author, .s-update-time.
  */
 function parseShukuPage(html) {
   const source = String(html || "");
@@ -498,7 +491,7 @@ function parseShukuPage(html) {
   };
 }
 
-/** 页面实际生效的筛选必须和文件头写的一致（#340）：标题三项齐全，读得到排序时必须是按点击量。 */
+/** 실제 유효 필터는 파일 머리와 같아야 한다(#340). 제목 세 항목이 완전해야 하며 정렬을 읽을 수 있으면 조회순이어야 한다. */
 function libraryPageProblems(page, requestedPage) {
   const problems = [];
   const missing = LIBRARY_TITLE_MARKS.filter((mark) => !page.title.includes(mark));
@@ -514,7 +507,7 @@ function libraryPageProblems(page, requestedPage) {
   return problems;
 }
 
-/** 主类页 <title>「都市小说-好看的都市小说-…」→「都市」；对不上就返回空串。 */
+/** 주분류 페이지 <title> ‘都市小说-好看的都市小说-…’ → ‘都市’. 맞지 않으면 빈 문자열. */
 function parseCategoryTitle(html) {
   const m = String(html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const title = m ? htmlText(m[1]) : "";
@@ -542,7 +535,7 @@ function summarizeLibraryQuality(books, rawCount, pageProblems) {
     const n = count(pred);
     if (n) problems.push(`${label} ${n} 条`);
   }
-  // 书库页本来就没有热度数字，缺热度不算问题，名次即点击量页序。
+  // 라이브러리는 원래 인기도 숫자가 없으므로 누락이 문제가 아니며 순위는 조회순 페이지 순서다.
   if (books.length < LIBRARY_SPARSE_BELOW) problems.push(`[数据稀疏] 实际采集 ${books.length} 条`);
   return { linked, problems, quality: problems.length ? "[存在问题]" : "[OK]" };
 }
@@ -567,7 +560,7 @@ function renderLibraryMarkdown({ books, rawCount, pages, pagesRead, pageProblems
   ];
   for (const b of books) {
     lines.push(`### #${b.rank} ${b.title}`);
-    // 元信息按位置聚合：作者、题材（主类，取不到时退用子分类）、子分类进标签、状态、字数。
+    // 위치별 메타정보 집계: 작가, 장르(주분류가 없으면 하위 분류), 하위 분류 태그, 상태, 글자 수.
     const meta = [
       metaPart(b.author),
       metaPart(b.genre || b.subGenre),
@@ -586,8 +579,8 @@ function renderLibraryMarkdown({ books, rawCount, pages, pagesRead, pageProblems
 }
 
 /**
- * 翻页采集书库。按 bookId 去重、按首次出现连续编号；某页没有新书就停。
- * 第 1 页失败或一本没采到 → 抛错（不写文件）；后面某页失败 → 保留已采到的页，partial。
+ * 페이지를 넘기며 bookId 중복을 제거하고 첫 등장 순으로 연속 번호를 붙인다. 새 작품이 없는 페이지에서 멈춘다.
+ * 첫 페이지 실패나 수집 0권이면 예외이며 파일을 쓰지 않는다. 이후 페이지 실패면 기존 페이지를 partial로 보존한다.
  */
 async function scrapeLibrary(pages) {
   console.log(`\n→ 采集 七猫${LIBRARY_LIST}（${LIBRARY_FILTER_NOTE}，${LIBRARY_SORT}，前 ${pages} 页）...`);
@@ -646,7 +639,7 @@ async function scrapeLibrary(pages) {
     throw new Error(`书库第 1 页一本书都没解析出来（页面条目 ${invalid} 个），页面可能改版`);
   }
 
-  // 书库页只有子分类；主类按分类页标题查，每个主类 id 本次运行只请求一次。
+  // 라이브러리는 하위 분류만 있다. 주분류는 분류 페이지 제목으로 조회하며 ID당 실행 중 한 번만 요청한다.
   const mainNames = new Map();
   for (const id of new Set(books.map((book) => book.mainId).filter(Boolean))) {
     try {
@@ -670,7 +663,7 @@ async function scrapeLibrary(pages) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -682,7 +675,7 @@ const PERIOD = getArg(args, "--period") || "day";
 const SOURCE = getArg(args, "--source") || "rank";
 const PAGES_ARG = getArg(args, "--pages");
 
-/** 参数是否显式出现过（含 --x=value 写法）；书库模式下用来拒绝排行榜专用参数。 */
+/** --x=value를 포함한 인자 명시 여부. 라이브러리 모드에서 순위 전용 인자를 거부하는 데 쓴다. */
 function hasArg(argv, name) {
   return argv.some((arg) => arg === name || String(arg).startsWith(`${name}=`));
 }
@@ -705,7 +698,7 @@ function scrapeRank(port, channelId, rankTypeId, periodId) {
     ab(port, "open", url);
     sleep(3000);
 
-    // 连通性自检：CDP 未起/被重定向时给可操作报错，而非静默产空
+    // 연결 자체 검사: CDP 미실행·리디렉션 시 빈 출력을 조용히 만들지 않고 대응 가능한 오류를 준다.
     const probe = probePage(port);
     if (!probe) {
       console.error(
@@ -727,11 +720,11 @@ function scrapeRank(port, channelId, rankTypeId, periodId) {
     }
     console.log(`  ✓ 已验证页面实际榜单：${observed.channel}/${observed.rankType}${observed.period ? "/" + observed.period : ""}`);
 
-    // 滚动加载更多
+    // 스크롤해 더 로드한다.
     scrollLoad(port, 5);
     sleep(1000);
 
-    // 文本解析获取书籍数据 + DOM 获取链接
+    // 텍스트로 작품 데이터를 파싱하고 DOM에서 링크를 얻는다.
     const rawBooks = extractBooksFromText(port);
     rawCount = rawBooks.length;
     books = rawBooks.filter(isUsableBook);
@@ -746,7 +739,7 @@ function scrapeRank(port, channelId, rankTypeId, periodId) {
     return null;
   }
 
-  // 按标题匹配 URL（书名归一后比对，吸收空白差异）
+  // 제목을 정규화해 공백 차이를 흡수한 뒤 URL과 맞춘다.
   const norm = (s) => (s || "").replace(/\s+/g, "");
   for (const b of books) {
     try {
@@ -765,7 +758,7 @@ function scrapeRank(port, channelId, rankTypeId, periodId) {
 }
 
 function buildTargets(channel, rankType, period, source = "rank") {
-  // 书库只有一个目标：全站一份，不进 --type all（它不需要 Chrome，筛选也和排行榜无关）。
+  // 라이브러리는 사이트 전체 하나가 유일한 대상이며 --type all에 넣지 않는다. Chrome 불필요, 순위와 무관한 필터를 사용한다.
   if (source === LIBRARY_ID) return [{ channel: "all", rankType: LIBRARY_ID, period: null }];
   const channels = channel === "all" ? CHANNELS.map((item) => item.id) : [channel];
   const rankTypes = rankType === "all" ? RANK_TYPES.map((item) => item.id) : [rankType];
@@ -793,7 +786,7 @@ function outputFilename(channelId, rankTypeId, periodId, date) {
   return `七猫${channel.label}${rankType.label}${period ? period.label : ""}_${date}.md`;
 }
 
-/** 参数全部在联网、开浏览器之前校验；返回本次要采的目标与书库页数。 */
+/** 네트워크·브라우저 실행 전에 모든 인자를 검증하고 대상·라이브러리 페이지 수를 반환한다. */
 function resolvePlan() {
   if (SOURCE !== "rank" && SOURCE !== LIBRARY_ID) {
     throw new Error(`未知 --source: ${SOURCE}（rank / ${LIBRARY_ID}）`);
@@ -831,7 +824,7 @@ async function main() {
   for (const target of targets) {
     let content;
     if (target.rankType === LIBRARY_ID) {
-      // 书库一次只有一个目标：整份失败直接抛错（exit 1，不写文件），页级失败带回 partialReasons。
+      // 라이브러리는 대상 하나다. 전체 실패는 예외(exit 1, 파일 미작성), 페이지별 실패는 partialReasons에 담는다.
       const library = await scrapeLibrary(pages);
       content = library.content;
       partialReasons.push(...library.partialReasons);

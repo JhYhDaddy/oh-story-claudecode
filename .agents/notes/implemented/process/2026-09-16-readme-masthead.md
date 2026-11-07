@@ -1,26 +1,26 @@
-# Agent Note: README 头部统一为居中 masthead
+# Agent Note: README 머리말을 중앙 정렬 형식으로 통일
 
 Status: implemented
 
 ## Problem
 
-六个仓库的 README 头部各不相同：标题有的用仓库 slug，徽章从 0 枚到 4 枚不等且风格混杂（Actions 徽章、social 样式、flat 样式并存），社区入口只有旗舰仓库有一个 Telegram 且埋在正文末尾。读者打开任何一个仓库，前一屏都看不出这是谁的项目、活不活跃、去哪提问。
+저장소 여섯 곳의 README 머리말이 제각각이었다. 일부 제목은 저장소 슬러그였고 배지는 0~4개로 개수도 다르며 Actions·social·flat 스타일이 섞여 있었다. 커뮤니티 진입점은 대표 저장소에만 Telegram 하나가 있었고 그것도 본문 끝에 묻혀 있었다. 어느 저장소를 열어도 첫 화면만으로는 누구의 프로젝트인지, 활동 중인지, 어디서 질문해야 하는지 알기 어려웠다.
 
 ## Decision
 
-六个仓库的两份 README 共用同一个居中 masthead，顺序固定：品牌标记（76px，引用 `https://raw.githubusercontent.com/zenstory-ai/zenstory/main/apps/web/public/brand/zenstory-ai-mark.svg`；2026-10-29 起不再引用 zenstory.ai 上的副本：GitHub 图片代理在每次 README 浏览时回源，占 Vercel CDN 请求约 16%）、`<h1>` 产品名、一句加粗的话、一行导航（项目主页 · 两个正文锚点 · 另一种语言）、一行 flat-square 徽章、一行 for-the-badge 社区按钮。徽章统一 flat-square 并使用品牌色：star 数 `#22D3EE`，Release 与计数 `#081431`，License `#1F6FEB`。核心四项是 Stars、Release、项目规模（Skills N 或 Workbenches N）、License；仓库特有的运行事实（Python 版本、CI、Validate、MiMo）接在其后。产品名用站点上的名字，不用仓库 slug。
+여섯 저장소의 두 언어 README는 동일한 중앙 정렬 머리말을 사용하며 순서를 고정한다. 브랜드 마크(76px, `https://raw.githubusercontent.com/zenstory-ai/zenstory/main/apps/web/public/brand/zenstory-ai-mark.svg` 참조; 2026-10-29부터 zenstory.ai 사본을 참조하지 않는다. GitHub 이미지 프록시가 README 조회마다 원본을 요청하여 Vercel CDN 요청의 약 16%를 차지했기 때문이다), `<h1>` 제품명, 굵은 한 문장, 탐색 링크 한 줄(프로젝트 홈페이지 · 본문 앵커 두 개 · 다른 언어), flat-square 배지 한 줄, for-the-badge 커뮤니티 버튼 한 줄 순이다. 배지는 flat-square와 브랜드 색상으로 통일한다. 별 수는 `#22D3EE`, Release와 개수는 `#081431`, License는 `#1F6FEB`이다. 핵심 네 항목은 Stars·Release·프로젝트 규모(Skills N 또는 Workbenches N)·License이며 저장소별 실행 정보(Python 버전·CI·Validate·MiMo)는 그 뒤에 놓는다. 제품명은 저장소 슬러그가 아니라 사이트의 이름을 사용한다.
 
 ## Alternatives considered
 
-- **像 hypit 那样给每个产品做带字的 logo 图当标题**。最强理由：图片字标的视觉密度远高于文字，一眼能认出品牌。被否：六个产品要六张字标，是一次完整的设计工作，超出这次改动的范围；文字 `<h1>` 还能被搜索、目录和读屏软件读到。
-- **把 logo 文件复制进每个仓库**。最强理由：不依赖外部站点，fork 和离线渲染都正常。被否：六份副本以后换标要改六处；已实测 GitHub 的 camo 代理能正确返回 zenstory.ai 上的这个 SVG。
+- **hypit처럼 제품마다 글자가 포함된 로고 이미지를 제목으로 사용**. 가장 큰 장점은 이미지 워드마크의 시각적 밀도가 글자보다 훨씬 높아 브랜드를 한눈에 알아볼 수 있다는 점이다. 그러나 제품 여섯 개의 워드마크 여섯 개를 만드는 것은 별도 디자인 작업으로 이번 범위를 벗어난다. 텍스트 `<h1>`은 검색·목차·스크린 리더에서도 읽을 수 있다.
+- **로고 파일을 각 저장소에 복사**. 외부 사이트에 의존하지 않아 포크와 오프라인 렌더링도 정상 작동한다는 점이 가장 큰 장점이다. 그러나 로고를 바꿀 때 사본 여섯 곳을 수정해야 한다. GitHub camo 프록시가 zenstory.ai의 이 SVG를 정상 반환하는 것도 실제로 확인했다.
 
 ## Consequences
 
-- 收益：六个仓库第一屏一致，star、版本、规模、许可和提问入口都在固定位置；换品牌标记只改线上一个文件。
-- 代价：logo 依赖 zenstory.ai 可访问；GitHub 给 `<h1>` 的下边框去不掉，标题与副标题之间会留一条横线。
-- 本仓库顺带的取舍：无。
+- 이점: 여섯 저장소의 첫 화면이 같아지고 별 수·버전·규모·라이선스·질문 진입점이 고정 위치에 놓인다. 브랜드 마크 변경 시 온라인 파일 하나만 바꾸면 된다.
+- 비용: 로고는 zenstory.ai 접근 가능 여부에 의존한다. GitHub가 `<h1>`에 붙이는 하단 테두리는 없앨 수 없어 제목과 부제 사이에 가로선이 남는다.
+- 이 저장소에서 추가로 한 선택: 없음.
 
-## Verification
+## 검증
 
-27 个徽章 URL 逐个请求，全部返回 200 且标签正确（含 star 数、Release tag、CI/Validate 状态）；masthead 经 GitHub 官方 markdown 接口渲染，浅色与深色主题下目视确认。
+배지 URL 27개를 하나씩 요청해 모두 200을 반환하고 라벨도 올바른지 확인했다(별 수·Release 태그·CI/Validate 상태 포함). 머리말은 GitHub 공식 Markdown 인터페이스로 렌더링하고 밝은·어두운 테마에서 육안으로 확인했다.

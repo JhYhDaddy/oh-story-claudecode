@@ -1,6 +1,6 @@
 #!/bin/sh
-# Project-local Codex hook launcher. hooks.json locates this file; this script owns
-# interpreter probing and event dispatch so six hook registrations do not duplicate it.
+# 프로젝트 로컬 Codex 훅 실행기. hooks.json이 이 파일을 찾으며 이 스크립트가
+# 인터프리터 탐색과 이벤트 분배를 담당해 훅 등록 6개에 중복하지 않게 한다.
 set -eu
 
 EVENT="${1:-}"

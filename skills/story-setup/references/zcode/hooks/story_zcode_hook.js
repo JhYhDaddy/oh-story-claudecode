@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 "use strict"
 
-// ZCode hook adapter for oh-story writing projects. It has no third-party
-// dependencies and emits only fields accepted by ZCode 3.3.4's strict hook
-// output schema. Diagnostics go to stderr; a healthy no-op keeps stdout empty.
+// oh-story용 ZCode 훅 어댑터. 서드파티 의존성이 없으며
+// ZCode 3.3.4의 엄격한 출력 schema가 허용하는 필드만 내보낸다.
+// 진단은 stderr, 정상적인 무작업은 빈 stdout을 유지한다.
 
 const fs = require("node:fs")
 const path = require("node:path")
@@ -101,7 +101,7 @@ function sessionStart() {
   }
   const book = discoverActiveBook(root)
   if (book) {
-    const context = path.join(book, "追踪", "上下文.md")
+    const context = path.join(book, "추적", "문맥.md")
     if (fs.existsSync(context)) {
       messages.push(`[story context] 当前书目：${safeRelative(root, book)}。继续长篇写作前先读取 ${safeRelative(root, context)}。`)
     } else {
@@ -197,8 +197,8 @@ function main() {
       process.exitCode = 2
     }
   } catch (error) {
-    // Hook checks are defensive guardrails. Unexpected parse/filesystem failures
-    // fail open and are diagnosable without corrupting strict stdout JSON.
+    // 훅 검사는 방어적 보호 장치다. 예상 밖 파싱·파일시스템 실패는
+    // 허용으로 처리하며 엄격한 stdout JSON을 손상시키지 않고 진단할 수 있다.
     process.stderr.write(`[oh-story zcode hook] ${error instanceof Error ? error.message : String(error)}\n`)
   }
 }

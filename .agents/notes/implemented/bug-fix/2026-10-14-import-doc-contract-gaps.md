@@ -1,45 +1,45 @@
-# Agent Note: 导入文档对齐现有脚本与拆文产物
+# Agent Note: 가져오기 문서를 기존 스크립트·작품 분석 산출물에 맞추기
 
 Status: implemented
-Related: [导入按时刻加载](../../implemented/architecture/2026-09-26-import-by-moment.md)
+Related: [가져오기 자료를 시점별로 로드](../../implemented/architecture/2026-09-26-import-by-moment.md)
 
 ## Problem
 
-导入流程的分时刻设计已落地，但部分说明仍与当前实现冲突：收尾自检要求尚未执行的激活项已完成；角色快照误写列表最多 8 条，并要求扩大范围后重新初始化已有状态；短篇结构分段、铺垫与情绪强度的来源写错；长篇迁移后半段又无条件阻断前文允许复用的旧成果。
+가져오기 흐름의 시점별 설계는 구현되었지만 일부 설명이 현재 구현과 충돌했다. 마무리 자체 검사는 아직 실행하지 않은 활성화 항목도 완료되어야 한다고 요구했다. 인물 스냅샷 목록을 최대 8개로 잘못 설명했고 범위를 확대하면 기존 상태를 재초기화하도록 요구했다. 단편의 구조 분할·밑작업·감정 강도 출처가 잘못되었고 장편 이전의 후반부는 앞에서 재사용을 허용한 기존 결과까지 무조건 차단했다.
 
 ## Decision
 
-依据 `tracking_commit.py`、`build_outline_brief.py` 与长短篇拆文的现有输出契约，文档明确收尾自检只查此前进度，快照列表按字节限制，分批分析完成后只初始化一次。短篇的结构划分取自拆文报告，铺垫取自反转分析，情绪强度区分两套量表；长篇迁移统一旧成果兼容范围。篇幅分流以作者声明直接锁定；未声明时的信号冲突在既有 Phase 1 确认中处理，并补全少于 5 章时的字数兜底。命令、字段、编号与机械门禁保留，脚本不变。
+`tracking_commit.py`, `build_outline_brief.py`, 기존 장편·단편 분석 출력 계약에 따라 마무리 자체 검사는 이전까지의 진행만 확인하고 스냅샷 목록은 바이트로 제한하며 배치 분석 완료 후 한 번만 초기화한다고 명확히 한다. 단편 구조 분할은 분석 보고서, 밑작업은 반전 분석에서 가져오고 감정 강도는 두 척도를 구분한다. 장편 이전에서는 기존 결과의 호환 범위를 통일한다. 분량 경로는 작가가 선언하면 바로 확정한다. 선언이 없을 때의 신호 충돌은 기존 Phase 1 확인에서 처리하고 5장 미만일 때의 글자 수 대체 기준을 보완한다. 명령·필드·번호·기계적 검사와 스크립트는 유지한다.
 
-短篇迁移保存已有内容与续写基线，不再承诺直接通过写作侧构思检查；未来设计仍由写作 skill 的现有流程补齐。格式参考允许有依据的情绪起伏，标点默认服从已有的书级文风覆盖规则。两份共享追踪参考只记录建议，留待其真源批次处理。
+단편 이전은 기존 내용과 이어쓰기 기준을 보존하지만 집필 측 구상 검사를 바로 통과한다고 보장하지 않는다. 이후 설계는 집필 스킬의 기존 흐름으로 보완한다. 형식 참조는 근거 있는 감정 기복을 허용하고 문장부호는 기본적으로 기존 작품별 문체 우선 규칙을 따른다. 공유 추적 참조 두 개에는 제안만 기록하고 원본 처리 차례를 기다린다.
 
 ## Alternatives considered
 
-- 只润色语句，改动最小；但会保留会让执行者自锁或取不到数据的指令，因此同步修复可核实的说明错误。
-- 改脚本迁就旧说明，可以保留旧文档；但现有脚本和上下游契约已经一致，无需扩大实现范围。
+- 문장만 다듬으면 변경이 가장 적다. 그러나 실행자가 스스로 막히거나 데이터를 얻지 못하는 지침이 남으므로 확인 가능한 설명 오류도 함께 고친다.
+- 스크립트를 옛 설명에 맞추면 기존 문서를 유지할 수 있다. 그러나 현재 스크립트와 상하위 계약이 이미 일치하므로 구현 범위를 넓힐 필요가 없다.
 
 ## Consequences
 
-收益是导入说明能够按现有实现执行，续写所需的资料来源更明确。代价是维护时必须同时核对上游产物与本 skill 的迁移说明；两份共享追踪参考已随 long-write 真源批次整理并同步，维护时仍须遵循唯一源。
+가져오기 설명을 기존 구현대로 실행할 수 있고 이어쓰기에 필요한 자료 출처가 더 명확해진다. 대신 유지보수 시 상위 산출물과 이 스킬의 이전 설명을 함께 대조해야 한다. 공유 추적 참조 두 개는 long-write 원본 처리에서 정리·동기화되었으며 앞으로도 유일한 원본을 따라야 한다.
 
-## Coverage
+## 검토 범위
 
-15份文档均已完整通读并顺序完成五步；两份共享追踪资料随long-write真源批次修改并同步，当前记录已复核并完成同步的结果。
+문서 15개를 모두 읽고 다섯 단계를 순서대로 완료했다. 공유 추적 자료 두 개는 long-write 원본 처리에서 수정·동기화했으며 현재 기록은 재검토와 동기화를 완료한 결과다.
 
-| 文件 | 五步审查 | 结果 |
+| 파일 | 다섯 단계 검토 | 결과 |
 |---|---|---|
-| `SKILL.md` | 1→5 完成 | 已修改 |
-| `references/character-state-reverse.md` | 1→5 完成 | 已修改 |
-| `references/deep-analysis.md` | 1→5 完成 | 已修改 |
-| `references/format-and-structure.md` | 1→5 完成 | 已修改 |
-| `references/import-report.md` | 1→5 完成 | 已修改 |
-| `references/import-special-cases.md` | 1→5 完成 | 已修改 |
-| `references/import-tracking.md` | 1→5 完成 | 已修改 |
-| `references/length-routing.md` | 1→5 完成 | 已修改 |
-| `references/outline-reverse-rules.md` | 1→5 完成 | 已修改 |
-| `references/outline-reverse.md` | 1→5 完成 | 已修改 |
-| `references/state-tracking.md` | 1→5 完成 | 已修改 |
-| `references/structure-mapping-long.md` | 1→5 完成 | 已修改 |
-| `references/structure-mapping-short.md` | 1→5 完成 | 已修改 |
-| `references/tracking-initialization.md` | 1→5 完成 | 共享真源批次处理 |
-| `references/tracking-transaction.md` | 1→5 完成 | 共享真源批次处理 |
+| `SKILL.md` | 1→5 완료 | 수정 완료 |
+| `references/character-state-reverse.md` | 1→5 완료 | 수정 완료 |
+| `references/deep-analysis.md` | 1→5 완료 | 수정 완료 |
+| `references/format-and-structure.md` | 1→5 완료 | 수정 완료 |
+| `references/import-report.md` | 1→5 완료 | 수정 완료 |
+| `references/import-special-cases.md` | 1→5 완료 | 수정 완료 |
+| `references/import-tracking.md` | 1→5 완료 | 수정 완료 |
+| `references/length-routing.md` | 1→5 완료 | 수정 완료 |
+| `references/outline-reverse-rules.md` | 1→5 완료 | 수정 완료 |
+| `references/outline-reverse.md` | 1→5 완료 | 수정 완료 |
+| `references/state-tracking.md` | 1→5 완료 | 수정 완료 |
+| `references/structure-mapping-long.md` | 1→5 완료 | 수정 완료 |
+| `references/structure-mapping-short.md` | 1→5 완료 | 수정 완료 |
+| `references/tracking-initialization.md` | 1→5 완료 | 공유 원본 처리에서 완료 |
+| `references/tracking-transaction.md` | 1→5 완료 | 공유 원본 처리에서 완료 |

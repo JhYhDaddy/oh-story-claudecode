@@ -1,8 +1,8 @@
 ---
-description: 短篇网文扫榜，分析盐言、七猫、黑岩、点众等平台趋势。
+description: 단편 웹소설 순위 조사. 옌옌·치마오·헤이옌·뎬중 등의 추세를 분석한다.
 skills: story-short-scan
 ---
 
-调用 `$story-short-scan` 执行短篇榜单与市场调研。
+`$story-short-scan`을 호출하여 단편 순위·시장 조사를 수행한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

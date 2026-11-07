@@ -1,4 +1,4 @@
-"""Publishing-preparation regressions; no host CLI, network or third-party packages."""
+"""게시 준비 회귀 검사. 호스트 CLI, 네트워크, 외부 패키지를 사용하지 않는다."""
 
 import importlib.util
 import os
@@ -70,7 +70,7 @@ LONG = """> 格式版本：1
 
 ## 来源说明
 
-设定/题材定位.md；番茄长篇参考。
+설정/소재방향.md；番茄长篇参考。
 """
 
 SHORT = LONG.replace("> 作品类型：长篇", "> 作品类型：短故事").replace(
@@ -140,7 +140,7 @@ class ContractTests(unittest.TestCase):
 
 class PlatformRuleTests(unittest.TestCase):
     def test_reading_tags_follow_audience(self):
-        self.assertTrue(errors(LONG.replace("主分类：都市日常", "主分类：豪门总裁")))  # 女频候选
+        self.assertTrue(errors(LONG.replace("主分类：都市日常", "主分类：豪门总裁")))  # 여성향 후보.
         self.assertTrue(errors(LONG.replace("- 主题：", "- 主题：仕途、天灾、谍战")))
         self.assertTrue(errors(LONG.replace("目标读者：男频", "目标读者：")))
 
@@ -181,7 +181,7 @@ class PlatformRuleTests(unittest.TestCase):
             self.assertEqual({key: (len(values), limit) for key, (values, limit) in options.items()}, groups, name)
 
     def test_no_bundled_images(self):
-        # Evidence screenshots stay in docs/; skill copies are deployed into every project.
+        # 근거 스크린샷은 docs/에 두며 스킬 사본은 모든 프로젝트에 배포된다.
         self.assertEqual(list((ROOT / "skills/story-publish").rglob("*.png")), [])
 
 

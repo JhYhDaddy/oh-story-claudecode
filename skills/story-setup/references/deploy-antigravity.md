@@ -1,50 +1,50 @@
-# Google Antigravity 部署
+# Google Antigravity 배포
 
-`target_cli` 含 `antigravity` 时，由 SKILL.md Phase 2 完整读取并依次执行本文件。路径检查、幂等重跑、残留清理、部署标记、模板占位符和报告遵循 SKILL.md 的公共规则。`references/antigravity/` 提供 Always-On Rule、named-group hooks 与 I/O adapter；写后 findings 经 session artifact 交给 PreInvocation/Stop。
+`target_cli`에 `antigravity`가 있으면 SKILL.md Phase 2에서 이 파일을 전부 읽고 순서대로 실행한다. 경로 검사·멱등 재실행·잔여물 정리·배포 표식·템플릿 자리표시자·보고는 SKILL.md의 공통 규칙을 따른다. `references/antigravity/`는 Always-On Rule·named-group 훅·I/O 어댑터를 제공한다. 쓰기 후 발견 사항은 세션 산출물로 PreInvocation/Stop에 전달한다.
 
-## 部署清单（机械可检查）
+## 배포 목록(기계적 검사 가능)
 
 | Source path | Target path | Owner class | Merge mode | Validation check |
 |-------------|-------------|-------------|------------|------------------|
-| current package skill root + `scripts/deploy-antigravity-skills.py` | `.agents/skills/{browser-cdp,story*}/` | story-setup managed for 14 known skill names | atomically replace known dirs; preserve unknown skills; never write through symlink | 14 real skill directories with valid `SKILL.md` exist |
-| `skills/story-setup/scripts/generate-antigravity-agents.mjs` + Claude agent sources | `.agents/agents/agent-name/agent.md`（`agent-name` 为实际名称） | story-setup managed for 7 known agent definitions | generate then atomically replace known definitions; preserve unknown user agents | 7 Markdown agents parse; exact Antigravity tool names; `mainAgent: false`, `subagent: true` |
-| `skills/story-setup/references/antigravity/rules/oh-story.md` | `.agents/rules/oh-story.md` | story-setup managed | replace | `trigger: always_on`; under 12,000 characters |
-| `skills/story-setup/references/antigravity/hooks/hooks.json` | `.agents/hooks.json` | user+managed | replace only top-level `oh-story` group | valid Antigravity named-group schema; user groups preserved; idempotent |
-| `skills/story-setup/references/antigravity/hooks/{story_antigravity_hook.js,story_hook_core.js}` | `.agents/hooks/` same names | story-setup managed | replace | Node syntax valid; core byte-identical to shared source; hook contract tests pass |
-| `skills/story-setup/scripts/merge-antigravity-hooks.py` | deployment helper only | story-setup helper | execute | atomically replaces only `oh-story`, preserves user groups, idempotent |
+| 현재 패키지 스킬 루트 + `scripts/deploy-antigravity-skills.py` | `.agents/skills/{browser-cdp,story*}/` | 알려진 스킬명 14개는 story-setup 관리 | 알려진 디렉터리 원자 교체, 미지 스킬 보존, symlink를 따라 쓰지 않음 | 유효한 `SKILL.md`가 있는 실제 디렉터리 14개 |
+| `skills/story-setup/scripts/generate-antigravity-agents.mjs` + Claude 에이전트 원본 | `.agents/agents/agent-name/agent.md`(`agent-name`은 실제 이름) | 알려진 정의 7개는 story-setup 관리 | 생성 후 알려진 정의 원자 교체, 미지 사용자 에이전트 보존 | Markdown 에이전트 7개 해석 가능, 정확한 Antigravity 도구명, `mainAgent: false`, `subagent: true` |
+| `skills/story-setup/references/antigravity/rules/oh-story.md` | `.agents/rules/oh-story.md` | story-setup 관리 | 교체 | `trigger: always_on`, 12,000자 미만 |
+| `skills/story-setup/references/antigravity/hooks/hooks.json` | `.agents/hooks.json` | user+managed | 최상위 `oh-story` 그룹만 교체 | Antigravity named-group schema 유효, 사용자 그룹 보존, 멱등 |
+| `skills/story-setup/references/antigravity/hooks/{story_antigravity_hook.js,story_hook_core.js}` | `.agents/hooks/`의 같은 이름 파일 | story-setup 관리 | 교체 | Node 구문 유효, core가 공유 원본과 바이트 동일, 훅 계약 테스트 통과 |
+| `skills/story-setup/scripts/merge-antigravity-hooks.py` | 배포 helper 전용 | story-setup helper | 실행 | `oh-story`만 원자 교체, 사용자 그룹 보존, 멱등 |
 
-## 部署 Antigravity Agents
+## Antigravity 에이전트 배포
 
-- 先确认 `node` 在 PATH；Antigravity agent 生成与项目 hooks 都依赖 Node。缺失时停止 Antigravity 这一目标的部署，不留下半成品，并提示安装 Node 后重跑。
-- Agent 正文以 Claude Code Markdown 为真源。`.agents/agents/agent-name/agent.md`（`agent-name` 为实际名称）在部署时调用随 story-setup 下发的 `scripts/generate-antigravity-agents.mjs`，把 Claude 工具名、模型档、reference 根和调用术语确定性转换为 Antigravity 2.0 契约；不得把 Claude frontmatter 原样复制过去。
-- 执行 `node "{story-setup skill目录}/scripts/generate-antigravity-agents.mjs" --source "{story-setup skill目录}/references/templates/agents" --dest "{项目}/.agents/agents"`。生成器先渲染全部 7 个 agent，再原子替换这 7 个已知 `.agents/agents/agent-name/agent.md` 定义（`agent-name` 为实际名称），并清理旧版同名扁平 `.md`；保留其他用户 agent，任一源 frontmatter 异常时不得留下半更新目录，也不得沿 managed agent symlink 写出项目外。
-- 校验 7 个 `.md`：`name` 与父目录 `agent-name` 一致；`mainAgent: false`、`subagent: true`；模型只使用 `flash` / `pro`；工具只来自 Antigravity 官方名称 `view_file`、`find_by_name`、`grep_search`、`write_to_file`、`replace_file_content`、`multi_replace_file_content`、`run_command`；不得残留 Claude 的 `Read/Glob/Grep/Write/Edit/Bash` 工具名或 `.claude/skills/` reference 前缀。Antigravity 只使用当前规范前缀 `.agents/skills/`。
-- 只读 agent（`consistency-checker`、`story-explorer`）不得包含写文件或命令工具；`chapter-extractor` 只有读取与写文件、无命令工具；其他 agent 按 Claude 真源的能力边界映射。
-- Antigravity 通过 `invoke_subagent` 的 `TypeName` 调用这些 agent。部署后新开 Antigravity conversation，再用 `story-review` 验证 full/lean；运行时无法解析某个 custom agent 时按 skill 的 solo/direct fallback 执行。
+- PATH에서 `node`를 먼저 확인한다. 에이전트 생성과 프로젝트 훅이 모두 Node에 의존한다. 없으면 Antigravity 대상 배포를 멈추고 반제품을 남기지 않으며 Node 설치 후 재실행을 안내한다.
+- Claude Code Markdown이 에이전트 본문 원본이다. 배포 시 story-setup의 `scripts/generate-antigravity-agents.mjs`가 `.agents/agents/agent-name/agent.md`(`agent-name`은 실제 이름)를 만든다. Claude 도구명·모델 등급·참조 루트·호출 용어를 Antigravity 2.0 계약으로 결정적으로 변환한다. Claude frontmatter를 그대로 복사하지 않는다.
+- `node "{story-setup skill目录}/scripts/generate-antigravity-agents.mjs" --source "{story-setup skill目录}/references/templates/agents" --dest "{项目}/.agents/agents"`를 실행한다. 생성기는 7개를 모두 렌더링한 뒤 알려진 `.agents/agents/agent-name/agent.md` 7개를 원자 교체하고 구형 동명 평면 `.md`를 정리한다. 다른 사용자 에이전트는 보존한다. 어떤 원본의 frontmatter라도 잘못되면 일부만 갱신한 디렉터리를 남기지 않으며 관리 에이전트 symlink를 따라 프로젝트 밖에 쓰지 않는다.
+- `.md` 7개를 검증한다. `name`이 부모 `agent-name`과 일치하고 `mainAgent: false`·`subagent: true`여야 한다. 모델은 `flash` / `pro`만, 도구는 공식 `view_file`·`find_by_name`·`grep_search`·`write_to_file`·`replace_file_content`·`multi_replace_file_content`·`run_command`만 사용한다. Claude의 `Read/Glob/Grep/Write/Edit/Bash`나 `.claude/skills/` 접두사가 남으면 안 된다. Antigravity는 현재 표준 `.agents/skills/`만 쓴다.
+- 읽기 전용 `consistency-checker`·`story-explorer`에는 쓰기·명령 도구가 없어야 한다. `chapter-extractor`는 읽기·파일 쓰기만 있고 명령 도구가 없다. 나머지는 Claude 원본의 기능 경계에 따라 대응한다.
+- Antigravity는 `invoke_subagent`의 `TypeName`으로 호출한다. 배포 뒤 새 Antigravity 대화를 열고 `story-review`로 full/lean을 확인한다. 실행 중 custom agent를 찾지 못하면 스킬의 solo/direct fallback으로 수행한다.
 
-## Antigravity 部署算法
+## Antigravity 배포 알고리즘
 
-Antigravity 2.0 使用项目 `.agents/` customization 根，部署时创建 `.agents/skills`、`.agents/agents`、`.agents/rules`、`.agents/hooks` 并合并 `.agents/hooks.json`。部署 Skills、Always-On Rule、7 个 custom subagents 与 workspace Hooks；不修改用户 home 下的 `~/.gemini/`。
+Antigravity 2.0은 프로젝트 `.agents/`를 customization 루트로 쓴다. `.agents/skills`·`.agents/agents`·`.agents/rules`·`.agents/hooks`를 만들고 `.agents/hooks.json`을 병합한다. Skills·Always-On Rule·custom subagents 7개·workspace Hooks를 배포하며 사용자 home의 `~/.gemini/`는 수정하지 않는다.
 
-1. 找到当前 skill 包的 14 个已知 skill 目录（`browser-cdp` 与 `story*`），调用 `deploy-antigravity-skills.py --source "{当前 skill 包根}" --dest "{项目}/.agents/skills"` 原子物化。helper 只替换 14 个已知名称、保留用户其他 skills，并在源目标同一 realpath 时 no-op。目标必须是**真实目录**，不要新建顶层 `.agents/skills → ../skills` symlink：Antigravity 2.0 项目部署以真实目录作为受支持路径。
-   - 若已有 `.agents/skills` 是 symlink，helper 必须先停止且不沿链接写入。用 AskUserQuestion 说明：迁移会把链接当前可见的所有 skills 复制到新的项目内真实目录、只更新 14 个 oh-story 名称、保留链接目标原样，但会把 symlink 本身替换成目录；这可能形成较大的 git diff。只有用户明确同意后才加 `--migrate-symlink` 重跑，拒绝则停止 Antigravity 部署并报告未获得完整支持。这个确认不得被“多端部署”或已有 Codex symlink 跳过。
-2. 按上方「部署 Antigravity Agents」运行生成器，原子更新 `.agents/agents/` 中 7 个已知 `.agents/agents/agent-name/agent.md` 定义（`agent-name` 为实际名称）并保留其他用户 agent；不从用户 home 搬运 agent。
-3. 复制 `references/antigravity/rules/oh-story.md` 到 `.agents/rules/oh-story.md`，验证 `trigger: always_on` 且文件小于 Antigravity 12,000 字符上限。该 rule 承担 skill 路由、写作硬约束与 compact 后恢复；Antigravity IDE 不以根 `AGENTS.md` 作为 workspace rule，所以不要用 AGENTS 模板代替。
-4. 复制 `references/antigravity/hooks/story_antigravity_hook.js` 与同目录 `story_hook_core.js` 到 `.agents/hooks/`，验证 `node --check`。hook 命令以 `.agents/`（`hooks.json` 所在目录）为工作目录，必须使用 `hooks/story_antigravity_hook.js`，不得写成 `.agents/hooks/...`。共享 core 必须与 Claude/OpenCode/ZCode 源字节一致。
-5. 合并 `references/antigravity/hooks/hooks.json` 到 `.agents/hooks.json`：按跨平台规则探测 Python 3，调用 `merge-antigravity-hooks.py {项目}/.agents/hooks.json {skill目录}/references/antigravity/hooks/hooks.json`。helper 只替换顶层 `oh-story` named group，保留其他用户 hook groups；写后复跑并比较字节确认幂等。禁止把 Claude/Codex 的外层 `{ "hooks": ... }` schema 写入 Antigravity。
-6. 校验事件边界：只注册 `PreToolUse`、`PostToolUse`、`PreInvocation`、`Stop`。PreToolUse 必须为每次调用输出 `decision`；PostToolUse 必须只输出 `{}`，正文 findings 经 session `artifactDirectoryPath` 暂存并由下一次 PreInvocation 注入；若模型准备直接结束，Stop 最多强制继续一次，避免无限循环。Antigravity 外部 hooks 没有 SessionStart/PreCompact/PostCompact，首次上下文由 `invocationNum=0` 的 PreInvocation 注入，compact 后由 Always-On Rule 强制读取 `追踪/上下文.md`。
-7. `.story-deployed` 的 `target_cli` 写 `antigravity` 或多端组合，`references_dir` 写 `.agents/skills/story-setup/references/agent-references`。安装报告提示新开 conversation 使 Skills/Rules/Agents/Hooks 重新扫描；同时明确 Node 是 hook 运行时依赖。
+1. 현재 패키지의 알려진 스킬 14개(`browser-cdp`와 `story*`)를 찾아 `deploy-antigravity-skills.py --source "{当前 skill 包根}" --dest "{项目}/.agents/skills"`로 원자적으로 실제 파일을 만든다. helper는 14개 이름만 교체하고 다른 사용자 스킬은 보존하며 소스/대상 realpath가 같으면 no-op다. 대상은 **실제 디렉터리**여야 한다. 최상위 `.agents/skills → ../skills` symlink를 새로 만들지 않는다. Antigravity 2.0 프로젝트 배포는 실제 디렉터리를 지원 경로로 삼는다.
+   - 기존 `.agents/skills`가 symlink면 helper는 먼저 멈추고 링크를 따라 쓰지 않아야 한다. AskUserQuestion으로 다음을 설명한다. 이전 과정은 링크로 보이는 모든 스킬을 프로젝트 안의 새 실제 디렉터리로 복사하고 oh-story 이름 14개만 갱신하며 링크 대상은 원형 보존하지만 symlink 자체는 디렉터리로 바꾼다. 큰 git diff가 생길 수 있다. 사용자가 명시적으로 동의한 뒤에만 `--migrate-symlink`를 추가해 재실행한다. 거부하면 Antigravity 배포를 멈추고 완전한 지원을 확보하지 못했다고 보고한다. 다중 호스트 배포나 기존 Codex symlink를 이유로 이 확인을 생략하지 않는다.
+2. 위 에이전트 배포 절의 생성기로 `.agents/agents/`의 알려진 `.agents/agents/agent-name/agent.md` 7개를 원자 갱신하고 다른 사용자 에이전트를 보존한다. 사용자 home에서 에이전트를 옮겨 오지 않는다.
+3. `references/antigravity/rules/oh-story.md`를 `.agents/rules/oh-story.md`로 복사하고 `trigger: always_on`·12,000자 미만을 확인한다. 이 규칙이 스킬 라우팅·집필 강제 제약·compact 후 복구를 맡는다. Antigravity IDE는 루트 `AGENTS.md`를 workspace 규칙으로 보지 않으므로 AGENTS 템플릿으로 대체하지 않는다.
+4. `references/antigravity/hooks/story_antigravity_hook.js`와 같은 디렉터리의 `story_hook_core.js`를 `.agents/hooks/`에 복사하고 `node --check`를 검증한다. 훅 명령은 `.agents/`(`hooks.json` 위치)를 작업 디렉터리로 하므로 `hooks/story_antigravity_hook.js`를 써야 하며 `.agents/hooks/...`로 쓰지 않는다. 공유 core는 Claude/OpenCode/ZCode 원본과 바이트가 같아야 한다.
+5. `references/antigravity/hooks/hooks.json`을 `.agents/hooks.json`에 병합한다. 플랫폼 공통 규칙으로 Python 3를 찾고 `merge-antigravity-hooks.py {项目}/.agents/hooks.json {skill目录}/references/antigravity/hooks/hooks.json`을 호출한다. helper는 최상위 `oh-story` named group만 교체하고 다른 사용자 훅 그룹을 보존한다. 저장 뒤 재실행하고 바이트 비교로 멱등성을 확인한다. Claude/Codex의 바깥 `{ "hooks": ... }` schema를 Antigravity에 쓰지 않는다.
+6. 이벤트 경계를 검증한다. `PreToolUse`·`PostToolUse`·`PreInvocation`·`Stop`만 등록한다. PreToolUse는 호출마다 `decision`, PostToolUse는 `{}`만 출력해야 한다. 본문 발견 사항은 세션 `artifactDirectoryPath`에 임시 저장했다가 다음 PreInvocation에서 주입한다. 모델이 바로 종료하려 하면 Stop은 무한 루프를 막기 위해 최대 한 번만 계속하도록 강제한다. 외부 훅에는 SessionStart/PreCompact/PostCompact가 없다. 첫 맥락은 `invocationNum=0`의 PreInvocation이 주입하고 compact 뒤에는 Always-On Rule이 `추적/문맥.md` 읽기를 강제한다.
+7. `.story-deployed`의 `target_cli`는 `antigravity` 또는 여러 호스트 조합, `references_dir`는 `.agents/skills/story-setup/references/agent-references`로 쓴다. 설치 보고에 새 대화를 열어 Skills/Rules/Agents/Hooks를 다시 탐색하도록 안내하고 Node가 훅 실행 의존성임을 명시한다.
 
-Antigravity IDE 与交互式 `agy` 共用这套 workspace `.agents/` 产物，但仍需分别实机 smoke test。不要依赖 `npx skills add -g` 当前把全局 skill 写到哪个 `~/.gemini/*` 目录；`story-setup` 的支持承诺只覆盖上述项目内真实目录部署。
+Antigravity IDE와 대화형 `agy`는 이 workspace `.agents/` 산출물을 공유하지만 각각 실제 환경 smoke test가 필요하다. `npx skills add -g`가 현재 어느 `~/.gemini/*`에 전역 스킬을 쓰는지에 의존하지 않는다. story-setup의 지원 범위는 위 프로젝트 내부 실제 디렉터리 배포다.
 
-## 验证
+## 검증
 
-- 检查 `.agents/skills/` 下 14 个 story skills 为真实目录且 `SKILL.md` 可读；`.agents/skills/story-setup/references/agent-references/` 完整
-- 检查 `.agents/agents/` 下 7 个 Markdown agent 可解析，名称、模型档、官方工具白名单、只读边界与 `.agents/skills/` reference 前缀正确
-- 检查 `.agents/rules/oh-story.md` 为 `trigger: always_on` 且小于 12,000 字符
-- 检查 `.agents/hooks.json` 有效、顶层 `oh-story` group 恰有 PreToolUse/PostToolUse/PreInvocation/Stop，用户 hook groups 保留；检查 `.agents/hooks/story_antigravity_hook.js` 与 `story_hook_core.js` 语法有效
-- 用 fixture 验证：PreToolUse 缺纲/追踪时 deny、普通写入 allow、commit advisory；PostToolUse stdout 恒为 `{}` 且把正文 findings 写进 session artifact；下一次 PreInvocation 注入 findings；Stop 对未处理 findings 最多 continue 一次；干净正文清除 pending state
+- `.agents/skills/`의 story 스킬 14개가 실제 디렉터리이며 `SKILL.md`를 읽을 수 있고 `.agents/skills/story-setup/references/agent-references/`가 완전한지 확인한다.
+- `.agents/agents/`의 Markdown 에이전트 7개가 해석 가능하고 이름·모델 등급·공식 도구 허용 목록·읽기 전용 경계·`.agents/skills/` 참조 접두사가 맞는지 확인한다.
+- `.agents/rules/oh-story.md`의 `trigger: always_on`과 12,000자 미만을 확인한다.
+- `.agents/hooks.json`이 유효하며 최상위 `oh-story`에 정확히 PreToolUse/PostToolUse/PreInvocation/Stop이 있고 사용자 그룹이 보존되었는지 확인한다. `.agents/hooks/story_antigravity_hook.js`와 `story_hook_core.js` 구문도 확인한다.
+- fixture 검증: 개요/추적 누락 PreToolUse는 deny, 일반 쓰기는 allow, 커밋은 advisory. PostToolUse stdout은 항상 `{}`이며 본문 발견 사항을 세션 산출물에 쓴다. 다음 PreInvocation이 이를 주입한다. 미처리 발견 사항의 Stop continue는 최대 한 번이다. 깨끗한 본문은 pending state를 지운다.
 
-## 安装报告必须提示
+## 설치 보고 필수 안내
 
-新开 Antigravity conversation 刷新 customization；Hooks 依赖 PATH 中的 `node`；外部 hook API 没有 PreCompact/PostCompact，compact 恢复由 Always-On Rule 读取 `追踪/上下文.md`；IDE 与交互式 `agy` 仍建议分别实机 smoke test；命令行写作从项目目录进入交互式 `agy`，确认 `/skills`、`/agents`、`/hooks` 已发现 oh-story 后再发任务；print 模式 `agy -p` 必须带 `--add-dir "$PWD"`（实测 agy 1.2.10 带上才加载工作区 `.agents/` 的 14 个 skills、7 个 agents 与 hooks，不带则都不加载，可能回退写入 `~/.gemini/antigravity-cli/scratch/`），测试后检查 scratch 无意外小说产物。
+새 Antigravity 대화로 customization을 새로 읽는다. Hooks는 PATH의 `node`에 의존한다. 외부 훅 API에 PreCompact/PostCompact가 없으므로 Always-On Rule이 `추적/문맥.md`를 읽어 compact에서 복구한다. IDE와 대화형 `agy`는 각각 실제 환경 smoke test를 권한다. 명령줄 집필은 프로젝트 디렉터리에서 대화형 `agy`로 들어가 `/skills`·`/agents`·`/hooks`가 oh-story를 찾았는지 확인한 뒤 요청한다. print 모드 `agy -p`는 `--add-dir "$PWD"`가 필수다(agy 1.2.10 실측에서 있어야 workspace `.agents/`의 스킬 14개·에이전트 7개·훅을 읽었으며 없으면 모두 읽지 못해 `~/.gemini/antigravity-cli/scratch/`로 쓰기가 돌아갈 수 있음). 테스트 뒤 scratch에 예상 밖 소설 산출물이 없는지 확인한다.

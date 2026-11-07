@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""test-agent-notes.py — check-agent-notes.py 的行为回归：合法笔记通过，每类违规各自被拦。"""
+"""test-agent-notes.py — check-agent-notes.py 동작 회귀: 올바른 기록은 통과하고 각 위반 유형은 차단한다."""
 import pathlib
 import subprocess
 import sys

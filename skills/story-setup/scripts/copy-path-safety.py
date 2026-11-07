@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Classify a recursive deployment copy before any filesystem mutation."""
+"""파일시스템을 변경하기 전에 재귀 배포 복사를 분류한다."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Dict, Optional, Tuple
 
 
 def canonical_path(raw_path: str) -> Path:
-    """Return an absolute path with existing symlinks resolved."""
+    """기존 심볼릭 링크를 해석한 절대 경로를 반환한다."""
 
     return Path(os.path.realpath(os.path.abspath(os.path.expanduser(raw_path))))
 
@@ -35,7 +35,7 @@ def is_descendant(path: Path, parent: Path) -> bool:
     try:
         return os.path.commonpath((path_key, parent_key)) == parent_key
     except ValueError:
-        # Different Windows drives cannot contain one another.
+        # 서로 다른 Windows 드라이브는 서로를 포함할 수 없다.
         return False
 
 

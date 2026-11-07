@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for explicit reference governance and consumer reachability."""
+"""명시적 참조 관리와 소비자의 참조 도달 가능성을 검증하는 회귀 테스트."""
 
 from __future__ import annotations
 
@@ -209,7 +209,7 @@ def test_cross_manifest_ownership() -> None:
         assert "skills/z/references/cards/one.md" in result.stderr.replace("\\", "/")
         assert "runtime-tree:one.md" in result.stderr
 
-        # A neighboring runtime manifest is ignored unless explicitly selected.
+        # 명시적으로 선택하지 않은 인접 런타임 매니페스트는 무시한다.
         runtime_manifest(
             root,
             [
@@ -401,7 +401,7 @@ def test_tree_file_symlink_cannot_escape_root() -> None:
                 try:
                     escaped.symlink_to(outside_file)
                 except (NotImplementedError, OSError):
-                    # Symlink creation may be unavailable on Windows.
+                    # Windows에서는 심볼릭 링크 생성이 불가능할 수 있다.
                     return
 
                 tree_name = f"{manifest_kind}-{escaped_role}-escape"
@@ -551,13 +551,13 @@ def test_agent_reference_reachability() -> None:
         result = run(CONSUMERS, "--root", str(root))
         assert result.returncode == 0, result.stdout + result.stderr
 
-        # Check prefixes through the public CLI against deployed templates.
+        # 공개 CLI를 통해 배포된 템플릿의 접두사를 검사한다.
         write(base / "agent-references/genre-prose-cards/都市.md", "card\n")
         write(base / "agent-references/index.md", "[detail](details/detail.md)\n[card](genre-prose-cards/都市.md)\n")
         writer = base / "templates/agents/narrative-writer.md"
         canonical = "story-setup/references/agent-references/"
         valid = [
-            "读 正文.md 和 设定/角色/{name}.md，不读 my-index.md。项目研究记录在 research/index.md。",
+            "读 본문.md 和 설정/인물/{name}.md，不读 my-index.md。项目研究记录在 research/index.md。",
             f"读 `{canonical}index.md` 与 `{canonical}details/detail.md`。",
             f"[index.md]({canonical}index.md#规则)",
             f"{{项目根}}/.claude/skills/{canonical}index.md",

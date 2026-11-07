@@ -1,5 +1,5 @@
 #!/bin/bash
-# check-shared-files.sh — validate explicit cross-skill runtime/reference manifests.
+# check-shared-files.sh — 스킬 간 공유 런타임/참조 매니페스트를 명시적으로 검증한다.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"

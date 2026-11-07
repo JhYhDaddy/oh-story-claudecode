@@ -1,4 +1,4 @@
-# Agent Note: Windows 后台宿主隐藏写作守卫拉起的 Git 控制台窗口
+# Agent Note: Windows 백그라운드 호스트에서 집필 검사가 실행한 Git 콘솔 숨기기
 
 Status: implemented
 Date: 2026-10-26
@@ -6,24 +6,24 @@ Related: https://github.com/zenstory-ai/oh-story-claudecode/issues/463
 
 ## Problem
 
-OpenCode 桌面版在 Windows 后台服务进程中执行写作守卫时，插件的项目根定位与压缩前统计会同步拉起 Git；共享守卫核在提交检查时也会拉起 Git。这三处子进程没有要求 Windows 隐藏控制台窗口，导致写正文、修改正文或压缩上下文时反复闪出控制台，干扰正常写作。
+Windows 백그라운드 서비스 프로세스에서 OpenCode 데스크톱이 집필 검사를 실행할 때 플러그인의 프로젝트 루트 탐색과 압축 전 통계가 Git을 동기 실행했다. 공유 검사 코어도 제출 검사에서 Git을 실행했다. 세 하위 프로세스에 Windows 콘솔 숨김을 지정하지 않아 본문 쓰기·수정·컨텍스트 압축마다 콘솔 창이 반복해서 깜박이며 집필을 방해했다.
 
 ## Decision
 
-- OpenCode 插件的 `projectRoot()` 与 `tryGit()` 调用 Git 时传入 `windowsHide: true`。
-- 共享 `story_hook_core.js` 的 `stagedMarkdownWarnings()` 调用 Git 时也传入 `windowsHide: true`，再由共享资产同步器更新 OpenCode、ZCode 与 Antigravity 的部署副本。
-- 保留 PR #464 贡献者 SakarPaisen 的原始提交和三个运行时选项修改，合入当前 main；不重复覆盖已有补丁。
-- 在现有 OpenCode 插件行为测试中代理并转发真实 `child_process` 调用，分别执行项目根定位、压缩前 Git 统计和 staged warning 检查，断言实际 options 含隐藏窗口开关，避免把源码字符串存在性误当成行为覆盖。
+- OpenCode 플러그인의 `projectRoot()`와 `tryGit()`에서 Git 호출 시 `windowsHide: true`를 전달한다.
+- 공유 `story_hook_core.js`의 `stagedMarkdownWarnings()`도 Git 호출에 `windowsHide: true`를 전달하고 공유 자산 동기화기로 OpenCode·ZCode·Antigravity 배포 사본을 갱신한다.
+- PR #464 기여자 SakarPaisen의 원본 커밋과 런타임 옵션 세 곳의 수정을 보존해 현재 main에 병합한다. 기존 패치를 중복 덮어쓰지 않는다.
+- 기존 OpenCode 플러그인 동작 테스트에서 실제 `child_process` 호출을 프록시로 감싼 뒤 전달한다. 프로젝트 루트 탐색, 압축 전 Git 통계, staged warning 검사를 각각 실행해 실제 options에 창 숨김 옵션이 있는지 단언한다. 소스 문자열의 존재를 동작 검증으로 오인하지 않는다.
 
-- 按当前 main 的锁基线将 `story-setup` 包更新到 `1.1.41`；`story` 的 exact companion 随之指向该版本，其生成的 `INSTALL.md` 字节变化，因此包更新到 `1.0.26`。使用仓库工作流固定的中央控制器 `c584f3caac2f47168781f7165b38200f1bda2350` 重建摘要并校验基线；不改源码产品版本，也不触发发布。
+- 현재 main의 잠금 기준에 따라 `story-setup` 패키지를 `1.1.41`로 갱신한다. `story`의 exact companion도 이 버전을 가리키며 생성된 `INSTALL.md` 바이트가 달라져 패키지를 `1.0.26`으로 갱신한다. 저장소 워크플로가 고정한 중앙 컨트롤러 `c584f3caac2f47168781f7165b38200f1bda2350`으로 다이제스트를 재생성하고 기준을 검증한다. 소스 제품 버전은 변경하지 않고 게시도 시작하지 않는다.
 
 ## Alternatives considered
 
-- **只合入现有贡献补丁，不补自动化回归**——最强理由：改动只有三个布尔选项，且贡献者已在 Windows 真机验证。否：后续重构 options 时可静默删掉该行为，macOS/Linux CI 也无法从外观发现回归；薄代理能跨平台锁住传参契约。
-- **在所有仓库脚本的子进程调用上一律增加隐藏窗口选项**——最强理由：可统一消除未来 Windows 闪窗。否：本事故只涉及部署后运行在 GUI 后台宿主中的写作守卫；扩大到开发脚本和浏览器工具会引入无关 diff，且没有对应用户症状。
+- **기여 패치만 병합하고 자동 회귀 테스트는 추가하지 않기**: 불리언 옵션 세 곳만 바뀌고 기여자가 실제 Windows에서 확인했다는 점이 가장 큰 근거다. 그러나 이후 options 리팩터링에서 동작이 조용히 사라져도 macOS/Linux CI는 겉모습으로 회귀를 발견할 수 없다. 얇은 프록시가 플랫폼 공통으로 인자 전달 계약을 고정하므로 채택하지 않는다.
+- **모든 저장소 스크립트의 하위 프로세스에 창 숨김 옵션 추가**: 향후 Windows 창 깜박임을 통일적으로 없앨 수 있다는 점이 가장 큰 장점이다. 그러나 이번 문제는 배포 후 GUI 백그라운드 호스트에서 실행되는 집필 검사에 한정된다. 개발 스크립트와 브라우저 도구까지 넓히면 관련 없는 diff가 생기며 그에 대응하는 사용자 증상도 없다.
 
 ## Consequences
 
-- **收益**：Windows 桌面宿主中的三条已知 Git 路径不再创建可见控制台，且 options 契约有可执行回归保护。
-- **代价**：测试会短暂代理 Node 内置 `child_process` 的两个同步方法，但仍转发真实调用，并在结束时恢复；生产逻辑在非 Windows 平台收到一个无效果的兼容选项。
-- **验证上限**：跨平台 CI 只能证明实际传参和原有返回行为不变；控制台是否肉眼闪现仍以 Windows 桌面版真机复测为最终外观证据。
+- **이점**: Windows 데스크톱 호스트의 알려진 Git 실행 경로 세 곳이 보이는 콘솔을 만들지 않고 options 계약도 실행 가능한 회귀 테스트로 보호된다.
+- **비용**: 테스트가 잠시 Node 내장 `child_process`의 동기 메서드 두 개를 프록시로 감싸지만 실제 호출을 전달하고 종료 시 복구한다. Windows 외 플랫폼의 운영 코드는 효과가 없는 호환 옵션 하나를 받는다.
+- **검증 한계**: 플랫폼 공통 CI는 실제 전달 인자와 기존 반환 동작이 유지됨만 증명한다. 콘솔이 눈에 보이게 깜박이는지는 실제 Windows 데스크톱 재시험이 최종 외관 근거다.

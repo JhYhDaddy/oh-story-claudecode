@@ -1,32 +1,32 @@
-# Agent Note: ClawHub 分发采用显式清单和单一写入器
+# Agent Note: ClawHub 배포에는 명시적인 목록과 단일 쓰기 워크플로를 사용한다
 
 Status: implemented
 
 ## Problem
 
-产品 skill 没有统一的公开分发清单；仅靠各仓临时命令或等下一次 Release，会漏传、错传，且无法区分渠道缺失与尚未发布。旧流程还可能通过扫描整个 `skills/` 目录和临时删除目录来表达排除项，无法审查每个候选的发布者、版本、权利与包闭包。
+제품 스킬에 통일된 공개 배포 목록이 없었다. 저장소별 임시 명령에만 의존하거나 다음 Release를 기다리면 업로드가 누락되거나 잘못될 수 있으며, 배포 채널에서 빠진 것인지 아직 출시하지 않은 것인지 구분할 수 없다. 이전 절차는 `skills/` 전체를 스캔하고 디렉터리를 임시 삭제하는 방식으로 제외 항목을 표현하기도 했다. 이 방식으로는 후보별 게시자, 버전, 권리, 패키지에 필요한 파일 전체를 검토할 수 없다.
 
 ## Decision
 
-- `.clawhub/publish.json` 显式枚举仓库中的每个产品 skill，记录固定 `bootstrapSha`、owner/slug、semver、处置、skill 内包闭包、运行前提、发现元数据和权利证据。未验证过的运行时不写入 `supportedRuntimes`。
-- `.clawhub/README.md` 记录 2026-10-03 的 MIT-0 分发授权、根 `LICENSE` 保留方式和规范内容指纹。包只收 skill 目录内的运行资产；仓库开发脚本不因位于根目录而被带入。
-- 手动 `bootstrap` 使用固定起点提交，首次补齐不等待未来 Release。稳定 Release、十二小时 `reconcile` 和手动入口解析出四十位提交 SHA 后，统一调用组织级可复用写入器；不再保留独立 tag 写入口。
-- 每个可发布条目用跨平台 `packageDigest` 锁定逐文件内容；内容或依赖版本改变时同时 bump 明确 semver 并运行中央 `lock`。稳定 release 的 policy 与 source 是同一不可变提交；仅旧 source 不含清单的冷启动兼容期允许用另一个固定受审 policy SHA。
-- PR caller 只传 `mode: validate` 且不传发布 secret。中央引用必须替换成经审查的固定 commit SHA；仓库内 guard 在 `ROOT_REPLACE` 尚未替换时失败，防止占位引用被当作可上线配置。
-- README 只链接可验证的 ClawHub 站点入口。单个 skill 的 URL 必须等发布者、版本和匿名访问均验证后再写，不能根据 slug 猜测。
+- `.clawhub/publish.json`에 저장소의 모든 제품 스킬을 명시적으로 나열한다. 고정 `bootstrapSha`, owner/slug, semver, 처리 방침, 스킬 내부 패키지 구성 전체, 실행 전제, 검색용 메타데이터, 권리 증거를 기록한다. 검증하지 않은 런타임은 `supportedRuntimes`에 넣지 않는다.
+- `.clawhub/README.md`에 2026-10-03의 MIT-0 배포 허가, 루트 `LICENSE` 보존 방식, 정규화된 내용 지문을 기록한다. 패키지에는 스킬 디렉터리 안의 실행 자산만 넣는다. 저장소 개발 스크립트가 루트에 있다는 이유만으로 포함시키지 않는다.
+- 수동 `bootstrap`은 고정된 시작 커밋을 사용한다. 최초 누락 보충은 다음 Release까지 기다리지 않는다. 안정 Release, 12시간 주기의 `reconcile`, 수동 진입점은 40자리 커밋 SHA를 구한 뒤 조직 공통의 재사용 쓰기 워크플로를 호출한다. 별도의 tag 쓰기 진입점은 유지하지 않는다.
+- 게시 가능한 각 항목은 플랫폼 공통 `packageDigest`로 파일별 내용을 고정한다. 내용이나 의존성 버전이 바뀌면 명시된 semver도 함께 올리고 중앙 `lock`을 실행한다. 안정 release의 policy와 source는 동일한 불변 커밋이다. 이전 source에 목록이 없는 최초 배포 호환 기간에만 별도의 고정된 검토 완료 policy SHA를 허용한다.
+- PR caller는 `mode: validate`만 전달하고 게시 secret은 전달하지 않는다. 중앙 참조는 검토 완료된 고정 commit SHA로 바꿔야 한다. 저장소의 guard는 `ROOT_REPLACE`가 남아 있으면 실패하여 임시 참조가 실제 배포 가능한 설정으로 취급되지 않게 한다.
+- README에는 검증 가능한 ClawHub 사이트 진입점만 연결한다. 개별 스킬 URL은 게시자, 버전, 익명 접근을 모두 검증한 뒤에만 기재한다. slug로 URL을 추측해서는 안 된다.
 
 ## Alternatives considered
 
-- **继续由维护者在本机运行全目录同步**——最强理由是改动最少。否：目录扫描会把排除项混入，也不能留下可审查的冷启动、包内容与所有权证据。
-- **只在未来 Release 发布**——最强理由是天然绑定版本。否：现有漏项会继续存在到下次发版，不满足本次冷启动。
-- **每个触发器保留一套发布命令**——最强理由是各仓可以独立调整。否：多套 writer 容易发生重复 bump、身份漂移与部分失败后的重复上传；薄 caller 只负责解析不可变 source，写入语义集中一处。
+- **유지보수자가 로컬에서 전체 디렉터리 동기화를 계속 실행한다** — 변경이 가장 적다는 장점이 있다. 채택하지 않았다. 디렉터리 스캔은 제외 항목을 섞어 넣을 수 있고, 최초 배포·패키지 내용·소유권에 대한 검토 가능한 증거를 남기지 못한다.
+- **앞으로 나올 Release에서만 게시한다** — 자연스럽게 버전과 묶인다는 장점이 있다. 채택하지 않았다. 현재 누락된 항목이 다음 릴리스까지 남아 이번 최초 배포 요구를 충족하지 못한다.
+- **트리거마다 게시 명령을 유지한다** — 저장소마다 독립적으로 조정할 수 있다는 장점이 있다. 채택하지 않았다. 여러 쓰기 워크플로는 버전 중복 증가, 게시 주체 불일치, 부분 실패 뒤 중복 업로드를 일으키기 쉽다. 얇은 caller는 불변 source를 해석하는 일만 맡고 쓰기 의미는 한곳에 모은다.
 
 ## Consequences
 
-收益是每个候选都有明确去向，首次补齐不依赖新 Release，后续入口也不会形成多个写入器；包内容、许可证和指纹可以逐项复核。代价是仓库需维护清单；中央工作流 SHA、owner-qualified identity 与首发版本必须在真实写入前完成组织级核对。定时任务会消耗少量 Actions 配额，但相同 owner/slug/version/fingerprint 必须为 no-op。
+각 후보의 처리 방향이 명확해지고 최초 누락 보충이 새 Release에 의존하지 않는다. 이후 진입점도 여러 쓰기 워크플로로 분산되지 않는다. 패키지 내용, 라이선스, 지문을 항목별로 재검토할 수 있다. 비용은 저장소에서 목록을 유지해야 한다는 점이다. 실제 쓰기 전에 중앙 워크플로 SHA, owner를 포함한 식별자, 최초 게시 버전을 조직 차원에서 확인해야 한다. 예약 작업은 소량의 Actions 할당량을 사용하지만 owner/slug/version/fingerprint가 같으면 반드시 no-op이어야 한다.
 
-## Verification
+## 검증
 
-本次以 `actionlint` 验证两个 caller 的 YAML 与表达式；另用本地清单审计核对完整目录覆盖、固定 SHA、semver、权利锚点、依赖版本、包内无 symlink 与 38 个候选总数。中央引用已固定为经独立审查、通过 30 项回归测试的 `7f9ee0e3994037893dc0e829e95ba5f83c526fed`；uses 与 control_ref 相同，guard 只匹配 YAML 值，不会匹配自己的命令字符串。真实 GitHub CI 与首次公开分发由组织集成线留证。
+이번 작업에서는 `actionlint`로 두 caller의 YAML과 표현식을 검증했다. 별도의 로컬 목록 감사로 전체 디렉터리 포함 여부, 고정 SHA, semver, 권리 근거, 의존성 버전, 패키지 내부의 심볼릭 링크 부재, 후보 총 38개를 확인했다. 중앙 참조는 독립 검토와 회귀 테스트 30개를 통과한 `7f9ee0e3994037893dc0e829e95ba5f83c526fed`로 고정했다. uses와 control_ref는 같으며 guard는 YAML 값만 검사하고 자신의 명령 문자열에는 반응하지 않는다. 실제 GitHub CI와 첫 공개 배포 증거는 조직 통합 작업에서 남긴다.
 
-仓库守卫 `static-check.sh`、`skill-numbering.py check`、`check-doc-budget.sh`、`check-shared-files.sh` 与 `check-agent-notes.py` 全部通过。
+저장소 검사 도구 `static-check.sh`, `skill-numbering.py check`, `check-doc-budget.sh`, `check-shared-files.sh`, `check-agent-notes.py`가 모두 통과했다.

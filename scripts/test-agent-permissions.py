@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior tests for capability-derived multi-CLI agent permissions."""
+"""기능 집합에서 도출한 여러 CLI의 에이전트 권한을 동작 테스트로 검증한다."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def codex_documents(directory: Path) -> dict[str, dict[str, object]]:
 
 
 def opencode_permissions(path: Path) -> dict[str, str]:
-    """Read the generated 2.x `permissions:` rule list as {action: effect}, in rule order."""
+    """생성된 2.x `permissions:` 규칙 목록을 규칙 순서대로 {action: effect}로 읽는다."""
     permissions: dict[str, str] = {}
     in_permissions = False
     action = ""
@@ -312,12 +312,11 @@ def test_invalid_capability_declarations_fail_closed() -> None:
 
 
 def test_opencode_runtime(cli: str) -> None:
-    """Exercise the real OpenCode 2.x tool registry through `opencode run --agent`.
+    """`opencode run --agent`로 실제 OpenCode 2.x 도구 레지스트리를 시험한다.
 
-    OpenCode 2.x drops every tool whose last matching rule is a blanket deny from the tool list
-    it sends to the model, so the tool names the mock model receives are the runtime verdict —
-    except `skill` and Code Mode tools since 2.2, which are checked by calling them (see below).
-    A few scripted tool calls then prove that allowed tools really execute and denied ones don't.
+    OpenCode 2.x는 마지막 일치 규칙이 전면 deny인 도구를 모델에 보내는 목록에서 제거하므로 모의 모델이
+    받은 도구명이 런타임의 판단 결과다. 단, 2.2부터 skill과 Code Mode 도구는 직접 호출해 확인한다(아래 참고).
+    몇 가지 지정된 도구 호출로 허용된 도구는 실제 실행되고 거부된 도구는 실행되지 않음을 입증한다.
     """
     with tempfile.TemporaryDirectory(prefix="opencode-agent-permissions-") as tmp:
         root = Path(tmp).resolve()
@@ -339,14 +338,14 @@ def test_opencode_runtime(cli: str) -> None:
         probe_skill = project / ".opencode/skills/probe/SKILL.md"
         probe_skill.parent.mkdir(parents=True)
         probe_skill.write_text("---\nname: probe\ndescription: Permission probe.\n---\n\nSKILL_CANARY\n", encoding="utf-8")
-        # OpenCode 从当前目录向上找到项目根为止发现 .opencode/；项目根由 git 仓库界定。
+        # OpenCode는 현재 디렉터리부터 Git 저장소로 정의된 프로젝트 루트까지 올라가며 .opencode/를 찾는다.
         subprocess.run(["git", "init", "-q", str(project)], check=True)
         home = root / "home"
         env = {k: v for k, v in os.environ.items() if not k.startswith(("OPENCODE_", "ANTHROPIC_", "OPENAI_", "XDG_"))}
         env["HOME"] = str(home)
         for kind in ("CONFIG", "DATA", "CACHE", "STATE"):
             env[f"XDG_{kind}_HOME"] = str(home / kind.lower())
-        # `opencode run` 取 $PWD 作会话目录；subprocess 的 cwd= 不改继承来的 PWD，不显式设就会跑到调用方目录。
+        # `opencode run`은 $PWD를 세션 디렉터리로 쓴다. subprocess의 cwd=는 상속된 PWD를 바꾸지 않으므로 명시하지 않으면 호출자 디렉터리에서 실행된다.
         env["PWD"] = str(project)
         mock_log = root / "mock-requests.jsonl"
         mock_script = root / "mock-script.json"
@@ -369,14 +368,14 @@ def test_opencode_runtime(cli: str) -> None:
                 }},
             }), encoding="utf-8")
 
-            # 后台服务默认监听固定端口，开发机上已有 OpenCode 服务时会撞端口：给隔离 HOME 钉一个空闲端口。
+            # 백그라운드 서비스의 기본 고정 포트는 개발 머신의 기존 OpenCode 서비스와 충돌할 수 있으므로 격리된 HOME에 빈 포트를 지정한다.
             with socket.socket() as probe:
                 probe.bind(("127.0.0.1", 0))
                 service_port = probe.getsockname()[1]
             subprocess.run([cli, "service", "set", "port", str(service_port)], env=env, check=True,
                            capture_output=True, timeout=60)
-            # location 的 agent 是异步加载的，冷启动的服务上 `run --agent` 会先于加载报 Agent not found。
-            # 先把后台服务预热到能列出全部 agent，之后每次 run 都复用这个服务。
+            # location의 에이전트는 비동기로 로드되므로 처음 시작한 서비스에서 `run --agent`가 로드보다 먼저 실행되어 Agent not found가 날 수 있다.
+            # 모든 에이전트를 나열할 수 있을 때까지 백그라운드 서비스를 준비한 뒤 각 run에서 재사용한다.
             expected_agents = {path.stem for path in (project / ".opencode/agents").glob("*.md")}
             for _ in range(60):
                 listed = subprocess.run(
@@ -397,7 +396,7 @@ def test_opencode_runtime(cli: str) -> None:
                 result = subprocess.run(
                     [cli, "run", "--agent", name, "--model", "mock/probe", "go"],
                     cwd=project, env=env, text=True, capture_output=True, timeout=120,
-                    stdin=subprocess.DEVNULL,  # run 会把非 TTY 的 stdin 读作消息，继承管道会一直等 EOF
+                    stdin=subprocess.DEVNULL,  # run은 TTY가 아닌 stdin을 메시지로 읽으므로 파이프를 상속하면 EOF를 계속 기다린다.
                 )
                 assert result.returncode == 0, (name, result.stdout + result.stderr)
                 rows = [json.loads(line) for line in mock_log.read_text(encoding="utf-8").splitlines() if line]
@@ -410,11 +409,11 @@ def test_opencode_runtime(cli: str) -> None:
                 ]
                 return tools, "\n".join(results)
 
-            # 2.2 起有两类工具不再由列表裁决，只能看调用：
-            # - skill 按被加载的 skill 逐个判权限；2.2 给每个 agent 追加了针对浏览器 skill 的规则，
-            #   skill 的最后一条匹配规则不再是全局 deny，所以它总在列表里，调用时仍被 "*" deny 拦下。
-            # - execute 被拒时，Code Mode 工具直接暴露（OpenCode #59315）；opencode_worktree_remove
-            #   走 edit 权限，只要 agent 有任何 edit allow 就会出现。
+            # 2.2부터 두 유형의 도구는 목록만으로 판단할 수 없어 실제 호출로 확인한다.
+            # - skill은 로드할 스킬마다 권한을 판단한다. 2.2는 각 에이전트에 브라우저 스킬 규칙을 추가하므로
+            #   skill의 마지막 일치 규칙은 전역 deny가 아니다. 목록에 항상 표시되지만 호출 시에는 여전히 "*" deny가 차단한다.
+            # - execute가 거부되면 Code Mode 도구가 직접 노출된다(OpenCode #59315). opencode_worktree_remove는
+            #   edit 권한을 사용하므로 에이전트에 어떤 edit allow라도 있으면 표시된다.
             def visible(name: str, tools: set[str]) -> set[str]:
                 if "opencode_worktree_remove" in tools:
                     assert "edit" in tools, (name, tools)
@@ -446,7 +445,7 @@ def test_opencode_runtime(cli: str) -> None:
             tools = visible("glob-only", run_agent("glob-only")[0])
             assert tools == {"glob"}, tools
             raw, _ = run_agent("inherit-minus-glob")
-            if "skill" in raw:  # 继承全部工具的对照组确实能加载 probe，证明上面的拒绝不是因为 skill 没被发现
+            if "skill" in raw:  # 모든 도구를 상속하는 대조군이 실제로 probe를 로드해 위의 거부가 스킬을 찾지 못해서가 아님을 입증한다.
                 _, results = run_agent("inherit-minus-glob", [{"name": "skill", "arguments": {"id": "probe"}}])
                 assert "SKILL_CANARY" in results, results
             tools = visible("inherit-minus-glob", raw)
@@ -473,10 +472,62 @@ def test_opencode_runtime(cli: str) -> None:
             mock.wait(timeout=10)
 
 
+def test_antigravity_publish_recovers_from_rename_failure() -> None:
+    with tempfile.TemporaryDirectory(prefix="agy-publish-fault-") as tmp:
+        root = Path(tmp)
+        source = root / "source"
+        write_agent(source, "reader", ["Read"])
+        preload = root / "rename-fault.cjs"
+        preload.write_text("""
+const fs = require('fs');
+const path = require('path');
+const rename = fs.renameSync;
+let failed = false;
+fs.renameSync = function (source, destination) {
+  const stage = path.basename(source).includes('.staging-');
+  const restore = path.basename(source).includes('.backup-');
+  if ((stage && !failed) || (restore && process.env.FAIL_RESTORE === '1')) {
+    failed = true;
+    const error = new Error('injected rename failure');
+    error.code = process.env.RENAME_ERROR;
+    throw error;
+  }
+  return rename.call(fs, source, destination);
+};
+""", encoding="utf-8")
+        cases = [("EIO", False), ("EIO", True)]
+        if os.name == "nt":
+            cases.append(("EPERM", False))
+        for index, (error, fail_restore) in enumerate(cases):
+            dest = root / f"agents-{index}"
+            dest.mkdir()
+            (dest / "custom.txt").write_bytes(b"user content")
+            result = subprocess.run(
+                ["node", "--require", str(preload), str(ANTIGRAVITY_GENERATOR),
+                 "--source", str(source), "--dest", str(dest)],
+                env={**os.environ, "RENAME_ERROR": error, "FAIL_RESTORE": str(int(fail_restore))},
+                text=True, capture_output=True,
+            )
+            if error == "EPERM":
+                assert result.returncode == 0, result.stderr
+                assert (dest / "reader/agent.md").is_file()
+            else:
+                assert result.returncode != 0
+                assert not (dest / "reader/agent.md").exists()
+            if fail_restore:
+                backups = list(root.glob(f"agents-{index}.backup-*"))
+                assert len(backups) == 1 and (backups[0] / "custom.txt").read_bytes() == b"user content"
+            else:
+                assert (dest / "custom.txt").read_bytes() == b"user content"
+                assert not list(root.glob(f"agents-{index}.backup-*"))
+            assert not list(root.glob(f".agents-{index}.staging-*"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--opencode", help="OpenCode 2.x executable for real tool permission checks")
     args = parser.parse_args()
+    test_antigravity_publish_recovers_from_rename_failure()
     test_permissions_follow_capabilities_not_names()
     test_empty_and_inherited_tools_are_distinct()
     test_codex_recognizes_other_mutating_tools()

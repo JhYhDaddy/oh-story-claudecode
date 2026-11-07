@@ -1,17 +1,13 @@
 #!/usr/bin/env node
 /**
- * 刺猬猫阅读排行榜采集脚本
- *
- * 配合 browser-cdp skill 使用。先启动 Chrome CDP 环境，再运行本脚本。
- * 采集策略：刺猬猫 rank-index 页面单页展示所有榜单，文本解析提取结构化数据。
- * 输出的榜单 Markdown 格式见 aggregate-rank.js 文件头，聚合按它解析。
- *
- * 用法：
- *   node ciweimao-rank-scraper.js --type click       # 点击榜
- *   node ciweimao-rank-scraper.js --type monthly      # 月票榜
- *   node ciweimao-rank-scraper.js --type all           # 全部榜单
- *
- * 前置：
+ * 츠웨이마오 읽기 순위 수집기. browser-cdp 스킬로 Chrome CDP 환경을 먼저 시작한다.
+ * rank-index 한 페이지에 모든 순위가 있으므로 텍스트를 파싱해 구조화한다.
+ * 출력 Markdown 형식은 aggregate-rank.js 머리 주석에 있으며 집계도 그 형식으로 파싱한다.
+ * 사용법:
+ *   node ciweimao-rank-scraper.js --type click       # 조회 순위
+ *   node ciweimao-rank-scraper.js --type monthly     # 월표 순위
+ *   node ciweimao-rank-scraper.js --type all         # 전체 순위
+ * 사전 실행:
  *   node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
  */
 
@@ -21,7 +17,7 @@ const { ab, sleep, evalJSONBase64, scrollLoad, getArg, localDateStamp, runCli } 
 
 const RANK_URL = "https://www.ciweimao.com/rank-index";
 
-/** 连通性 + 页面就绪自检 */
+/** 연결·페이지 준비 상태 자체 검사. */
 function probePage(port) {
   return evalJSONBase64(
     port,
@@ -42,14 +38,14 @@ const RANK_TYPES = [
 ];
 
 // ---------------------------------------------------------------------------
-// 页面提取
+// 페이지 추출
 // ---------------------------------------------------------------------------
 
 /**
- * 从 rank-index 单页解析所有榜单。
- * 页面结构：每个榜单有标题行（如"点击榜"），后跟 NO.1 特殊条目 + #2-10 普通条目。
- * NO.1 格式：标题 / 作者 / 指标值（三行）
- * #2-10 格式：N[题材]书名 / 指标值（两行）
+ * rank-index 한 페이지에서 모든 순위를 파싱한다.
+ * 각 순위는 ‘点击榜’ 같은 제목 뒤에 특수 NO.1 항목과 일반 #2-10 항목이 있다.
+ * NO.1: 제목 / 작가 / 지표 값의 세 행.
+ * #2-10: N[장르]제목 / 지표 값의 두 행.
  */
 function extractAllRanks(port) {
   const js =
@@ -60,23 +56,23 @@ function extractAllRanks(port) {
     "var sections=[];var curName='';var curEntries=[];" +
     "for(var i=0;i<lines.length;i++){" +
     "  var line=lines[i];" +
-    // 检测新 section
+    // 새 section 탐지
     "  var headerIdx=headers.indexOf(line);" +
     "  if(headerIdx>=0){" +
     "    if(curName&&curEntries.length)sections.push({name:curName,entries:curEntries});" +
     "    curName=headers[headerIdx];curEntries=[];continue" +
     "  }" +
     "  if(!curName)continue;" +
-    // 跳过周期 tab 和 UI 文字
+    // 기간 탭·UI 텍스트 건너뛰기
     "  if(/^(周榜|月榜|总榜)$/.test(line))continue;" +
-    // NO.1 条目
+    // NO.1 항목
     "  if(line==='NO.1'&&i+3<lines.length){" +
     "    var t=lines[i+1]||'';var a=lines[i+2]||'';var v=lines[i+3]||'';" +
     "    if(headers.indexOf(v)>=0)continue;" +
     "    curEntries.push({rank:1,title:t,author:a,genre:'',metric:v});" +
     "    i+=2;continue" +
     "  }" +
-    // #2-10 条目：N[题材]书名
+    // #2-10 항목: N[장르]제목
     "  var rm=line.match(/^(\\d{1,2})\\[(.+?)\\](.+)$/);" +
     "  if(rm){" +
     "    var nextVal=i+1<lines.length?lines[i+1]:'';" +
@@ -93,8 +89,8 @@ function extractAllRanks(port) {
 }
 
 /**
- * 从 DOM 获取书籍链接。每本书常有封面图 anchor（textContent 为空）和书名 anchor，
- * 按 bookId 聚合后取最长的非空文本作为书名，避免空封面 anchor 覆盖书名导致回填全失败。
+ * DOM에서 작품 링크를 얻는다. 작품마다 textContent가 빈 표지 anchor와 제목 anchor가 흔히 함께 있다.
+ * bookId로 묶어 가장 긴 비어 있지 않은 텍스트를 제목으로 써 빈 표지가 제목을 덮어 보충 전체가 실패하지 않게 한다.
  */
 function extractBookUrls(port) {
   const js = `JSON.stringify((function(){
@@ -114,15 +110,15 @@ function extractBookUrls(port) {
 }
 
 // ---------------------------------------------------------------------------
-// 渲染
+// 렌더링
 // ---------------------------------------------------------------------------
 
-/** rank-index 每个榜单展示前 10 名 */
+/** rank-index는 각 순위의 상위 10개를 표시한다. */
 const RANK_SIZE = 10;
 
 /**
- * 一个榜单的 Markdown。文件头带「数据质量」「问题摘要」：条目不足 10 条、作品页链接匹配不到一半时标出来。
- * 榜首条目只有作者、其余条目只有题材，是页面本身的样子，不算问题。
+ * 순위 하나의 Markdown. 머리의 ‘数据质量’, ‘问题摘要’에 항목 10개 미만 또는 작품 링크 일치율 절반 미만을 표시한다.
+ * 1위는 작가만, 나머지는 장르만 있는 것은 실제 페이지 형식이므로 문제가 아니다.
  */
 function renderRankFile(rt, entries, urls, now) {
   const norm = (s) => (s || "").replace(/\s+/g, "");
@@ -157,7 +153,7 @@ function renderRankFile(rt, entries, urls, now) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -174,7 +170,7 @@ function main() {
     ab(PORT, "open", RANK_URL);
     sleep(4000);
 
-    // 连通性自检：CDP 未起/被重定向时给可操作报错，而非误报"结构已变"
+    // 연결 자체 검사: CDP 미실행·리디렉션은 구조 변경으로 오보하지 않고 대응 가능한 오류를 준다.
     const probe = probePage(PORT);
     if (!probe) {
       console.error(
@@ -192,7 +188,7 @@ function main() {
 
     sections = extractAllRanks(PORT);
     if (!sections.length) {
-      // 懒加载可能未触发，再滚动重试一次
+      // 지연 로딩이 실행되지 않았을 수 있으므로 스크롤 후 한 번 더 시도한다.
       scrollLoad(PORT, 2);
       sleep(1000);
       sections = extractAllRanks(PORT);
@@ -210,7 +206,7 @@ function main() {
 
   console.log(`  ✓ 提取 ${sections.length} 个榜单，${urls.length} 个书籍链接`);
 
-  // 筛选需要的榜单类型
+  // 필요한 순위 유형 선택
   const targetTypes =
     RANKTYPE === "all"
       ? RANK_TYPES

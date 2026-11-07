@@ -1,52 +1,52 @@
-# Agent Note: 逐份精修短篇拆文资料
+# Agent Note: 단편 작품 분석 자료를 문서별로 다듬기
 
 Status: implemented
 
 ## Problem
 
-短篇拆文资料存在写作命令与观察标尺混用、无来源精确统计、主观评价与评分冲突、节点顺序和完成数组歧义。上一轮尚有六份短标尺只审阅而未修改，用户要求全部文件走五步精修并保留专业术语。
+단편 작품 분석 자료에는 집필 명령과 관찰 기준의 혼용, 출처 없는 정밀 통계, 주관 평가와 점수의 충돌, 노드 순서·완료 배열의 모호함이 있었다. 지난 차례에는 짧은 기준 문서 여섯 개를 읽기만 하고 수정하지 않았다. 사용자는 전문 용어를 유지하면서 모든 파일에 다섯 단계 다듬기를 적용하라고 요청했다.
 
 ## Decision
 
-入口和22份reference已逐文件完成五步精修，保留钩子、核心梗、金手指、结构模式、主角代理权等术语。已有改动已回查专业语义；补清六份标尺中的指代、钩子判断范围、悬念对象及旁观型主角的观察方式。保持引文、围栏模板、编号、机械字段与门禁；市场共享真源同步扫榜副本。
+진입점과 reference 22개를 파일별로 다섯 단계에 따라 다듬었다. 후킹·핵심 아이디어·특수 능력·구조 패턴·주인공의 주도권 등의 용어는 유지한다. 기존 변경의 전문적 의미를 다시 확인하고 기준 문서 여섯 개의 지시 대상, 후킹 판정 범위, 서스펜스 대상, 관찰자형 주인공의 관찰 방식을 보완했다. 인용·코드 블록 템플릿·번호·기계 필드·검증 조건은 유지하고 시장 자료 공유 원본을 순위 조사 사본에 동기화한다.
 
 ## Alternatives considered
 
-- 六份较短标尺只列已读，可以减少改动；但其中仍存在重复元说明和判断范围缺口，因此继续按五步精修落地。
-- 让所有主角拥有决定终局的行动权，可方便比较主动性；但灵魂旁观等短篇的体验正来自无力干预，因此记录实际作用与读者承诺，不将单一模式当成合格条件。
+- 짧은 기준 문서 여섯 개를 읽은 것으로만 기록하면 변경을 줄일 수 있다. 그러나 중복된 편집 과정 설명과 판정 범위 누락이 남아 있어 다섯 단계에 따라 수정까지 진행한다.
+- 모든 주인공에게 결말을 결정하는 행동권을 주면 주도성을 비교하기 쉽다. 그러나 영혼으로 지켜보는 단편 등은 개입할 수 없다는 무력함 자체가 독서 경험이므로 실제 역할과 독자에게 한 약속을 기록하고 단일 패턴을 합격 조건으로 삼지 않는다.
 
 ## Consequences
 
-拆文更接近可复核的文本观察，减少把题材模型强加给源文的风险。简化部分绝对判断后，分析者需要结合文本解释效果；机械验收不变，字数预算不提高。
+작품 분석이 검증 가능한 텍스트 관찰에 가까워지고 장르 모델을 원문에 강요할 위험이 줄어든다. 일부 절대 판단을 완화하여 분석자가 텍스트에 근거해 효과를 설명해야 한다. 기계적 검수와 글자 수 예산은 유지한다.
 
-下表中的人物、读者、技法、段落钩子、拆文实例、知乎风格与市场数据文件已合并或删除，阻断门槛也改为只查是否写齐，见 [拆文资料按时刻重组](../architecture/2026-10-17-analyze-docs-by-moment.md)。
+아래 표의 인물·독자·기법·문단 후킹·분석 사례·즈후 스타일·시장 데이터 파일은 이후 병합하거나 삭제했고 차단 기준도 필요한 내용을 모두 썼는지만 확인하도록 바뀌었다. [작품 분석 자료의 시점별 재구성](../architecture/2026-10-17-analyze-docs-by-moment.md)을 참조한다.
 
-## Coverage
+## 검토 범위
 
-逐文件完成五步通读；output-contract.md 已随前序写作真源同步，本 PR 再核对完成与续跑约定。
+파일별 다섯 단계 전체 읽기를 완료했다. output-contract.md는 앞선 집필 원본 처리와 함께 동기화했고 이 PR에서 완료·재개 규약을 다시 확인했다.
 
-| 文件 | 五步审查 | 结果 |
+| 파일 | 다섯 단계 검토 | 결과 |
 |---|---|---|
-| `SKILL.md` | 1→5 完成 | 已修改 |
-| `references/analysis-character-basics.md` | 1→5 完成 | 已修改 |
-| `references/analysis-character-design.md` | 1→5 完成 | 已修改 |
-| `references/analysis-character-relations.md` | 1→5 完成 | 已修改 |
-| `references/analysis-method.md` | 1→5 完成 | 已修改 |
-| `references/analysis-paragraph-hooks.md` | 1→5 完成 | 已修改 |
-| `references/analysis-reader-profile.md` | 1→5 完成 | 已修改 |
-| `references/analysis-report-style.md` | 1→5 完成 | 已修改 |
-| `references/analysis-short-genres.md` | 1→5 完成 | 已修改 |
-| `references/analysis-short-hooks.md` | 1→5 完成 | 已修改 |
-| `references/analysis-short-mechanics.md` | 1→5 完成 | 已修改 |
-| `references/analysis-short-patterns.md` | 1→5 完成 | 已修改 |
-| `references/analysis-short-suspense.md` | 1→5 完成 | 已修改 |
-| `references/analysis-writing-techniques.md` | 1→5 完成 | 已修改 |
-| `references/deconstruction-examples.md` | 1→5 完成 | 已修改 |
-| `references/optional-modules.md` | 1→5 完成 | 已修改 |
-| `references/output-contract.md` | 1→5 完成 | 前序共享真源已修改并复核 |
-| `references/quality-checklist.md` | 1→5 完成 | 已修改 |
-| `references/real-market-data.md` | 1→5 完成 | 已修改 |
-| `references/source-story-quality.md` | 1→5 完成 | 已修改 |
-| `references/stage2-3-structure-emotion.md` | 1→5 完成 | 已修改 |
-| `references/stage4-6-reversal-summary.md` | 1→5 完成 | 已修改 |
-| `references/zhihu-style.md` | 1→5 完成 | 已修改 |
+| `SKILL.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-character-basics.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-character-design.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-character-relations.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-method.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-paragraph-hooks.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-reader-profile.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-report-style.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-short-genres.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-short-hooks.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-short-mechanics.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-short-patterns.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-short-suspense.md` | 1→5 완료 | 수정 완료 |
+| `references/analysis-writing-techniques.md` | 1→5 완료 | 수정 완료 |
+| `references/deconstruction-examples.md` | 1→5 완료 | 수정 완료 |
+| `references/optional-modules.md` | 1→5 완료 | 수정 완료 |
+| `references/output-contract.md` | 1→5 완료 | 앞선 공유 원본 수정·재검토 완료 |
+| `references/quality-checklist.md` | 1→5 완료 | 수정 완료 |
+| `references/real-market-data.md` | 1→5 완료 | 수정 완료 |
+| `references/source-story-quality.md` | 1→5 완료 | 수정 완료 |
+| `references/stage2-3-structure-emotion.md` | 1→5 완료 | 수정 완료 |
+| `references/stage4-6-reversal-summary.md` | 1→5 완료 | 수정 완료 |
+| `references/zhihu-style.md` | 1→5 완료 | 수정 완료 |

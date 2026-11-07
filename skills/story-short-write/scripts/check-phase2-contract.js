@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 /**
- * Phase 2 deterministic contract verifier for story-short-write.
+ * story-short-write의 2단계 결정론적 계약 검증기.
  *
- * This script is intentionally mechanical: it checks whether the two Phase 2
- * artifacts expose the fields and table shape required by the skill. It does
- * not pretend to judge story quality or whether a reference was genuinely
- * understood.
+ * 2단계 산출물 두 개에 스킬이 요구하는 필드와 표 구조가 있는지 기계적으로 검사한다.
+ * 이야기 품질이나 참고 자료를 제대로 이해했는지는 판단하지 않는다.
  *
- * Usage: node scripts/check-phase2-contract.js --json [project-dir]
- * Exit: 0 = pass, 1 = blocking contract failures, 2 = invalid invocation.
+ * 사용법: node scripts/check-phase2-contract.js --json [project-dir]
+ * 종료 코드: 0 = 통과, 1 = 계약 위반으로 차단, 2 = 잘못된 호출.
  */
 
 'use strict'
@@ -21,7 +19,7 @@ const OUTLINE_HEADERS = [
   '主事件',
   '情节推进',
   '情绪',
-  '人物/关系变化',
+  '인물/关系变化',
   '因果/逻辑链',
   '读者新获知什么',
   '结尾承接/钩子',
@@ -69,8 +67,8 @@ function makeCheck(id, ok, file, evidence, expected, references, repair) {
 function verify(projectDir) {
   const project = path.resolve(projectDir)
   const skillRoot = path.resolve(__dirname, '..')
-  const settingsFile = path.join(project, '设定.md')
-  const outlineFile = path.join(project, '小节大纲.md')
+  const settingsFile = path.join(project, '설정.md')
+  const outlineFile = path.join(project, '구간개요.md')
   const settingsRead = readUtf8(settingsFile)
   const outlineRead = readUtf8(outlineFile)
   const checks = []
@@ -78,20 +76,20 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.settings-readable',
     settingsRead.ok,
-    '设定.md',
+    '설정.md',
     settingsRead.ok ? '文件存在且非空' : (settingsRead.error || '文件为空'),
-    '项目目录下存在非空的 设定.md',
+    '项目目录下存在非空的 설정.md',
     ['references/workflow-design.md'],
-    '只补建或补全 设定.md，不改动已通过的 小节大纲.md。'
+    '只补建或补全 설정.md，不改动已通过的 구간개요.md。'
   ))
   checks.push(makeCheck(
     'phase2.outline-readable',
     outlineRead.ok,
-    '小节大纲.md',
+    '구간개요.md',
     outlineRead.ok ? '文件存在且非空' : (outlineRead.error || '文件为空'),
-    '项目目录下存在非空的 小节大纲.md',
+    '项目目录下存在非空的 구간개요.md',
     ['references/workflow-design.md'],
-    '只补建或补全 小节大纲.md，不改动已通过的 设定.md。'
+    '只补建或补全 구간개요.md，不改动已通过的 설정.md。'
   ))
 
   if (!settingsRead.ok || !outlineRead.ok) return report(project, checks)
@@ -103,11 +101,11 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.platform-declared',
     Boolean(platformMatch),
-    '设定.md',
+    '설정.md',
     platformMatch ? `目标平台：${platformMatch[1]}` : '未找到可识别的目标平台字段',
     '写明“目标平台：知乎盐言 / 番茄 / 七猫 / 黑岩 / 红果 / 小程序”之一；作者没定平台写“未定”',
     ['references/submission-craft.md'],
-    '只在 设定.md 的基本信息或 Phase 2 设计校验区补目标平台。'
+    '只在 설정.md 的基本信息或 Phase 2 设计校验区补目标平台。'
   ))
 
   const genreMatch = settings.match(/(?:题材参考|题材包)\s*[：:]\s*`?(references\/(?:genre-styles\/[^`\s|]+\.md|genre-writing-formulas\.md))`?/)
@@ -122,7 +120,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.genre-reference-declared',
     genreOk,
-    '设定.md',
+    '설정.md',
     genreEvidence,
     '写明一个真实存在的 references/genre-styles/{题材}.md；冷门题材写 references/genre-writing-formulas.md',
     ['references/workflow-design.md', 'references/short-craft.md'],
@@ -136,7 +134,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.genre-moves-declared',
     moves.length >= 2 && moves.length <= 3,
-    '设定.md',
+    '설정.md',
     moves.length ? `识别到 ${moves.length} 个核心招式` : '未找到核心招式字段',
     '“核心招式：招式一；招式二[；招式三]”，共 2-3 个',
     ['references/workflow-design.md'],
@@ -150,7 +148,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.villain-contract',
     villainOk,
-    '设定.md',
+    '설정.md',
     villainSkipped ? '已明确反派不适用' : (villainOk ? '反派五字段齐全' : `缺字段：${missingVillainFields.join('、')}`),
     '无反派时写“反派设计：不适用（原因）”；有反派时填写身份、动机、作恶方式、致命弱点、报应',
     ['references/villain-and-reveal.md'],
@@ -165,7 +163,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.no-template-placeholders',
     placeholderLines.length === 0,
-    '设定.md',
+    '설정.md',
     placeholderLines.length ? `仍是模板占位符的行：${placeholderLines.map((entry) => entry.line).join('、')}` : '契约字段没有未填写的 {} 占位符',
     'Phase 2 契约字段写实际设计内容，不保留 {} 模板占位符',
     ['references/workflow-design.md'],
@@ -191,7 +189,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.outline-12-columns',
     headerOk,
-    '小节大纲.md',
+    '구간개요.md',
     headerCells
       ? `表头 ${headerCells.length} 列：${headerCells.join(' | ')}${legacyHeader ? '（兼容旧项目；新建项目使用现行列名）' : ''}`
       : '未找到以“结构段/五段功能”开头的 Markdown 表格',
@@ -216,7 +214,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.outline-data-rows',
     rows.length > 0 && rowShapeFailures.length === 0,
-    '小节大纲.md',
+    '구간개요.md',
     rows.length === 0 ? '固定表头下没有数据行' : (rowShapeFailures.length ? `列数错误行：${rowShapeFailures.map((row) => row.line).join('、')}` : `识别到 ${rows.length} 节，均为 12 列`),
     '固定表头下至少一行数据，且每节恰好 12 列',
     ['references/workflow-design.md'],
@@ -234,7 +232,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.outline-subevents',
     rows.length > 0 && progressionFailures.length === 0,
-    '小节大纲.md',
+    '구간개요.md',
     progressionFailures.length
       ? `情节推进为空或功能标签错误行：${progressionFailures.join('、')}`
       : (progressionRows.length === rows.length
@@ -245,7 +243,7 @@ function verify(projectDir) {
     '只修报告行的“情节推进”单元格，不重写其他列或其他节；不要为数量补事件。'
   ))
 
-  // 「约 1-1.3 万」「1.1万字」这类写法先换成整数再解析。
+  // ‘약 1~1.3만’, ‘1.1만 자’ 같은 표기는 먼저 정수로 바꾼 뒤 파싱한다.
   const targetLine = (settings.match(/目标字数\s*[：:][^\n]*/) || [''])[0]
     .replace(/(\d+(?:\.\d+)?)\s*((?:[-–—~～]|到|至)\s*)(\d+(?:\.\d+)?)\s*万/g,
       (_, a, sep, b) => `${Math.round(Number(a) * 10000)}${sep}${Math.round(Number(b) * 10000)}`)
@@ -272,9 +270,9 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.target-word-sum',
     targetOk,
-    '设定.md、小节大纲.md',
+    '설정.md、구간개요.md',
     `设定目标：${statedTarget === null ? '未识别' : (isRange ? `${targetLow}-${targetHigh}` : statedTarget)}；大纲合计：${targetSum === null ? '有非数字目标字数' : targetSum}`,
-    '设定.md 的目标字数为 1000-200000 的正整数或区间（用户明确范围优先，未指定时用所选平台的投稿区间，未定平台用 8000-12000）；大纲每行目标字数可解析，写区间时合计落在区间内，写单值时误差不超过 5%',
+    '설정.md 的目标字数为 1000-200000 的正整数或区间（用户明确范围优先，未指定时用所选平台的投稿区间，未定平台用 8000-12000）；大纲每行目标字数可解析，写区间时合计落在区间内，写单值时误差不超过 5%',
     ['references/workflow-design.md', 'references/submission-craft.md'],
     '只修目标字数字段或各节“目标字数”单元格，使合计匹配；不要用增删剧情绕过数字错误。'
   ))
@@ -299,7 +297,7 @@ function verify(projectDir) {
   checks.push(makeCheck(
     'phase2.reversal-position',
     reversalOk,
-    '设定.md',
+    '설정.md',
     reversalEvidence,
     '有反转时写明揭穿节号、全文总节数和计算百分比；总节数须与大纲一致，计算误差不超过 0.6%。无反转时写明“反转类型：无反转”和带原因的“反转位置：不适用（…）”',
     ['references/workflow-design.md', 'references/short-reversal.md'],
@@ -313,18 +311,18 @@ function verify(projectDir) {
     .filter((row) => /付费点/.test(row.hook))
   const paywallOk = paywallSection !== null && paywallRows.length === 1 &&
     paywallRows[0].section === paywallSection
-  let paywallEvidence = '设定.md 未按“付费点：第 X 节末”声明'
+  let paywallEvidence = '설정.md 未按“付费点：第 X 节末”声明'
   if (paywallSection !== null && paywallRows.length === 0) {
-    paywallEvidence = `设定.md 声明第 ${paywallSection} 节末；大纲“结尾承接/钩子”列未标出付费点`
+    paywallEvidence = `설정.md 声明第 ${paywallSection} 节末；大纲“结尾承接/钩子”列未标出付费点`
   } else if (paywallSection !== null && paywallRows.length > 0) {
-    paywallEvidence = `设定.md 声明第 ${paywallSection} 节末；大纲标在第 ${paywallRows.map((row) => row.section).join('、')} 节`
+    paywallEvidence = `설정.md 声明第 ${paywallSection} 节末；大纲标在第 ${paywallRows.map((row) => row.section).join('、')} 节`
   }
   checks.push(makeCheck(
     'phase2.paywall-in-both',
     paywallOk,
-    '设定.md、小节大纲.md',
+    '설정.md、구간개요.md',
     paywallEvidence,
-    '设定.md 写“付费点：第 X 节末”，且小节大纲.md 第 X 行数据的“结尾承接/钩子”单元格只标一次“付费点”',
+    '설정.md 写“付费点：第 X 节末”，且小节大纲.md 第 X 行数据的“结尾承接/钩子”单元格只标一次“付费点”',
     ['references/submission-craft.md', 'references/workflow-design.md'],
     '只在缺失的文件补同一个付费断点，并确保它位于对应节末的钩子单元格。'
   ))

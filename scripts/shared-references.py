@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check or sync explicitly managed cross-skill reference copies."""
+"""명시적으로 관리하는 스킬 간 참조 사본을 검사하거나 동기화한다."""
 
 from __future__ import annotations
 
@@ -346,7 +346,7 @@ def main() -> int:
     try:
         groups = load_groups(root, manifest)
         if args.runtime_manifest is not None:
-            # Disjoint file types keep the two manifests from owning the same path.
+            # 파일 형식을 분리해 두 매니페스트가 같은 경로를 소유하지 않게 한다.
             load_groups(root, args.runtime_manifest.resolve(), runtime_manifest=True)
         return run(args.command, root, groups)
     except ManifestError as exc:

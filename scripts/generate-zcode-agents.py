@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate ZCode plugin-agent Markdown from canonical Claude agent templates."""
+"""기준 Claude 에이전트 템플릿에서 ZCode 플러그인 에이전트 Markdown을 생성한다."""
 
 from __future__ import annotations
 
@@ -57,15 +57,15 @@ def adapt_body(body: str, name: str) -> str:
     )
     adapted = re.sub(
         r'`Agent\(subagent_type: "([A-Za-z0-9_-]+)"\)`',
-        lambda match: f"ZCode 子代理 `{match.group(1)}`",
+        lambda match: f"ZCode 하위 에이전트 `{match.group(1)}`",
         adapted,
     )
     if name == "chapter-extractor":
         adapted = (
             adapted.rstrip()
-            + "\n\n> ZCode 权限边界：本宿主不提供 Claude inline hook 的 per-agent 写入强隔离。"
-            + "你仍只能 Write/Edit 调用方指定的单个 `_analysis_cache/输入-{批次ID}.md`，"
-            + "不得写改其他路径；调用方必须复核回执与产物路径。\n"
+            + "\n\n> ZCode 권한 경계: 이 호스트는 Claude 인라인 훅의 에이전트별 강한 쓰기 격리를 제공하지 않습니다. "
+            + "호출자가 지정한 단일 `_analysis_cache/输入-{批次ID}.md`에만 Write/Edit할 수 있으며, "
+            + "다른 경로에 쓰거나 수정해서는 안 됩니다. 호출자는 응답과 산출물 경로를 재확인해야 합니다.\n"
         )
     return adapted.rstrip() + "\n"
 

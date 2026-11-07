@@ -1,110 +1,110 @@
-# How it works: agents, hooks and project structure
+# 작동 원리: 에이전트, 훅, 프로젝트 구조
 
-[中文](architecture.md)
+[중국어판의 한국어 번역](architecture.md)
 
-Oh Story splits long-form writing into three layers: the file system as memory, specialist agents, and automated gates. The overview is in [How it works](../README_EN.md#how-it-works).
+Oh Story는 장편 집필을 파일 시스템 기반 기억, 전문 에이전트 분업, 자동 검증 관문의 세 층으로 나눕니다. 개요는 [작동 원리](../README_EN.md#how-it-works)에 있습니다.
 
-## Agent System
+## 에이전트 체계
 
-Writing skills call seven specialist agents as needed and fall back to the main session when the host has not registered them. The models below are Claude template defaults; other hosts use their adapter settings:
+집필 스킬은 필요에 따라 전문 에이전트 7개를 호출합니다. 호스트에 등록되지 않았다면 스킬 규칙에 따라 주 세션에서 수행합니다. 표의 모델은 Claude 템플릿의 기본값이며 다른 호스트는 해당 어댑터 설정을 따릅니다.
 
-| Agent | Model | Role |
+| 에이전트 | 모델 | 역할 |
 |:------|:------|:-----|
-| **story-architect** | Opus | Story architecture — genre positioning, outline structure, hook/twist design, emotion arcs |
-| **character-designer** | Sonnet | Character design — profiles, voice, motivation chains, dialogue writing |
-| **narrative-writer** | Opus | Narrative writer — prose writing, de-AI-ify, format compliance |
-| **consistency-checker** | Haiku | Consistency check — fact conflict scanning, foreshadowing tracking, S1-S4 grading reports |
-| **story-researcher** | Sonnet | Research — CDP search + full-text extraction, multi-source cross-verification, structured reference files |
-| **story-explorer** | Haiku | Story query — read-only character/foreshadowing/setting/progress lookup, quick context loading |
-| **chapter-extractor** | Haiku | Continuous chapter blocks / legacy-asset normalization — chapter facts, per-chapter plot points, and cross-chapter plot arcs |
+| **story-architect** | Opus | 이야기 구조 — 장르 포지셔닝, 개요 구조, 훅·반전 설계, 감정 곡선 |
+| **character-designer** | Sonnet | 인물 설계 — 인물 기록, 말투, 동기 사슬, 대화 작성 |
+| **narrative-writer** | Opus | 서사 집필 — 본문 작성, AI 문체 제거, 형식 준수 |
+| **consistency-checker** | Haiku | 일관성 검사 — 사실 충돌 탐색, 복선 추적, S1~S4 등급 보고 |
+| **story-researcher** | Sonnet | 자료 조사 — CDP 검색과 본문 추출, 여러 출처 교차 검증, 구조화된 참조 파일 작성 |
+| **story-explorer** | Haiku | 작품 조회 — 인물·복선·설정·진척 읽기 전용 조회, 빠른 맥락 로딩 |
+| **chapter-extractor** | Haiku | 연속 장 묶음·이전 산출물 정규화 — 장별 사실, 장별 플롯 항목, 여러 장에 걸친 플롯 |
 
-Agents read relevant character, dialogue and twist references as needed. Unread files do not enter the context.
+에이전트는 작업에 필요한 인물 설계·대화·반전 자료를 읽습니다. 읽지 않은 파일은 맥락에 들어가지 않습니다.
 
-## Automation Hooks
+## 자동화 훅
 
-`/story-setup` deploys 8 automation hooks for Claude Code:
+`/story-setup`은 Claude Code에 자동화 훅 8개를 배포합니다.
 
-| Hook | Trigger | Function |
+| 훅 | 실행 시점 | 기능 |
 |:-----|:---------|:---------|
-| session-start.sh | Session start | Display branch, progress snapshot, deconstruction status |
-| session-end.sh | Session end | Log session to `追踪/session-log.txt` |
-| detect-story-gaps.sh | Session start | Detect setting gaps, missing outlines, foreshadowing breaks |
-| pre-compact.sh | Before context compaction | Save progress snapshot path and line-count summary |
-| post-compact.sh | After context compaction | Prompt to read progress snapshot for context recovery |
-| validate-story-commit.sh | git commit | Check hardcoded attributes, setting required fields (warning only, non-blocking) |
-| guard-outline-before-prose.sh | Before writing prose (Write/Edit) | Blocks first creation of a chapter/story body when its 细纲/小节大纲 is missing (blocking) — enforces outline-first |
-| check-prose-after-write.sh | After writing prose (Write/Edit) | Lightly scan for truncation, leaked workflow terms, deterministic toxic phrasing, (advisory; word count is measured by the writing workflow before delivery) |
+| session-start.sh | 세션 시작 | 브랜치, 진척 스냅샷, 작품 분석 상태 표시 |
+| session-end.sh | 세션 종료 | 세션 로그를 `추적/session-log.txt`에 기록 |
+| detect-story-gaps.sh | 세션 시작 | 설정 공백, 개요 누락, 복선 단절 탐지 |
+| pre-compact.sh | 맥락 압축 전 | 진척 스냅샷 경로와 줄 수 요약 저장 |
+| post-compact.sh | 맥락 압축 후 | 진척 스냅샷을 읽어 맥락 복원하도록 안내 |
+| validate-story-commit.sh | git commit | 하드코딩 속성과 설정 필수 필드 검사. 경고만 하며 차단하지 않음 |
+| guard-outline-before-prose.sh | 본문 작성 전(Write/Edit) | 대응 상세 개요·소절 개요가 없으면 본문 최초 생성을 차단하여 개요 우선 원칙 적용 |
+| check-prose-after-write.sh | 본문 작성 후(Write/Edit) | 글 잘림, 유출된 작업 용어, 결정적으로 판정할 수 있는 유해 문장 패턴을 가볍게 검사. 알림만 하며 차단하지 않음. 분량은 전달 전 집필 워크플로에서 일괄 계수 |
 
-## Project File Structure
+## 프로젝트 파일 구조
 
-The project keeps settings, outlines, prose and tracking in separate files. Each chapter loads relevant records and commits changes that actually happened, reducing reliance on the chat transcript.
+프로젝트는 설정·개요·본문·추적 정보를 따로 관리합니다. 모델은 매 장 관련 파일을 읽고 실제로 일어난 변화를 추적 정보에 반영하여 대화 기록 의존도를 줄입니다.
 
-Only `story-long-write` and `story-short-write` manage and query author memory. `story` routes related requests; de-AI-ifying and review use the style requirements passed by the writing workflow.
+작가 메모리 관리와 조회는 `story-long-write`와 `story-short-write`만 담당합니다. `story`는 관련 요청을 전달하고, AI 문체 제거·원고 검토는 집필 워크플로에서 받은 문체 요구를 사용합니다.
 
-Author memory stays separate from any one book's continuity tracking and lives in two stores so memory travels with the book: the workspace `.story/作者记忆/` holds global, genre and workflow preferences (`AP` ids), and each book directory's `.story/作者记忆/` holds only that book's preferences (`BP` ids). Both share the same layout:
+작가 메모리는 개별 작품의 연속성 추적과 분리하고, 책과 함께 이동하도록 두 계층에 저장합니다. 작업 공간의 `.story/작가기억/`에는 전역·장르·워크플로 선호(`AP` 번호), 책 디렉터리의 `.story/작가기억/`에는 해당 책의 선호(`BP` 번호)만 저장합니다. 두 계층의 구조는 같습니다.
 
 ```text
-.story/作者记忆/
-├── _author-memory-state.json  # Single structured authority
-├── 作者画像.md               # Confirmed preferences used in creation
-├── 待确认.md                 # Candidates whose scope the author left vague, and conflict candidates
-└── 变更记录.md               # Auditable replacement and withdrawal history
+.story/작가기억/
+├── _author-memory-state.json  # 유일한 구조화된 기준 데이터
+├── 작가프로필.md               # 창작에 사용할 수 있는 확인된 선호
+├── 확인대기.md                 # 작가 발언의 범위가 모호한 후보와 충돌 후보
+└── 변경기록.md               # 감사 가능한 대체·철회 이력
 ```
 
-Only preferences the author states explicitly are recorded; nothing is inferred from repeated edits or finished drafts.
+작가가 명시적으로 표현한 선호만 기록하며 반복 수정이나 완성 원고에서 추론하지 않습니다.
 
-**Long-form:** the English directory labels below explain their roles. Actual project paths use the Chinese names shown in the [Chinese structure](architecture.md#项目文件结构).
+**장편:** 아래 영어 디렉터리명은 역할을 설명하기 위한 것입니다. 실제 경로는 [중국어 구조](architecture.md#项目文件结构)에 제시된 중국어 이름을 사용합니다.
 
 ```
 {Book Title}/
 ├── Settings/
-│   ├── World/              # Background, power systems, etc. — one file per topic
-│   ├── Characters/         # One file per character (Shen_Zhi.md, Lu_Yanzhi.md)
-│   ├── Factions/           # One file per faction/organization (Tianji_Pavilion.md)
-│   ├── Relationships.md    # Character relationship map
-│   └── Genre_Positioning.md # Core trope + benchmark analysis
+│   ├── World/              # 배경·능력 체계 등. 주제별 파일
+│   ├── Characters/         # 인물별 파일 (Shen_Zhi.md, Lu_Yanzhi.md)
+│   ├── Factions/           # 세력·조직별 파일 (Tianji_Pavilion.md)
+│   ├── Relationships.md    # 인물 관계도
+│   └── Genre_Positioning.md # 장르 핵심 설정과 비교 작품 분석
 ├── Outline/
-│   ├── Outline.md          # Full-book volume-level structure
-│   ├── Volume_1.md         # One per volume: payoff pacing + emotion arc + character arc + foreshadowing + twists
-│   ├── Chapter_001.md      # One per chapter: summary + multi-line plot + relationships/order + hooks
+│   ├── Outline.md          # 작품 전체의 권 단위 구조
+│   ├── Volume_1.md         # 권별 파일: 쾌감 리듬·감정 곡선·인물 변화·복선·반전
+│   ├── Chapter_001.md      # 장별 파일: 내용 요약·다중 플롯·인물 관계와 등장 순서·훅
 │   └── ...
 ├── Prose/
 │   ├── Chapter_001_Title.md
 │   └── ...
-├── Benchmark/                # Benchmark reference (structured subdirs synced from deconstruction)
+├── Benchmark/                # 비교 자료. 구조화된 하위 디렉터리는 작품 분석 자료에서 동기화
 │   └── {Benchmark Book}/
-│       ├── Source/              # Benchmark book original chapters
-│       ├── Characters/         # Structured character profiles (synced from analyze)
-│       ├── Plotlines/          # Structured plot lines/pacing/emotion modules (synced from analyze)
-│       ├── Settings/           # Structured world settings (synced from analyze)
-│       ├── 文风.md              # Benchmark voice used before daily writing
-│       └── Report.md            # Analyze skill output
-├── Tracking/                # File-first continuity state
-│   ├── _tracking-state.json # Single structured authority (not loaded into prose prompts)
-│   ├── Context.md           # Derived hot context (7 fixed sections, ≤12 KB)
-│   ├── Chapter_Records/     # Compact continuity record / revision overlay (≤3072 bytes)
-│   ├── Character_Status/    # Derived snapshot per core character
-│   ├── Foreshadowing.md     # Derived current foreshadowing view
-│   └── Timeline/            # Derived author-truth and reader-known views
-├── References/              # story-researcher output
-│   └── {topic}.md           # Split by research topic
+│       ├── Source/              # 비교 작품 원문 장
+│       ├── Characters/         # 구조화된 인물 카드. 분석 산출물에서 동기화
+│       ├── Plotlines/          # 구조화된 플롯·리듬·감정 모듈. 분석 산출물에서 동기화
+│       ├── Settings/           # 구조화된 설정. 분석 산출물에서 동기화
+│       ├── 문체.md              # 일일 집필 전에 읽어 비교 작품 문체를 참고
+│       └── Report.md            # 분석 스킬의 보고서
+├── Tracking/                # 파일 우선 연속성 상태
+│   ├── _tracking-state.json # 유일한 구조화된 기준 상태. 본문 프롬프트에는 넣지 않음
+│   ├── Context.md           # 파생된 이어 쓰기 상태 카드. 고정 7개 절, 최대 12 KB
+│   ├── Chapter_Records/     # 장별 미래 관련 연속성 기록·수정 계층. 최대 3072바이트
+│   ├── Character_Status/    # 핵심 인물별 파생 상태 스냅샷
+│   ├── Foreshadowing.md     # 파생된 현재 복선 뷰
+│   └── Timeline/            # 파생된 작가의 진실·독자가 아는 사실 뷰
+├── References/              # story-researcher의 조사 자료
+│   └── {topic}.md           # 조사 주제별 분리
 ```
 
-**Short-form file structure:**
+**단편 파일 구조:**
 
 ```
-短篇/{Title}/
-├── 正文.md                  # Final draft
-├── 小节大纲.md              # 8-section structure + emotion curve
-└── 拆文库/                  # If a reference novel exists (analyze output)
+단편/{Title}/
+├── 본문.md                  # 완성 원고
+├── 구간개요.md              # 8개 절 구조와 감정 곡선
+└── 작품분석실/                  # 참고 소설이 있을 경우. 분석 산출물
     └── {Book}/
-        ├── 拆文报告.md
-        ├── 情节节点.md
-        └── 写作手法.md
+        ├── 작품분석보고서.md
+        ├── 사건노드.md
+        └── 집필기법.md
 ```
 
-The eight-section short-form outline is an illustration; the confirmed design and delivery contract determine the actual section count.
+단편의 8개 절은 예시입니다. 실제 절 수는 확인된 설계와 전달 계약에 따라 정합니다.
 
-**Deconstruction Library:** Deconstruction skills save structured outputs (characters, plotlines, settings, chapters) under `拆文库/{Book Title}/` at project root; long-form plot output includes `节奏.md` and `情绪模块.md`. Writing skills consume these assets through `对标/{书名}/剧情/` and related benchmark subdirectories, falling back to the deconstruction library when project views are absent. The book’s own style takes priority; benchmark style fills unspecified dimensions.
+**작품 분석 자료:** 분석 스킬은 프로젝트 루트의 `작품분석실/{Book Title}/`에 인물·플롯·설정·장별 구조화 자료를 저장합니다. 장편 플롯에는 `리듬.md`와 `감정모듈.md`가 포함되며 분석의 기준 데이터입니다. 집필 스킬은 `비교작품/{书名}/플롯/` 등 프로젝트의 참조 뷰에서 이를 읽고, 뷰가 없으면 작품 분석 자료로 돌아갑니다. 해당 책의 문체가 우선이고 비교 작품은 지정되지 않은 문체 특성만 보완합니다.
 
-**`.active-book`:** a text file at project root containing the active book's relative path (for example, `长篇/My Novel`). Hooks and writing skills use it to locate the current project.
+**`.active-book`:** 프로젝트 루트의 텍스트 파일이며 현재 활성 작품의 **상대 경로**(예: `장편/My Novel`)를 담습니다. 훅과 집필 스킬이 이 파일로 현재 프로젝트를 찾습니다.

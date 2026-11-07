@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior regression for generated ZCode plugin agents."""
+"""생성된 ZCode 플러그인 에이전트의 동작 회귀 테스트."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ CALLER_SKILLS = (
 
 
 def caller_contract_errors(root: Path) -> list[str]:
-    """Inspect entrypoints and every cold reference, not just generated roles."""
+    """생성된 역할뿐 아니라 진입점과 모든 필요 시 읽는 참조를 검사한다."""
     patterns = (
         (r"\bAgent\s*\(\s*subagent_type\s*:", "Claude-only invocation"),
         (r"canonical(?:\s+agent)?\s*目录\s*已部署|检查\s*canonical\s*目录", "file-only role availability"),

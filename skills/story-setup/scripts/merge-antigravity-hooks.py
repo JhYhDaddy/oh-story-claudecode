@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Merge the managed oh-story Antigravity hook group atomically.
+"""관리 대상 oh-story Antigravity 훅 그룹을 원자적으로 병합한다.
 
-Antigravity's workspace hooks file is a top-level mapping of named hook groups.
-story-setup owns only the ``oh-story`` key and preserves every user group.
+Antigravity 작업 공간 훅 파일의 최상위는 이름별 훅 그룹 매핑이다.
+story-setup은 ``oh-story`` 키만 관리하고 모든 사용자 그룹을 보존한다.
 """
 
 from __future__ import annotations

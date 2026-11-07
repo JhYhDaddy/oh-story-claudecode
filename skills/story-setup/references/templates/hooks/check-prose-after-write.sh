@@ -1,53 +1,53 @@
 #!/bin/bash
-# check-prose-after-write.sh — PostToolUse(Write|Edit|MultiEdit) 正文兜底
-# 正文落盘后自动跑「轻量确定性网」，把发现注入提醒——模型无关的兜底层：
-# 即使主会话漏跑「确定性收尾」步骤（压缩/弱模型/分心），这些硬信号也保证被抓。
+# check-prose-after-write.sh — PostToolUse(Write|Edit|MultiEdit) 본문 보완 검사
+# 본문 저장 후 가벼운 결정론적 검사망을 자동 실행해 발견 내용을 알린다. 모델과 무관한 보완 계층이다.
+# 주 세션이 압축/낮은 모델 성능/주의 분산으로 결정론적 마무리를 놓쳐도 강한 신호는 반드시 잡는다.
 #
-# 只兜「硬信号」（漏跑最伤、退化模型自己发现不了的）：截断、生成拒绝语 / AI 自指、
-# 工程词漏进正文、紧邻整行复读、毒句式（确定性 AI 句式指纹）、落盘失败/截断。
-# 碎句号/长段落/破折号这类 advisory，以及复读全量 / tier2 歧义词，仍由 workflow 收尾
-# 步骤的 check-ai-patterns / check-degeneration 全量跑——本 hook 不部署也不依赖那两个
-# 检测器，是独立的轻量网（毒句式规则与 check-ai-patterns.js 的同名规则统一规格）。
+# 누락 피해가 크고 퇴화한 모델이 스스로 찾기 어려운 강한 신호만 다룬다. 잘림, 생성 거부/AI 자기 지칭,
+# 본문의 제작 용어 누출, 인접한 전체 줄 반복, 유해 문형(결정론적 AI 문형 특징), 저장 실패/잘림.
+# 지나친 단문/긴 문단/대시 같은 advisory와 전체 반복/tier2 모호한 단어는 작업 흐름의 마무리 단계에서
+# check-ai-patterns / check-degeneration으로 전체 검사한다. 이 훅은 두 탐지기를 배포하거나 의존하지 않으며
+# 독립된 가벼운 검사망이다(유해 문형은 check-ai-patterns.js의 동명 규칙과 같은 규격).
 #
-# 覆盖范围：只在 PostToolUse 的 Write|Edit|MultiEdit 上触发。cat>/tee/cp/mv 等用 Bash
-# 写正文的路径绕过本 hook（Claude/OpenCode 侧 Bash 只做 pre-guard，无 post-write 兜底）；
-# 这类路径由 Codex 的 Stop 回合末 git 改动集扫描兜全。已知边界，非缺陷。
+# 범위: PostToolUse의 Write|Edit|MultiEdit에서만 실행한다. cat>/tee/cp/mv 등 Bash로
+# 본문을 쓰는 경로는 이 훅을 우회한다(Claude/OpenCode Bash는 사전 보호만 있고 쓰기 후 보완은 없음).
+# 이러한 경로는 Codex Stop의 턴 종료 git 변경 집합 검사가 보완한다. 알려진 범위 제한이며 결함이 아니다.
 #
-# 内容网走 node 共享核 story_hook_core.js（和 OpenCode/ZCode 同一份），只留 bash
-# 做事件路由与文件类型判定。node 天生按 UTF-8 写 stdout，免掉旧内嵌 python 的 cp936 体操。
+# 내용 검사는 OpenCode/ZCode와 같은 node 공유 코어 story_hook_core.js를 사용하고 bash는
+# 이벤트 라우팅과 파일 유형 판정만 맡는다. node stdout은 기본 UTF-8이라 이전 내장 Python의 cp936 처리가 필요 없다.
 #
-# 非阻塞（exit 0，advisory 提醒，不挡写作）；无发现时完全静默（不污染 context）；
-# node 不可用时静默放行（兜底不能反过来卡流程）。
+# 비차단(exit 0, 안내만 하며 집필을 막지 않음). 발견이 없으면 컨텍스트를 오염시키지 않도록 완전히 조용하다.
+# node를 사용할 수 없으면 조용히 허용한다(보완 검사가 흐름을 막으면 안 됨).
 set -euo pipefail
 
 source "$(dirname "$0")/lib/common.sh"
 
-# 中文路径上做 bash 通配/basename/case。Windows 中文系统的 GBK 区域会把 UTF-8 字面量按
-# 多字节误解码、让每个比较恒假而静默失效（issue #164）。强制 C 区域走字节匹配才稳定。
-# node 单独进程按 UTF-8 处理，不受 LC_ALL=C 影响。
+# 중국어 경로에서 bash glob/basename/case를 쓴다. 중국어 Windows의 GBK 로캘은 UTF-8 리터럴을
+# 멀티바이트로 잘못 디코딩해 비교가 항상 거짓이 된다(이슈 #164). C 로캘 바이트 일치로 강제해야 안정적이다.
+# node는 별도 프로세스에서 UTF-8로 처리하므로 LC_ALL=C의 영향을 받지 않는다.
 export LC_ALL=C
 
 HOOK_INPUT="${CLAUDE_TOOL_INPUT:-}"
 if [ -z "$HOOK_INPUT" ] && [ ! -t 0 ]; then
   HOOK_INPUT="$(cat)"
 fi
-# 故意不 export：Write/Edit 负载里带整章正文，export 会把它塞进本脚本每个子进程的 envp，
-# 负载一大 execve 就 E2BIG（Linux 单个环境变量上限 128 KiB，macOS 整体 1 MiB），
-# dirname/basename/node 全报「Argument list too long」，兜底网静默停用。改为只在需要负载的
-# node 调用处用管道喂 stdin（story_hook_cli.js extract-target 在 HOOK_INPUT 缺省时读 stdin）。
+# 의도적으로 export하지 않는다. Write/Edit 입력은 장 전체 본문을 포함해 export하면 모든 자식 프로세스 envp에 들어간다.
+# 입력이 커지면 execve가 E2BIG를 낸다(Linux 단일 환경 변수 128 KiB, macOS 전체 1 MiB 상한).
+# dirname/basename/node가 모두 Argument list too long을 내어 보완 검사망이 조용히 중단된다. 필요한 node 호출에만
+# 파이프로 stdin을 전달한다(story_hook_cli.js extract-target은 HOOK_INPUT이 없으면 stdin을 읽음).
 
-# 探测 node（官方现在推荐原生二进制装 Claude Code，只有 npm 装法才带 Node——native 安装
-# 可能无 node。探测不到就静默放行：兜底网降级停用，session-start.sh 会在会话起点提示一次）。
+# node 탐색: 공식 권장 네이티브 바이너리 Claude Code에는 node가 없을 수 있고 npm 설치에만 포함된다.
+# 찾지 못하면 조용히 허용하고 보완 검사망을 중단한다. session-start.sh가 세션 시작에 한 번 안내한다.
 node -e "" >/dev/null 2>&1 || exit 0
 CLI="$(dirname "$0")/story_hook_cli.js"
 [ -f "$CLI" ] || exit 0
 
-# 抽取目标文件路径（负载走管道喂 node 的 stdin，按 UTF-8 写回路径）。
+# 대상 파일 경로 추출: 입력을 파이프로 node stdin에 전달하고 UTF-8 경로를 돌려받는다.
 TARGET="$(printf '%s' "$HOOK_INPUT" | node "$CLI" extract-target 2>/dev/null || true)"
 [ -z "$TARGET" ] && exit 0
 
 ROOT=$(project_root)
-# 盘符绝对路径归一（对齐 guard-outline-before-prose.sh / plugin.ts，issue #184）。
+# 드라이브 문자 절대 경로 정규화(guard-outline-before-prose.sh / plugin.ts와 일치, 이슈 #184).
 case "$TARGET" in
   /*) ABS="$TARGET" ;;
   [A-Za-z]:[/\\]*) ABS="${TARGET//\\//}" ;;
@@ -57,20 +57,20 @@ esac
 BASE="$(basename "$ABS")"
 PARENT="$(basename "$(dirname "$ABS")")"
 
-# 只对「正文」文件兜底，绝不碰代码/细纲/设定/大纲等非正文文件：
-#   - 短篇：{书}/正文.md，且同目录有 设定.md（真短篇工程信号，排除 docs/正文.md 之类）
-#   - 长篇：{书}/正文/第N章*.md（父目录必须是「正文」），且 {书} 有 大纲/追踪/设定（真书结构）
-# case 模式锚定首字：细纲_第N章.md（首字「细」）、卷纲_第1卷.md、check-ai-patterns.js、
-# 设定.md、大纲.md 等天然都不匹配 `正文.md`/`第*章*.md`，不会被捕获。
+# 본문 파일만 보완 검사하며 코드/상세 개요/설정/전체 개요 등은 절대 건드리지 않는다.
+#   - 단편: {书}/본문.md이며 같은 디렉터리에 설정.md가 있음(실제 단편 신호, docs/본문.md 등 제외)
+#   - 장편: {书}/본문/제N장*.md(부모는 반드시 正文), {书}에 개요/추적/设定이 있음(실제 책 구조)
+# case 패턴은 첫 문자에 고정한다. 상세개요_제N장.md(첫 글자 细), 권개요_제1권.md, check-ai-patterns.js,
+# 설정.md, 개요.md 등은 `본문.md`/`제*장*.md`와 일치하지 않아 탐지되지 않는다.
 IS_PROSE=false
 case "$BASE" in
-  正文.md)
-    [ -f "$(dirname "$ABS")/设定.md" ] && IS_PROSE=true
+  본문.md)
+    [ -f "$(dirname "$ABS")/설정.md" ] && IS_PROSE=true
     ;;
-  第*章*.md)
-    if [ "$PARENT" = "正文" ]; then
+  제*장*.md)
+    if [ "$PARENT" = "본문" ]; then
       BOOK="$(dirname "$(dirname "$ABS")")"
-      if [ -d "$BOOK/大纲" ] || [ -d "$BOOK/追踪" ] || [ -d "$BOOK/设定" ] || [ -f "$BOOK/设定.md" ]; then
+      if [ -d "$BOOK/개요" ] || [ -d "$BOOK/추적" ] || [ -d "$BOOK/설정" ] || [ -f "$BOOK/설정.md" ]; then
         IS_PROSE=true
       fi
     fi
@@ -79,29 +79,29 @@ esac
 [ "$IS_PROSE" = true ] || exit 0
 [ -f "$ABS" ] || exit 0
 
-# 报告用真实换行拼接（NL），不用字面 `\n` 占位：末尾必须 printf '%s' 输出，见文末注释。
+# 보고서는 리터럴 `\n` 대신 실제 줄바꿈 NL로 합친다. 마지막 출력은 printf %s여야 한다(끝 주석 참조).
 NL=$'\n'
 OUT=""
 
-# 落盘检测：正文极短（<200 字节）多半是没写完或落盘失败（quota/timeout 中断）。
-# 用字节（wc -c）而非字数：LC_ALL=C 下无法按码点数中文，字节阈值已足够判「几乎空」。
+# 저장 검사: 본문이 200바이트 미만이면 미완성 또는 quota/timeout 중단에 따른 저장 실패일 가능성이 크다.
+# LC_ALL=C에서는 중국어 코드 포인트를 셀 수 없어 글자 수 대신 wc -c 바이트를 쓴다. 거의 비었는지 판단하기에 충분하다.
 BYTES=$(wc -c < "$ABS" 2>/dev/null | tr -d ' ' || echo 0)
 case "$BYTES" in ''|*[!0-9]*) BYTES=0 ;; esac
 if [ "$BYTES" -lt 200 ]; then
-  OUT+="【落盘】正文仅 ${BYTES} 字节，疑似未写完/落盘失败（quota/超时中断？），请核对并补写。${NL}"
+  OUT+="【파일 저장】본문이 ${BYTES}바이트뿐입니다. 미완성이나 저장 실패(용량 한도·시간 초과)가 의심되므로 확인하고 보완하세요.${NL}"
 fi
 
-# 内容网走 node 共享核，抓截断/拒绝语/AI 自指/工程词 tier1/紧邻复读/毒句式。
-# 字数只由 storyctl 的公开命令测量，不在 Adapter 内复制，也不受 Node 降级影响。
+# node 공유 코어가 잘림/거부 표현/AI 자기 지칭/tier1 제작 용어/인접 반복/유해 문형을 탐지한다.
+# 글자 수는 storyctl 공개 명령만 측정한다. 어댑터에 복제하지 않고 Node 기능 저하에도 영향받지 않는다.
 NET_MSG="$(node "$CLI" prose-net "$ABS" 2>/dev/null || true)"
-[ -n "$NET_MSG" ] && OUT+="【退化/工程词/毒句式】（硬信号：截断/拒绝语/工程词→重写该段；毒句式→就地改写；命中即处理，别留给下一章）${NL}${NET_MSG}${NL}"
+[ -n "$NET_MSG" ] && OUT+="【품질 저하/작업 용어/문제 문장】(잘림·거부 문구·작업 용어는 해당 문단 재작성, 문제 문장은 해당 위치 수정. 다음 장으로 미루지 말고 즉시 처리)${NL}${NET_MSG}${NL}"
 
 [ -z "$OUT" ] && exit 0
 
-# 必须 %s 不能 %b：${OUT} 里嵌的是作者原文切片（截断/复读/工程词摘录）。%b 会把正文里的
-# `\n`、`\b`、`\t` 当转义展开，把摘录改写成文件里不存在的内容；`\c`（Windows 路径 C:\code
-# 就带）更会直接终止整条 printf，把它后面所有硬信号静默丢掉（exit 0、stderr 空）。
-# 本 hook 自己的分隔换行由上面的 ${NL} 真实换行承担，不再依赖 %b 展开。
-printf '%s\n' "=== 正文兜底检测（${BASE}）===" "轻量确定性网自动复扫（模型无关，防主会话漏跑收尾）。按类型处理后复扫到净："
+# 반드시 %s를 쓰고 %b는 금지한다. ${OUT}에는 작가 원문 일부(잘림/반복/제작 용어 발췌)가 들어 있다. %b는 본문의
+# `\n`, `\b`, `\t`를 확장해 파일에 없는 내용으로 바꾸며 `\c`(Windows 경로 C:\code에도 포함)는
+# printf 전체를 즉시 끝내 이후 강한 신호를 조용히 버린다(종료 0, stderr 없음).
+# 훅 자체 구분 줄바꿈은 위 ${NL} 실제 줄바꿈이 담당하며 %b 확장에 의존하지 않는다.
+printf '%s\n' "=== 본문 보완 검사(${BASE}）===" "주 세션이 마무리 검사를 놓치지 않도록 모델과 무관한 규칙으로 자동 재검사합니다. 유형별로 수정한 뒤 문제가 없을 때까지 다시 검사하세요:"
 printf '%s' "$OUT"
 exit 0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime E2E for check, commit, and accept-current-length."""
+"""check, commit, accept-current-length의 런타임 종단 간 테스트."""
 
 from __future__ import annotations
 
@@ -112,14 +112,14 @@ class FinalChapterFlowTests(unittest.TestCase):
         return self.run_process(args, expect=expect, env=env)
 
     def state(self) -> dict[str, object]:
-        return json.loads((self.project / "追踪/_tracking-state.json").read_text(encoding="utf-8"))
+        return json.loads((self.project / "추적/_tracking-state.json").read_text(encoding="utf-8"))
 
     def write_contract(
         self, chapter: int, actual: int, *, target: int = 1000, blocking: bool = False, extra: str = ""
     ) -> None:
-        (self.project / "大纲").mkdir(exist_ok=True)
-        (self.project / "正文").mkdir(exist_ok=True)
-        (self.project / "大纲" / f"细纲_第{chapter:03d}章.md").write_text(
+        (self.project / "개요").mkdir(exist_ok=True)
+        (self.project / "본문").mkdir(exist_ok=True)
+        (self.project / "개요" / f"상세개요_제{chapter:03d}장.md").write_text(
             f"- 字数目标：{target} 字\n- 字数口径：visible_chars_v1\n{extra}\n"
             "| # | 情节点（谁做了什么） | 功能标签 | 执行边界 |\n|---|---|---|---|\n"
             "| 1 | 江晨完成一次审核 | 推进 | 不新增支线 |\n",
@@ -127,14 +127,14 @@ class FinalChapterFlowTests(unittest.TestCase):
         )
         prefix = "这不是夸奖，而是命令。" if blocking else ""
         fill = max(0, actual - len(prefix) - 1)
-        (self.project / "正文" / f"第{chapter:03d}章_测试.md").write_text(
+        (self.project / "본문" / f"제{chapter:03d}장_测试.md").write_text(
             f"# 第{chapter}章\n{prefix}" + "字" * fill + "。",
             encoding="utf-8",
         )
 
     def test_fix_punctuation_normalizes_body_before_the_single_check(self) -> None:
         self.write_contract(1, 1000)
-        body = self.project / "正文" / "第001章_测试.md"
+        body = self.project / "본문" / "제001장_测试.md"
         body.write_text(body.read_text(encoding="utf-8").replace("字字字字", "字……字", 1), encoding="utf-8")
         plain = self.run_chapter("check", 1, expect=1)
         self.assertEqual(plain["status"], "blocked")
@@ -149,7 +149,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertFalse(self.run_process(args)["punctuation_fixed"])
 
     def test_complete_user_flow_without_persisted_approval_state(self) -> None:
-        # Checkpoint is pure: one call changes neither tracking state nor prose.
+        # 체크포인트는 순수하다. 한 번 호출해도 추적 상태나 본문은 바뀌지 않는다.
         segment = self.root / "segment.md"
         segment.write_text("# 前半段\n" + "字" * 500, encoding="utf-8")
         before = self.state()
@@ -159,7 +159,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertEqual(checkpoint["remaining_user_range"], {"min": 350, "max": 650})
         self.assertEqual(self.state(), before)
 
-        # 1: length and blocking quality pass -> normal commit.
+        # 1: 분량과 차단 수준 품질 검사를 통과하면 정상 커밋한다.
         self.write_contract(1, 1000)
         checked = self.run_chapter("check", 1)
         self.assertEqual(checked["quality"]["status"], "pass")
@@ -167,7 +167,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         committed = self.run_chapter("commit", 1, document=transaction(1, self.state()["state_revision"]))
         self.assertTrue(committed["tracking_committed"])
 
-        # 2: under never auto-commits; accept re-reads changed body and target, then commits once.
+        # 2: 분량 미달(under)은 자동 커밋하지 않는다. accept가 바뀐 본문과 목표를 다시 읽은 뒤 한 번 커밋한다.
         self.write_contract(2, 800)
         checked = self.run_chapter("check", 2)
         self.assertEqual(
@@ -191,7 +191,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertEqual((record["target"], record["actual"], record["status"]), (1100, 801, "under"))
         self.assertEqual(record["resolution"], "accepted_current_length")
 
-        # 3: over offers exactly one net-delete pass with deterministic removal ranges.
+        # 3: 분량 초과(over)는 결정론적으로 정한 삭제 범위에 따라 순수 삭제만 하는 축약을 정확히 한 번 제안한다.
         self.write_contract(3, 1200)
         checked = self.run_chapter("check", 3)
         self.assertEqual(checked["length"]["status"], "over")
@@ -213,7 +213,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertIn("outside the user band", rejected["message"])
         self.assertEqual(self.state()["last_committed_chapter"], 2)
 
-        # Simulate the one allowed compression pass; a fresh check now enters the band and commits.
+        # 허용된 한 번의 축약을 재현한다. 새 검사에서 허용 구간에 들어오면 커밋한다.
         self.write_contract(3, 1100)
         checked = self.run_chapter("check", 3)
         self.assertEqual(checked["length"]["status"], "internal_pass")
@@ -221,7 +221,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertIsNone(checked["compression"])
         self.run_chapter("commit", 3, document=transaction(3, self.state()["state_revision"]))
 
-        # 4: blocking quality failure cannot commit; after an explicit quality fix, next chapter proceeds.
+        # 4: 차단 수준 품질 검사가 실패하면 커밋할 수 없다. 명시적으로 품질을 수정한 뒤 다음 장을 진행한다.
         self.write_contract(4, 1200, blocking=True)
         failed = self.run_chapter("check", 4, expect=1)
         self.assertEqual(failed["status"], "blocked")
@@ -244,13 +244,13 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertNotIn("wordcount_policy", state)
 
     def test_author_range_from_outline_or_flags_replaces_the_default_band(self) -> None:
-        # 1080 字对目标 1200：默认 ±12% 内部带（1056 起）会判 internal_pass；作者说 1100-1300 就是欠长。
+        # 목표 1200자에 1080자: 기본 내부 허용 구간 ±12%(1056자부터)에서는 internal_pass지만 작가 지정 범위가 1100-1300이면 분량 미달이다.
         self.write_contract(1, 1080, target=1200, extra="- 字数范围：1100-1300\n")
         checked = self.run_chapter("check", 1)
         self.assertEqual(checked["length"]["status"], "under")
         self.assertEqual(checked["length"]["band_source"], "author")
         self.assertEqual(checked["status"], "needs_decision")
-        # 命令行给的区间优先于细纲；作者区间内提交，记录带上 author_range，state 仍能通过校验。
+        # 명령행에서 준 범위가 상세 개요보다 우선한다. 작가 범위 안에서 커밋하며 기록에 author_range를 포함하고 state 검증도 통과한다.
         widened = ["--min-chars", "1000", "--max-chars", "1300"]
         self.assertEqual(self.run_chapter("check", 1, extra=widened)["status"], "ready")
         self.run_chapter("commit", 1, document=transaction(1, self.state()["state_revision"]), extra=widened)
@@ -258,7 +258,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertEqual(record["author_range"], {"min": 1000, "max": 1300})
         self.assertEqual(record["status"], "internal_pass")
         self.run_process([sys.executable, str(TRACKING), "check", "--project", str(self.project)])
-        # 超长时的删除字数也按作者区间算。
+        # 분량 초과 시 삭제할 글자 수도 작가 지정 범위로 계산한다.
         self.write_contract(2, 1400, target=1200, extra="- 字数范围：1100-1300\n")
         over = self.run_chapter("check", 2)
         self.assertEqual(over["compression"]["remove_to_user_band"], {"min": 100, "max": 300})
@@ -282,7 +282,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         )
         self.assertEqual(refused["error_code"], "COMPRESSION_REQUIRED")
         self.assertEqual(self.run_chapter("check", 2)["available_actions"][0], "compress-once")
-        # 删一个字不算压缩：基线 1400、作者范围上限 1150，至少要删到差额（250）的一半，即 ≤1275。
+        # 한 글자 삭제는 축약으로 인정하지 않는다. 기준 1400자, 작가 상한 1150자라면 차이 250자의 절반 이상을 삭제해 ≤1275자가 되어야 한다.
         for token_cut in (1399, 1276):
             self.write_contract(2, token_cut)
             refused = self.run_chapter(
@@ -290,12 +290,12 @@ class FinalChapterFlowTests(unittest.TestCase):
             )
             self.assertEqual(refused["error_code"], "COMPRESSION_REQUIRED", token_cut)
             self.assertIn("1275", refused["message"])
-        self.write_contract(2, 1270)  # 真压过一次仍超长：现在可以接受。
+        self.write_contract(2, 1270)  # 실제로 한 번 축약했는데도 초과한다면 이제 현재 분량을 수락할 수 있다.
         accepted = self.run_chapter(
             "accept-current-length", 2, document=transaction(2, self.state()["state_revision"])
         )
         self.assertTrue(accepted["tracking_committed"])
-        self.assertEqual(accepted["work_dir_removed"], ".story/work/第002章")
+        self.assertEqual(accepted["work_dir_removed"], ".story/work/제002장")
 
     def test_missing_node_is_a_tool_error_not_a_prose_finding(self) -> None:
         self.write_contract(1, 1000)
@@ -314,7 +314,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         self.assertEqual((refused["schema"], refused["error_code"]), ("story-chapter-error/v1", "TOOL_UNAVAILABLE"))
 
     def test_findings_pass_through_and_semantic_advisories_are_counted(self) -> None:
-        # 用桩检测器替身跑真实 storyctl：finding 原样透传，review 缺省按语义类计数。
+        # 대체 검사기 스텁으로 실제 storyctl을 실행한다. finding은 그대로 전달하고 review는 기본적으로 의미 유형별로 센다.
         runtime = self.root / "runtime"
         runtime.mkdir()
         for name in ("storyctl.py", "wordcount_core.py", "tracking_commit.py"):
@@ -327,7 +327,7 @@ class FinalChapterFlowTests(unittest.TestCase):
         (runtime / "check-ai-patterns.js").write_text(
             f"process.stdout.write(JSON.stringify({{findings: {json.dumps(findings)}}}))\n", encoding="utf-8"
         )
-        # 退化检测器的 advisory（工程词疑似泄漏）不带 review：它不是 AI 味，不计入触发去 AI 味审查的语义条数。
+        # 퇴화 검사기의 advisory(개발 용어 유출 의심)는 review를 붙이지 않는다. AI 문체 문제가 아니므로 AI 문체 검토를 유발하는 의미 항목 수에 포함하지 않는다.
         degeneration = [{"type": "meta-leak", "severity": "advisory", "line": 4}]
         (runtime / "check-degeneration.js").write_text(
             f"process.stdout.write(JSON.stringify({{findings: {json.dumps(degeneration)}}}))\n", encoding="utf-8"
@@ -360,16 +360,16 @@ class FinalChapterFlowTests(unittest.TestCase):
             "--chapter", "1", "--input", draft["draft"],
         ])
         self.assertEqual(committed["mode"], "revision")
-        self.assertEqual(committed["work_dir_removed"], ".story/work/第001章")
+        self.assertEqual(committed["work_dir_removed"], ".story/work/제001장")
         self.assertEqual(self.state()["wordcount_records"]["1"]["actual"], 950)
-        self.assertIn("第1章完成。", (self.project / "追踪/逐章记录/第001章.md").read_text(encoding="utf-8"))
+        self.assertIn("第1章完成。", (self.project / "추적/장별기록/제001장.md").read_text(encoding="utf-8"))
 
     def test_chapter_work_dir_survives_failure_and_is_removed_after_commit(self) -> None:
-        work = self.project / ".story/work/第001章"
+        work = self.project / ".story/work/제001장"
         work.mkdir(parents=True)
-        memory = self.project / ".story/作者记忆"
+        memory = self.project / ".story/작가기억"
         memory.mkdir(parents=True)
-        (work / "前组.md").write_text("# 前组\n" + "字" * 400, encoding="utf-8")
+        (work / "전반.md").write_text("# 前组\n" + "字" * 400, encoding="utf-8")
         (work / "writer_prompt.md").write_text("prompt", encoding="utf-8")
         tracking_input = work / "tracking.json"
 
@@ -382,24 +382,24 @@ class FinalChapterFlowTests(unittest.TestCase):
                 "--chapter", "1", "--input", str(tracking_input),
             ], expect=expect)
 
-        # A rejected commit keeps every scratch file so the same transaction can be rerun.
+        # 거부된 커밋은 모든 임시 파일을 보존해 같은 트랜잭션을 재실행할 수 있게 한다.
         self.write_contract(1, 800)
         rejected = commit(2)
         self.assertIn("outside the user band", rejected["message"])
         self.assertTrue(tracking_input.is_file())
-        self.assertTrue((work / "前组.md").is_file())
+        self.assertTrue((work / "전반.md").is_file())
 
         self.write_contract(1, 1000)
         committed = commit(0)
         self.assertTrue(committed["tracking_committed"])
-        self.assertEqual(committed["work_dir_removed"], ".story/work/第001章")
+        self.assertEqual(committed["work_dir_removed"], ".story/work/제001장")
         self.assertFalse(work.exists())
         self.assertFalse((self.project / ".story/work").exists())
-        # Book-level author memory shares .story/ and must never be touched.
+        # 책 수준 작가 기억도 .story/를 공유하며 절대 건드리면 안 된다.
         self.assertTrue(memory.is_dir())
-        self.assertEqual(sorted(path.name for path in (self.project / "正文").iterdir()), ["第001章_测试.md"])
+        self.assertEqual(sorted(path.name for path in (self.project / "본문").iterdir()), ["제001장_测试.md"])
 
-        # No work dir for the next chapter is simply reported as nothing to remove.
+        # 다음 장의 작업 디렉터리가 없으면 삭제할 것이 없다고만 보고한다.
         self.write_contract(2, 1000)
         second = self.run_chapter("commit", 2, document=transaction(2, self.state()["state_revision"]))
         self.assertIsNone(second["work_dir_removed"])

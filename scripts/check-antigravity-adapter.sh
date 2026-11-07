@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deterministic checks for the Google Antigravity 2.0 project adapter.
+# Google Antigravity 2.0 프로젝트 어댑터의 결정론적 검사.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -59,7 +59,7 @@ rule = Path('skills/story-setup/references/antigravity/rules/oh-story.md').read_
 assert rule.startswith('---\ntrigger: always_on\n---\n')
 assert len(rule) < 12_000
 assert '.agents/skills/' in rule and 'invoke_subagent' in rule
-assert '~/.gemini/' in rule and 'scratch/' in rule and 'inside the current workspace' in rule
+assert '~/.gemini/' in rule and 'scratch/' in rule and any(s in rule for s in ('inside the current workspace', '현재 작업 공간 안에 둔다'))
 PY
 
 node "$GENERATOR" --dest "$TMP_DIR/agents" >/dev/null
@@ -117,7 +117,10 @@ researcher = (root / 'story-researcher/agent.md').read_text(encoding='utf-8')
 assert 'has no WebSearch/webReader tool' in researcher
 assert 'never claim that web fallback ran' in researcher
 assert '### 第四步：WebSearch/webReader（兜底）' not in researcher
-assert 'CDP 不可用时交回父会话' in researcher
+assert any(s in researcher for s in ('CDP 不可用时交回父会话', 'CDP 불가 시 주 세션에 반환'))
+assert '### 네 번째 단계: WebSearch/webReader(보완)' not in researcher
+assert 'WebSearch/webReader로 전환' not in researcher
+assert 'WebSearch로 전환합니다' not in researcher
 assert 'WebSearch/webReader 作为兜底' not in researcher
 PY
 
@@ -137,12 +140,12 @@ grep -q 'target_cli = antigravity' skills/story-setup/SKILL.md \
   || fail "story-setup does not detect Antigravity"
 grep -q "agents_version: $CURRENT_AGENTS_VERSION" skills/story-setup/SKILL.md \
   || fail "story-setup deployment contract is not v$CURRENT_AGENTS_VERSION"
-# 入口按宿主只读一份部署文件：入口要路由到 Antigravity 那份，算法与校验写在那份里。
+# 진입점은 호스트별 배포 파일 하나만 읽는다. Antigravity 배포 파일로 연결하며 알고리즘과 검증은 그 파일에 둔다.
 grep -q 'references/deploy-antigravity\.md' skills/story-setup/SKILL.md \
   || fail "story-setup entry does not route antigravity to its deploy file"
-grep -q 'Antigravity 部署算法' skills/story-setup/references/deploy-antigravity.md \
+grep -Eq 'Antigravity (部署算法|배포 알고리즘)' skills/story-setup/references/deploy-antigravity.md \
   || fail "story-setup lacks Antigravity deployment algorithm"
-grep -q 'references_dir` 写 `\.agents/skills/story-setup/references/agent-references' skills/story-setup/references/deploy-antigravity.md \
+grep -Eq 'references_dir`( 写 |는 )`\.agents/skills/story-setup/references/agent-references' skills/story-setup/references/deploy-antigravity.md \
   || fail "Antigravity deploy file must set references_dir to .agents/skills"
 grep -q -- '--migrate-symlink' skills/story-setup/references/deploy-antigravity.md \
   || fail "Antigravity deploy file must gate .agents/skills symlink migration on author consent"

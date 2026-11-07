@@ -1,9 +1,6 @@
-"""Read-only check of a publishing-preparation document against its platform reference.
-
-The platform rules come from the reference files' frontmatter (one JSON line per work type),
-so adding a platform means adding references, not editing this script.
-FAIL: the file breaks the format contract or names an option the platform doesn't offer.
-WARN: a confirmed value the platform may reject; the author decides.
+"""출판 준비 문서를 플랫폼 참조와 읽기 전용으로 대조한다.
+플랫폼 규칙은 참조 프런트매터(작품 유형당 JSON 한 행)에서 얻으므로 플랫폼 추가는 스크립트 수정 없이 참조를 추가하면 된다.
+FAIL: 형식 계약 위반 또는 플랫폼이 제공하지 않는 선택지. WARN: 플랫폼이 거부할 수 있는 확정 값으로 작가가 판단한다.
 """
 
 import argparse
@@ -30,7 +27,7 @@ def frontmatter(path):
 
 
 def load_spec(platform, work_type):
-    """Find the reference whose frontmatter names this platform and carries this work type."""
+    """프런트매터가 플랫폼과 작품 유형을 명시한 참조를 찾는다."""
     for path in sorted(REFERENCES.glob("*.md")):
         meta = frontmatter(path)
         if meta.get("platform") == platform and work_type in meta:
@@ -39,7 +36,7 @@ def load_spec(platform, work_type):
 
 
 def load_options(name):
-    """Return {field: (candidates, limit)} from a reference's '## 字段 / 规则 / 候选值' blocks."""
+    """참조의 ‘## 字段 / 规则 / 候选值’ 블록에서 {field: (candidates, limit)}를 반환한다."""
     options = {}
     for block in re.split(r"^## ", (REFERENCES / name).read_text(encoding="utf-8"), flags=re.M)[1:]:
         field, _, body = block.partition("\n")
@@ -53,7 +50,7 @@ def load_options(name):
 
 
 def unfenced(lines, start=0, end=None):
-    """(index, line) pairs outside fenced code; a long cover prompt may hold its own headings."""
+    """코드 블록 밖의 (index, line) 쌍. 긴 표지 프롬프트 안에는 별도 제목이 있을 수 있다."""
     kept, fence = [], None
     for index in range(start, len(lines) if end is None else end):
         marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", lines[index])
@@ -68,14 +65,14 @@ def unfenced(lines, start=0, end=None):
 
 
 def block(lines, headings, position):
-    """Non-blank lines under a heading, fenced code left out."""
+    """코드 블록을 제외한 제목 아래의 비어 있지 않은 행."""
     start = headings[position][0] + 1
     end = headings[position + 1][0] if position + 1 < len(headings) else len(lines)
     return [line for _, line in unfenced(lines, start, end) if line.strip()]
 
 
 def parse_fields(lines, where, errors):
-    """'- 字段：值' lines -> {field: value}; each field once, each on its own line."""
+    """‘- 字段：值’ 행을 {field: value}로 변환한다. 필드는 각각 한 행에 한 번만 나온다."""
     fields = {}
     for line in lines:
         match = re.fullmatch(r"- ([^：:]+)：(.*)", line)
@@ -118,7 +115,7 @@ def title_warnings(title, rule):
 
 
 def check(text):
-    """Return (errors, warnings) for one publishing document."""
+    """출판 문서 하나의 (errors, warnings)를 반환한다."""
     lines = text.lstrip("﻿").splitlines()
     headings = [(index, len(match[1]), match[2]) for index, line in unfenced(lines)
                 if (match := re.match(r"^(#{1,6})\s+(.*?)\s*$", line))]
@@ -194,11 +191,11 @@ def check(text):
 
     synopsis = "\n".join(block(lines, headings, len(spec["tag_sections"]) + 2)).strip()
     if synopsis != BLANK:
-        check_value("作品简介", "正文", synopsis, errors)
+        check_value("作品简介", "본문", synopsis, errors)
         limit = spec.get("max_length", {}).get("作品简介")
         if limit and len(synopsis) > limit:
             warnings.append(f"作品简介 {len(synopsis)} 字，平台上限 {limit}。")
-    # Blank fields are allowed: this is a preparation document, not submission readiness.
+    # 준비 문서이므로 빈 필드를 허용한다. 실제 제출 준비 완료를 검사하는 것이 아니다.
     return errors, warnings
 
 

@@ -1,34 +1,34 @@
-# Agent Note: 检测器、扫榜运行时与 Dashboard 测试：一条契约一个守卫，负例必须走到被测分支
+# Agent Note: 탐지기·순위 조사 런타임·Dashboard 테스트는 계약마다 검사 하나를 두고 음성 예제가 검사 분기에 도달하게 한다
 
 Status: implemented
 
 ## Problem
 
-一轮只读测试审计在检测器、扫榜运行时和 Dashboard 三块发现同一类问题：测试在「看起来覆盖」，变异后却不红。
+읽기 전용 테스트 감사에서 탐지기, 순위 조사 런타임, Dashboard 세 영역에 같은 문제가 발견되었다. 테스트가 '검사하는 것처럼 보이지만' 변이 후에도 실패하지 않았다.
 
-- 密度类规则（微动作、套式反应、抽象总结、动作清单、套词、比喻、解释链、过度精炼）的「引号内…不应报」负例全靠低密度通过；把密度函数里的 `stripQuoted(trimmed)` 换成 `trimmed`，这些负例仍全绿。退化检测器的纯台词复沓用「我不走。」，短于复读长度门槛，同样测不到去引号。
-- 同一件事被多处重复断言：`test-ai-patterns.sh` / `test-outline-copy.sh` 逐字比对检测器副本，与 `sync-shared-assets.py check` 重复；`test-scan-runtime.js` 对逐字同步的 short-scan `cdp-utils.js` 再跑一遍；`dashboard-bundle-contract.test.mjs` 的 manifest 断言与 `check-plugin-packaging.py` 重复；CI 的「Verify cdp-utils loads」没有断言。
-- `testScraperImports` 要求 scraper「必须导出可测试 helper」，逼四个 scraper 留着没人 require 的导出。
+- 밀도 규칙(미세 동작, 상투적 반응, 추상적 요약, 동작 나열, 상투어, 비유, 설명 사슬, 과도한 압축)의 '따옴표 안에서는 탐지하지 않아야 한다'는 음성 예제는 모두 밀도가 낮아서 통과했다. 밀도 함수의 `stripQuoted(trimmed)`를 `trimmed`로 바꿔도 전부 통과했다. 퇴화 탐지기의 순수 대사 반복 예제는 '我不走。'였는데 반복 탐지 길이 기준보다 짧아 역시 따옴표 제거 동작을 검사하지 못했다.
+- 같은 것을 여러 곳에서 중복 검사했다. `test-ai-patterns.sh` / `test-outline-copy.sh`의 탐지기 사본 글자별 비교는 `sync-shared-assets.py check`와 중복되었다. `test-scan-runtime.js`는 글자 단위로 동기화하는 short-scan의 `cdp-utils.js`를 다시 실행했다. `dashboard-bundle-contract.test.mjs`의 manifest 검사는 `check-plugin-packaging.py`와 중복되었다. CI의 'Verify cdp-utils loads'에는 검증문이 없었다.
+- `testScraperImports`는 scraper가 '테스트 가능한 helper를 반드시 export할 것'을 요구하여 scraper 네 개가 아무도 require하지 않는 export를 남겨 두게 했다.
 
 ## Decision
 
-- 副本一致性只由 `scripts/check-shared-files.sh` 里的 `sync-shared-assets.py check` 负责；测试脚本只测 source 副本的行为。
-- `test-ai-patterns.sh` 用一张表驱动用例把八条密度规则正例原句放进台词引号里，断言都不报；去引号变异后八条全红。`test-degeneration.sh` 的纯台词复沓改用 ≥12 字长台词（紧邻两次、全文三次），紧邻复读与长句复读两个分支分别变异都会红。
-- scraper 只保留无副作用 import 检查，不再要求导出；ciweimao、jjwxc、dz-browse、fanqie 的测试专用导出删除。
-- Claude 打包身份只由 `check-plugin-packaging.py` 负责；Dashboard 静态资源改在 `dashboard-server.test.mjs` 的真实 HTTP 边界验证：取 `/`，按页面引用逐个取回资源。
-- CI 的 sleep 检查断言 `sleep(100)` 至少阻塞 90ms，无断言的 cdp-utils 加载步骤删除（两端都已跑 `test-scan-runtime.js`）。
+- 사본의 일치는 `scripts/check-shared-files.sh` 안의 `sync-shared-assets.py check`만 담당한다. 테스트 스크립트는 source 사본의 동작만 검사한다.
+- `test-ai-patterns.sh`는 표 기반 테스트에서 밀도 규칙 여덟 개의 양성 예제 원문을 대사 따옴표 안에 넣고 모두 탐지되지 않는지 확인한다. 따옴표 제거를 없애는 변이를 적용하면 여덟 개 모두 실패한다. `test-degeneration.sh`의 순수 대사 반복은 길이 ≥12자인 대사로 바꾼다(바로 이어 두 번, 문서 전체에서 세 번). 인접 반복과 긴 문장 반복 분기를 각각 변이시켜도 실패한다.
+- scraper는 부작용 없는 import 검사만 유지하고 export를 요구하지 않는다. ciweimao, jjwxc, dz-browse, fanqie의 테스트 전용 export를 삭제한다.
+- Claude 패키징 식별은 `check-plugin-packaging.py`만 담당한다. Dashboard 정적 자원은 `dashboard-server.test.mjs`에서 실제 HTTP 경계로 검증한다. `/`를 가져온 뒤 페이지가 참조하는 자원을 하나씩 요청한다.
+- CI의 sleep 검사는 `sleep(100)`이 최소 90ms 동안 대기시키는지 확인한다. 검증문 없는 cdp-utils 로드 단계는 삭제한다. 두 환경 모두 이미 `test-scan-runtime.js`를 실행한다.
 
 ## Alternatives considered
 
-- **测试里保留副本逐字比对作双保险**——最强理由：单跑某个检测器测试时也能发现副本漂移。否：CI 每个平台都跑 `check-shared-files.sh`，漂移报错信息更准（指出组名和文件），两处比对只是改一处要记着改两处。
-- **给每条密度规则单独补一个引号负例**——最强理由：失败信息更贴近单条规则。否：八段几乎一样的 shell 样板；表驱动用例一次汇报所有失败的规则，失败信息同样逐条列出。
-- **保留 scraper 导出以便日后写单元测试**——最强理由：纯函数有了导出才好测。否：现在没有任何消费方，扫榜行为已由 `runScraper` 驱动 CLI 的回归覆盖；真需要时在同一改动里连同测试一起加回。
+- **이중 안전장치로 테스트 안에 사본 글자별 비교를 유지한다** — 탐지기 테스트 하나만 실행해도 사본 불일치를 찾을 수 있다는 장점이 있다. 채택하지 않았다. CI는 모든 플랫폼에서 `check-shared-files.sh`를 실행하며 그 오류 메시지가 그룹명과 파일을 알려 주므로 더 정확하다. 두 곳에서 비교하면 한 계약을 바꿀 때 두 곳을 고쳐야 할 뿐이다.
+- **밀도 규칙마다 따옴표 음성 예제를 따로 추가한다** — 실패 메시지가 개별 규칙에 더 밀접하다는 장점이 있다. 채택하지 않았다. 거의 같은 shell 틀이 여덟 번 반복된다. 표 기반 테스트는 실패 규칙을 한 번에 보고하면서도 메시지에 규칙별로 나열한다.
+- **나중의 단위 테스트를 위해 scraper export를 유지한다** — 순수 함수를 export해야 테스트하기 쉽다는 장점이 있다. 채택하지 않았다. 현재 사용하는 곳이 없으며 순위 조사 동작은 `runScraper`가 CLI를 구동하는 회귀 검사로 이미 검증한다. 실제로 필요해지면 같은 변경에서 테스트와 함께 다시 추가한다.
 
 ## Consequences
 
-- **收益**：每条保留的负例都经过变异证明能红；重复断言删掉后，同一契约改动只需改一处；四个 scraper 不再挂着无人使用的导出。
-- **代价**：单独跑 `test-ai-patterns.sh` 不再发现检测器副本漂移，必须同时跑 `check-shared-files.sh`；Dashboard 的 API job 不再因 `.claude-plugin/marketplace.json` 变动而触发，打包变动只由 cross-platform 的打包守卫把关。
+- **이점**: 유지한 모든 음성 예제는 변이 테스트로 실제 실패할 수 있음을 입증했다. 중복 검사를 없애 같은 계약 변경에 한곳만 고치면 된다. scraper 네 개에서 사용하지 않는 export가 사라졌다.
+- **비용**: `test-ai-patterns.sh`만 실행하면 탐지기 사본 불일치를 발견하지 못하므로 `check-shared-files.sh`도 실행해야 한다. Dashboard API job은 `.claude-plugin/marketplace.json` 변경으로 더 이상 실행되지 않는다. 패키징 변경은 cross-platform의 패키징 검사만 담당한다.
 
-## Verification
+## 검증
 
-`bash scripts/test-ai-patterns.sh`；`bash scripts/test-degeneration.sh`；`bash scripts/test-outline-copy.sh`；`node scripts/test-scan-runtime.js`；`bash scripts/check-shared-files.sh`；`npm run test:dashboard`；`python3 scripts/check-plugin-packaging.py`。
+`bash scripts/test-ai-patterns.sh`; `bash scripts/test-degeneration.sh`; `bash scripts/test-outline-copy.sh`; `node scripts/test-scan-runtime.js`; `bash scripts/check-shared-files.sh`; `npm run test:dashboard`; `python3 scripts/check-plugin-packaging.py`.

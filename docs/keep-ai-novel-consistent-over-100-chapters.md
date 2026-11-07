@@ -1,67 +1,67 @@
-# How to keep an AI writing agent from breaking character over 100+ chapters
+# AI 집필 에이전트가 100장 넘게 인물의 일관성을 유지하는 방법
 
-Keep story state in files, load the slice each chapter needs, and commit changes through the tracking tools. That is how Oh Story (`zenstory-ai/oh-story-claudecode`, MIT, 13 agent skills for Claude Code, Codex CLI, OpenCode and other coding agents) organizes daily writing batches with explicit continuity records.
+이야기의 상태를 파일에 보관하고 매 장 필요한 부분만 읽으며 추적 도구로 변화를 반영합니다. Oh Story(`zenstory-ai/oh-story-claudecode`, MIT, Claude Code·Codex CLI·OpenCode 등 코딩 에이전트용 스킬 13개)는 명시적인 연속성 기록으로 일일 일괄 집필을 구성합니다.
 
-The current skills use structured tracking to reduce character drift, lost setups and premature knowledge.
+현재 스킬은 구조화된 추적으로 인물 설정의 변화, 복선 단절, 인물이 정보를 너무 일찍 아는 문제를 줄입니다.
 
-中文版：[AI 写长篇小说怎么不崩人设](ai-long-novel-character-consistency.md)
+[중국어판의 한국어 번역](ai-long-novel-character-consistency.md)
 
-## Why agents drift
+## 일관성이 무너지는 이유
 
-A common cause of continuity errors is the information the model receives for a chapter. If it saw "the last few chapters", it forgot the clue planted in chapter 3. If it saw "a summary of the whole book", it treated a planned future event as something that already happened. Loading more text does not replace the need to distinguish facts, plans and character knowledge.
+연속성 오류는 장을 쓸 때 제공한 정보가 적절하지 않아 생기는 경우가 많습니다. 최근 몇 장의 본문만 읽으면 3장에서 심은 복선을 잊고, 책 전체 요약을 읽으면 아직 일어나지 않은 계획을 이미 일어난 사실로 취급할 수 있습니다. 텍스트를 많이 넣는 것만으로 사실·계획·인물의 지식을 구분하는 작업을 대신할 수 없습니다.
 
-Select the facts needed for this chapter and identify plans that have not happened yet.
+집필 전에 이번 장에 필요한 사실을 고르고 아직 일어나지 않은 계획을 명시해야 합니다.
 
-## The four-layer project
+## 네 계층의 프로젝트 파일
 
-A long-form project in Oh Story looks like this (from the README's project structure):
+Oh Story 장편 프로젝트의 구조는 다음과 같습니다. README의 프로젝트 구조에서 발췌했습니다.
 
 ```text
 {book}/
-├── 设定/          # world, one file per character, factions, relations
-├── 大纲/          # book outline, per-volume outline, per-chapter brief
-├── 正文/          # chapter prose
-└── 追踪/          # file-first continuity state
-    ├── _tracking-state.json   # the only structured source of truth
-    ├── 上下文.md              # derived state card, fixed 7 sections, ≤12KB
-    ├── 逐章记录/              # per-chapter delta, ≤3072 bytes each
-    ├── 角色状态/              # current snapshot per core character
-    ├── 伏笔.md                # open and paid-off setups
-    └── 时间线/                # author-truth.md + reader-known.md
+├── 설정/          # 세계관, 인물별 파일, 세력, 관계
+├── 개요/          # 전체 개요, 권별 개요, 장별 상세 개요
+├── 본문/          # 장 본문
+└── 추적/          # 파일 우선 연속성 상태
+    ├── _tracking-state.json   # 유일한 구조화된 기준 데이터
+    ├── 문맥.md              # 파생 상태 카드. 고정 7개 절, 최대 12 KB
+    ├── 장별기록/              # 장별 변화 기록. 각 최대 3072바이트
+    ├── 인물상태/              # 핵심 인물별 현재 스냅샷
+    ├── 복선.md                # 미회수·회수 복선
+    └── 시간선/                # 작가의 진실·독자가 아는 사실
 ```
 
-Three design rules do the work:
+핵심 설계 원칙은 세 가지입니다.
 
-1. **One authority, everything else derived.** `_tracking-state.json` is the only writable truth. The state card, character snapshots, setup list and both timelines are generated from it deterministically. All writes go through `scripts/tracking_commit.py`; hand-editing derived files is forbidden. `tracking_commit.py check` re-renders from state and compares each derived file to detect drift. A transaction’s expected revision separately prevents stale writes.
-2. **Author truth and reader knowledge are separate timelines.** `时间线/作者真相.md` records what actually happened in the story. `时间线/读者已知.md` records what the reader has seen so far. When the model writes chapter 40 it can see who the murderer is, and also that the protagonist does not know yet, so it will not let a character blurt out the answer.
-3. **Per-chapter writes are capped deltas.** Each `逐章记录/第NNN章.md` targets ≤1536 bytes with a hard cap of 3072, and records only changes that affect later chapters. Historical records continue to grow, while the current state card is capped at 12 KiB. Older information is queried when needed; the full history stays out of prose prompts.
+1. **기준 데이터는 하나이고 나머지는 파생합니다.** `_tracking-state.json`만 쓰기 가능한 기준 데이터입니다. 상태 카드, 인물 스냅샷, 복선 목록, 두 시간선은 여기서 결정적으로 생성합니다. 모든 추적 쓰기는 `scripts/tracking_commit.py`를 거치며 파생 파일을 직접 수정해서는 안 됩니다. `tracking_commit.py check`는 상태에서 다시 렌더링해 파일별로 비교하고 불일치를 찾습니다. 트랜잭션의 예상 개정 번호는 오래된 상태에 기반한 쓰기를 별도로 막습니다.
+2. **작가의 진실과 독자가 아는 사실을 구분합니다.** `시간선/작가용진실.md`에는 이야기에서 실제로 일어난 일을, `시간선/독자가아는사실.md`에는 독자가 현재 장까지 본 내용을 기록합니다. 모델이 40장을 쓸 때 범인이 누구인지와 주인공은 아직 모른다는 사실을 함께 확인하므로 인물이 정답을 너무 일찍 말하지 않도록 합니다.
+3. **장별 기록은 크기가 제한된 변화분입니다.** `장별기록/제NNN장.md`의 목표는 1536바이트 이하, 절대 상한은 3072바이트이며 이후 연속성에 영향을 주는 변화만 기록합니다. 과거 기록은 계속 쌓이지만 현재 상태 카드는 12 KiB로 제한합니다. 오래된 정보는 필요할 때 조회하며 전체 이력을 본문 프롬프트에 넣지 않습니다.
 
-## What one chapter actually does
+## 한 장을 쓸 때의 실제 흐름
 
-From `story-long-write`'s single-chapter flow:
+`story-long-write`의 단일 장 흐름입니다.
 
-1. **Reference gate, read before write.** Load the chapter brief, the volume contract and current plot unit selected by the outline tool, and the current tracking state, then record this round's constraints before writing: word range, must-happen, must-not-happen, time anchors, where the chapter stops, what new debt it opens. These project facts override any craft reference.
-2. **Load only what would otherwise be wrong.** For each character on stage, read `设定/角色/{name}.md` (stable characterization) and `追踪/角色状态/{name}.md` (current location, goal, relationships, what they know, open threads). "Xu Tang has an older brother" is characterization. "Xu Tang does not know the letter came from him" is state. Reading them separately is what stops the model from turning a fact into character knowledge.
-3. **Write the prose.**
-4. **Check and revise.** Chapter checks cover approved plot points, length, phrasing and degeneration. Consistency review runs when needed, and before commit for a standalone chapter. A separate `/story-review` request provides multi-perspective review, with main-session fallback when agents are unavailable.
-5. **Commit the delta.** After checks, `storyctl.py chapter commit` invokes the tracking transaction to record knowledge, paid-off setups and time changes. Continue only after a successful commit refreshes the derived views.
+1. **필수 자료를 먼저 읽고 씁니다.** 이번 장 상세 개요, 개요 추출 도구가 고른 권 계약과 현재 플롯 단위, 현재 추적 상태를 읽습니다. 집필 전 글자 수 범위, 반드시 일어날 일, 일어나면 안 되는 일, 시간 기준점, 멈출 지점, 장 끝의 새로운 미해결 과제를 기록합니다. 이러한 프로젝트 사실이 모든 집필 기법 자료보다 우선합니다.
+2. **모르면 잘못 쓸 정보만 로드합니다.** 등장 인물마다 `설정/인물/{name}.md`의 안정적인 인물 설정과 `추적/인물상태/{name}.md`의 현재 위치·목표·관계·지식·미해결 단서를 읽습니다. “쉬탕에게 오빠가 있다”는 설정이고 “쉬탕은 편지를 보낸 사람이 오빠인 줄 모른다”는 상태입니다. 이를 구분해 읽어야 모델이 설정을 인물이 아는 사실로 바꾸지 않습니다.
+3. **본문을 작성합니다.**
+4. **검사하고 수정합니다.** 장별 검사는 합의된 플롯 항목, 분량, 문장 패턴, 퇴화를 확인합니다. 일관성 검사는 필요할 때 실행하며 단일 장 집필에서는 커밋 전에 확인합니다. `/story-review`를 별도로 요청하면 다각도 검토를 수행하고 에이전트가 없으면 주 세션에서 처리합니다.
+5. **변화를 추적 정보에 반영합니다.** 검사 후 `storyctl.py chapter commit`으로 추적 트랜잭션을 호출하여 누가 무엇을 알게 됐는지, 어떤 복선이 회수됐는지, 시간이 얼마나 지났는지를 기록합니다. 커밋 성공과 파생 뷰 갱신을 확인한 뒤 다음 장으로 넘어갑니다.
 
-This is why a three-chapter batch keeps working: each chapter starts from a fresh state card, not from an ever-growing chat transcript.
+하루 3장을 연속으로 쓸 수 있는 이유는 매 장 최신 상태 카드를 받기 때문입니다. 계속 길어지는 대화 기록을 그대로 받는 방식이 아닙니다.
 
-## Already 40 chapters in, no tracking files?
+## 이미 40장을 썼는데 추적 파일이 없다면
 
-Run `/story-setup`, then `/story-import` to reverse-parse the existing manuscript into the structure above. It produces first-pass settings, character states and setups. Inferred facts are listed as "to confirm" rather than written as truth; review them, then continue with `/story-long-write`.
+`/story-setup` 다음 `/story-import`를 실행해 기존 원고를 위 구조로 역분석합니다. 최초 설정·인물 상태·복선을 생성합니다. 추론한 사실은 확정 사실로 쓰지 않고 “확인 필요”로 구분합니다. 이를 검토한 뒤 `/story-long-write`로 이어 씁니다.
 
-## Limits
+## 한계
 
-- Tracking reduces two classes of error: forgetting, and characters knowing things early. It does not choose the plot for you and it does not guarantee zero errors.
-- It only works if the author actually writes settings and chapter briefs. A missing chapter brief pauses for confirmation, and since v0.7.7 a brief without a word target stops instead of falling back to a default 3000 characters.
-- The workflow runs inside your coding agent. A hosted model requires no extra local GPU or model deployment.
+- 추적은 잊어버림과 너무 일찍 앎이라는 두 오류를 줄입니다. 작가 대신 플롯을 결정하거나 오류가 전혀 없음을 보장하지는 않습니다.
+- 작가는 실제로 설정과 상세 개요를 작성해야 합니다. 상세 개요가 없으면 확인을 위해 멈추며, v0.7.7부터는 목표 글자 수가 없는 경우에도 기본 3000자로 대체해 쓰지 않고 중단합니다.
+- 워크플로는 기존 코딩 에이전트 안에서 실행됩니다. 호스팅 모델을 쓰면 추가 로컬 GPU나 모델 배포가 필요하지 않습니다.
 
-## Related
+## 관련 자료
 
-- Install: `npx skills add zenstory-ai/oh-story-claudecode -y -g`, then `/story-setup` inside the agent.
-- Site guide with a worked three-chapter example: https://zenstory.ai/oh-story/long-novel-continuity
-- Chapter outline template (what each chapter must change, and what stays hidden): https://zenstory.ai/oh-story/chapter-outline-template
-- Implementation notes: `skills/story-long-write/references/tracking-transaction.md`
-- Repository: https://github.com/zenstory-ai/oh-story-claudecode (formerly `worldwonderer/oh-story-claudecode`; old links redirect)
+- 설치: `npx skills add zenstory-ai/oh-story-claudecode -y -g` 후 에이전트에서 `/story-setup` 실행
+- 세 장 예시가 있는 사이트 안내: https://zenstory.ai/oh-story/long-novel-continuity
+- 장별 상세 개요 템플릿(이번 장에서 바뀔 것과 아직 숨길 정보): https://zenstory.ai/oh-story/chapter-outline-template
+- 추적 구현: `skills/story-long-write/references/tracking-transaction.md`
+- 저장소: https://github.com/zenstory-ai/oh-story-claudecode (이전 `worldwonderer/oh-story-claudecode` 주소는 자동 이동)

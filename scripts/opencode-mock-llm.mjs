@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// opencode-mock-llm.mjs — 给真实 OpenCode 2.x 运行时测试用的 OpenAI 兼容 mock 模型。
+// opencode-mock-llm.mjs — 실제 OpenCode 2.x 런타임 테스트용 OpenAI 호환 모의 모델.
 //
-// 行为：带 tools 的首轮请求按 MOCK_SCRIPT 文件里的 JSON 数组 [{name, arguments}] 一次性发出工具调用
-// （每个请求现读，测试可在两次 `opencode run` 之间换剧本而不重启 mock；文件缺失即不调工具）；
-// 消息里已有工具结果的轮次回复 "done" 结束；不带 tools 的请求（标题生成等）回复一个标题。
-// 每个请求体追加写入 MOCK_LOG（JSONL），测试据此读模型实际拿到的工具清单与工具返回内容。
-// 启动后把监听端口打到 stdout 第一行；MOCK_PORT 缺省为 0（随机端口）。
+// 동작: tools가 있는 첫 요청에는 MOCK_SCRIPT 파일의 JSON 배열 [{name, arguments}]에 따라 도구 호출을 한 번에 반환한다.
+// (요청마다 파일을 다시 읽으므로 mock을 재시작하지 않고 두 `opencode run` 사이에 시나리오를 바꿀 수 있다. 파일이 없으면 도구를 호출하지 않는다.)
+// 메시지에 이미 도구 결과가 있으면 'done'으로 종료하고, tools가 없는 요청(제목 생성 등)에는 제목을 반환한다.
+// 각 요청 본문을 MOCK_LOG(JSONL)에 추가한다. 테스트는 이를 통해 모델이 실제로 받은 도구 목록과 반환 내용을 확인한다.
+// 시작 후 수신 포트를 stdout 첫 줄에 출력한다. MOCK_PORT 기본값은 0(임의 포트)이다.
 import fs from "node:fs"
 import http from "node:http"
 

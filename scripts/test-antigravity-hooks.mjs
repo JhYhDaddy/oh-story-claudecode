@@ -41,8 +41,8 @@ function invoke(event, input, shell = false) {
   const handlers = entry.hooks || [entry]
   assert.equal(handlers.length, 1, `${event}: expected one registered handler`)
   const { command } = handlers[0]
-  // Test the registered command through a shell and with quotes preserved in argv.
-  // Literal splitting probes compatibility; it does not model the IDE's parser.
+  // 셸을 통한 실행과 argv에 따옴표를 보존한 실행으로 등록 명령을 테스트한다.
+  // 리터럴 분할은 호환성을 시험하며 IDE 파서를 모델링하지는 않는다.
   const [program, ...args] = command.trim().split(/\s+/)
   const result = spawnSync(shell ? command : program, shell ? [] : args, {
     shell,
@@ -67,8 +67,8 @@ try {
   fs.copyFileSync(path.join(source, "story_hook_core.js"), path.join(hookDir, "story_hook_core.js"))
   fs.copyFileSync(path.join(source, "hooks.json"), path.join(fixture, ".agents/hooks.json"))
 
-  // All four registered commands must launch in a project path containing spaces
-  // and Chinese characters, both through the OS shell and literal argv dispatch.
+  // 등록한 네 명령 모두 공백과 중국어 문자가 있는 프로젝트 경로에서
+  // OS 셸과 리터럴 argv 전달 방식으로 실행되어야 한다.
   for (const shell of [false, true]) {
     assert.deepEqual(invoke("pre-tool-use", {
       toolCall: { name: "write_to_file", args: { TargetFile: "普通笔记.md" } },
@@ -79,29 +79,29 @@ try {
       { decision: "stop" })
   }
 
-  write("短篇/设定.md", "# 设定\n")
-  const shortProse = path.join(fixture, "短篇/正文.md")
+  write("단편/설정.md", "# 설정\n")
+  const shortProse = path.join(fixture, "단편/본문.md")
   let response = invoke("pre-tool-use", {
     toolCall: { name: "write_to_file", args: { TargetFile: shortProse } },
   }).value
   assert.equal(response.decision, "deny")
-  assert.match(response.reason, /小节大纲/)
+  assert.match(response.reason, /구간개요/)
 
-  write("短篇/小节大纲.md", "# 小节大纲\n")
+  write("단편/구간개요.md", "# 小节大纲\n")
   response = invoke("pre-tool-use", {
-    toolCall: { name: "write_to_file", args: { TargetFile: "短篇/正文.md" } },
+    toolCall: { name: "write_to_file", args: { TargetFile: "단편/본문.md" } },
   }).value
   assert.deepEqual(response, { decision: "allow" })
 
-  write("另一短篇/设定.md", "# 设定\n")
+  write("另一短篇/설정.md", "# 설정\n")
   response = invoke("pre-tool-use", {
     toolCall: {
       name: "run_command",
-      args: { CommandLine: "printf draft > \"另一短篇/正文.md\"", Cwd: fixture },
+      args: { CommandLine: "printf draft > \"另一短篇/본문.md\"", Cwd: fixture },
     },
   }).value
   assert.equal(response.decision, "deny")
-  assert.match(response.reason, /另一短篇.*小节大纲/s)
+  assert.match(response.reason, /另一短篇.*구간개요/s)
 
   write("普通笔记.md", "hello\n")
   response = invoke("pre-tool-use", {
@@ -109,22 +109,22 @@ try {
   }).value
   assert.deepEqual(response, { decision: "allow" })
 
-  write("短篇/正文.md", "# 标题\n\n本章将在下一章继续展开")
+  write("단편/본문.md", "# 标题\n\n本章将在下一章继续展开")
   let post = invoke("post-tool-use", {
-    toolCall: { name: "write_to_file", args: { TargetFile: "短篇/正文.md" } },
+    toolCall: { name: "write_to_file", args: { TargetFile: "단편/본문.md" } },
   })
   assert.equal(post.raw, "{}", "PostToolUse must emit exactly {}")
   const pending = path.join(artifact, "oh-story-pending.json")
   assert.ok(fs.existsSync(pending), "PostToolUse must persist pending findings")
   post = invoke("post-tool-use", {
-    toolCall: { name: "run_command", args: { CommandLine: "printf draft > \"短篇/正文.md\"", Cwd: fixture } },
+    toolCall: { name: "run_command", args: { CommandLine: "printf draft > \"단편/본문.md\"", Cwd: fixture } },
   })
   assert.equal(post.raw, "{}", "run_command PostToolUse must also emit exactly {}")
 
   response = invoke("pre-invocation", { invocationNum: 1 }).value
   assert.ok(Array.isArray(response.injectSteps) && response.injectSteps.length === 1)
-  assert.match(response.injectSteps[0].ephemeralMessage, /正文兜底检测/)
-  assert.match(response.injectSteps[0].ephemeralMessage, /疑似截断|元信息泄漏|毒句式/)
+  assert.match(response.injectSteps[0].ephemeralMessage, /본문 보완 검사/)
+  assert.match(response.injectSteps[0].ephemeralMessage, /잘림 의심|메타정보 유출|문제 문장 패턴/)
 
   response = invoke("stop", { fullyIdle: false, terminationReason: "model_stop" }).value
   assert.equal(response.decision, "stop", "Stop must not continue while background work is active")
@@ -136,9 +136,9 @@ try {
   assert.equal(response.decision, "stop", "Stop may force at most one continuation")
 
   const clean = "雨落在旧瓦上，檐角的水沿着石阶往下淌，院门外传来车轮碾过碎石的轻响。".repeat(4)
-  write("短篇/正文.md", `# 标题\n\n${clean}\n`)
+  write("단편/본문.md", `# 标题\n\n${clean}\n`)
   post = invoke("post-tool-use", {
-    toolCall: { name: "multi_replace_file_content", args: { TargetFile: "短篇/正文.md" } },
+    toolCall: { name: "multi_replace_file_content", args: { TargetFile: "단편/본문.md" } },
   })
   assert.equal(post.raw, "{}")
   assert.ok(!fs.existsSync(pending), "clean rewrite must clear pending findings")
@@ -146,15 +146,15 @@ try {
 
   write(".story-deployed", "agents_version: 26\ntarget_cli: antigravity\n")
   write(".active-book", "长书\n")
-  write("长书/设定/世界观.md", "# 世界观\n")
-  write("长书/追踪/上下文.md", "# 上下文\n")
+  write("长书/설정/세계관.md", "# 세계관\n")
+  write("长书/추적/문맥.md", "# 上下文\n")
   response = invoke("pre-invocation", { invocationNum: 0 }).value
   assert.ok(Array.isArray(response.injectSteps))
   assert.match(response.injectSteps.map((item) => item.ephemeralMessage).join("\n"), /Active book: 长书/)
 
   const git = (args) => spawnSync("git", args, { cwd: fixture, encoding: "utf8" })
   assert.equal(git(["init", "-q"]).status, 0)
-  write("长书/设定/角色/甲.md", "# 角色甲\n\n年龄：20\n")
+  write("长书/설정/인물/甲.md", "# 角色甲\n\n年龄：20\n")
   assert.equal(git(["add", "."]).status, 0)
   response = invoke("pre-tool-use", {
     toolCall: { name: "run_command", args: { CommandLine: "git commit -m fixture", Cwd: fixture } },

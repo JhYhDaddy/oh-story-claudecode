@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 "use strict"
 
-// Generate Antigravity 2.0 Markdown agents from the Claude Markdown source of
-// truth. Antigravity and Claude both use Markdown bodies, but their frontmatter,
-// tool names, model tiers, and deployed reference roots differ.
+// 기준 원본인 Claude Markdown으로 Antigravity 2.0 Markdown 에이전트를 생성한다.
+// Antigravity와 Claude 모두 Markdown 본문을 사용하지만 프런트매터와
+// 도구 이름, 모델 등급, 배포된 참조 루트는 서로 다르다.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -122,6 +122,15 @@ function adaptBody(body, name, tools) {
 
   if (name === "story-researcher") {
     adapted = adapted
+      .replace("**핵심 원칙: CDP 우선, WebSearch 보완.**", "**핵심 원칙: CDP로만 조사하며 사용할 수 없으면 주 세션에 돌려보냅니다.**")
+      .replace("3. WebSearch / webReader → CDP 사용 불가 또는 페이지 열기 실패 시 보완", "3. CDP 사용 불가 또는 페이지 열기 실패 → 구조화 research gap을 주 세션에 반환")
+      .replaceAll("WebSearch/webReader로 전환합니다", "구조화 research gap을 주 세션에 반환합니다")
+      .replaceAll("WebSearch/webReader로 전환", "구조화 research gap을 주 세션에 반환")
+      .replaceAll("WebSearch로 전환합니다", "구조화 research gap을 주 세션에 반환합니다")
+      .replace(
+        /### 네 번째 단계: WebSearch\/webReader\(보완\)[\s\S]*?(?=\n### 다섯 번째 단계: 결과 정리)/,
+        '### 네 번째 단계: CDP 불가 시 주 세션에 반환\n\n`status: "failed"`를 반환하고 `gaps`에 CDP 사용 불가 또는 페이지 추출 실패를 설명합니다. 추천 검색어와 출처 유형을 제시합니다. 웹 검색을 실행했다고 주장하거나 내용을 꾸며내지 않습니다.\n',
+      )
       .replace("WebSearch/webReader 作为兜底。", "CDP 不可用时返回结构化缺口，由父会话完成联网检索。")
       .replace("**核心原则：CDP 优先，WebSearch 兜底。**", "**核心原则：只在 CDP 可用时研究；否则交回父会话。**")
       .replace("CDP 能打开真实页面拿到完整正文；WebSearch 只返回摘要节选，信息量远不如全文。", "Antigravity custom subagent 只通过 `run_command` 使用 CDP；不假定存在额外联网工具。")
@@ -167,7 +176,7 @@ function renderAgent(sourceFile) {
   const model = sourceModel === "haiku" ? "flash" : "pro"
   const sourceSkills = parseInlineList(data.skills)
   const description = name === "story-researcher"
-    ? String(data.description).replace("WebSearch/webReader 作为兜底", "CDP 不可用时返回缺口，由父会话联网检索")
+    ? String(data.description).replace("WebSearch/webReader 作为兜底", "CDP 不可用时返回缺口，由父会话联网检索").replace("WebSearch/webReader로 보완합니다", "CDP 사용 불가 시 조사 공백을 주 세션에 반환합니다")
     : String(data.description)
 
   const frontmatter = [
@@ -211,7 +220,6 @@ function publish(rendered, destination) {
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   const staging = fs.mkdtempSync(path.join(path.dirname(destination), `.${path.basename(destination)}.staging-`))
   const existed = fs.existsSync(destination)
-  const replacement = `${destination}.replacement-${process.pid}`
   const backup = `${destination}.backup-${process.pid}`
   try {
     if (existed) {
@@ -228,19 +236,27 @@ function publish(rendered, destination) {
       fs.rmSync(target, { recursive: true, force: true })
       fs.writeFileSync(target, content, "utf8")
     }
-    fs.rmSync(replacement, { recursive: true, force: true })
     fs.rmSync(backup, { recursive: true, force: true })
-    fs.renameSync(staging, replacement)
-    if (existed) fs.renameSync(destination, backup)
-    fs.renameSync(replacement, destination)
+    if (existed) renameDirectory(destination, backup)
+    renameDirectory(staging, destination)
     fs.rmSync(backup, { recursive: true, force: true })
   } catch (error) {
-    if (!fs.existsSync(destination) && fs.existsSync(backup)) fs.renameSync(backup, destination)
+    if (!fs.existsSync(destination) && fs.existsSync(backup)) renameDirectory(backup, destination)
     throw error
   } finally {
     fs.rmSync(staging, { recursive: true, force: true })
-    fs.rmSync(replacement, { recursive: true, force: true })
-    fs.rmSync(backup, { recursive: true, force: true })
+    // 복원 자체가 실패했다면 원본 백업은 남겨 둔다.
+  }
+}
+
+function renameDirectory(source, destination) {
+  for (let attempt = 0; ; attempt++) {
+    try { fs.renameSync(source, destination); return }
+    catch (error) {
+      if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(error.code) || attempt >= 5) throw error
+      // Windows 파일 감시기가 막 만든 디렉터리 핸들을 잠시 보유할 수 있다.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50 * (attempt + 1))
+    }
   }
 }
 

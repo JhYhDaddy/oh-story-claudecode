@@ -1,7 +1,7 @@
 ---
-description: 长篇网文写作。从大纲到正文，辅助长篇网络小说的创作。
+description: 장편 웹소설 집필. 개요부터 본문까지 장편 창작을 돕는다.
 ---
 
-请使用 story-long-write skill，帮助我进行长篇网文写作。
+story-long-write 스킬로 장편 웹소설 집필을 도와주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

@@ -16,8 +16,8 @@ const originalExecSync = childProcess.execSync;
 const originalSpawnSync = childProcess.spawnSync;
 const childProcessCalls = [];
 
-// 用真实 child_process 调用的薄代理记录 options：这会覆盖插件和共享核实际解构到的
-// execSync/spawnSync，能验证运行时参数，而不是只扫源码里有没有 windowsHide 字样。
+// 실제 child_process 호출을 감싸는 얇은 프록시로 options를 기록한다. 플러그인과 공유 코어가 실제 구조 분해로 얻는
+// execSync/spawnSync를 다루므로 소스에 windowsHide라는 글자가 있는지만 보는 것이 아니라 런타임 인자를 검증한다.
 childProcess.execSync = (command, options) => {
   childProcessCalls.push({ method: "execSync", command, options });
   return originalExecSync(command, options);
@@ -28,9 +28,9 @@ childProcess.spawnSync = (command, args, options) => {
 };
 syncBuiltinESMExports();
 
-// plugin.ts imports "./lib/story_hook_core.js"（与 ZCode 共享的 prose-guard 核，部署到
-// .opencode/plugins/lib/）。仓库源码里核是平铺的，只有部署布局才有 lib/ 子目录；在 tmp 里
-// 复刻部署布局，import 才能解析到核。
+// plugin.ts는 "./lib/story_hook_core.js"를 가져온다(ZCode와 공유하는 본문 검사 코어이며
+// .opencode/plugins/lib/에 배포됨). 저장소 코어는 같은 디렉터리에 있고 배포 배치에만 lib/가 있으므로 임시 디렉터리에서
+// 배포 배치를 재현해야 import가 코어를 찾을 수 있다.
 const deployDir = path.join(tmp, "plugins");
 fs.mkdirSync(path.join(deployDir, "lib"), { recursive: true });
 fs.copyFileSync(path.join(srcDir, "plugin.ts"), path.join(deployDir, "plugin.ts"));
@@ -41,17 +41,17 @@ fs.copyFileSync(
 const pluginPath = path.join(deployDir, "plugin.ts");
 
 async function expectBlocked(action, label) {
-  await assert.rejects(action, /写正文被拦截/, label);
+  await assert.rejects(action, /본문 쓰기 차단/, label);
 }
 
 function writeCleanState(book, lastCommitted = 0) {
-  fs.mkdirSync(path.join(book, "追踪"), { recursive: true });
+  fs.mkdirSync(path.join(book, "추적"), { recursive: true });
   fs.writeFileSync(
-    path.join(book, "追踪", "_tracking-state.json"),
+    path.join(book, "추적", "_tracking-state.json"),
     JSON.stringify({ schema_version: 4, state_revision: 0, last_committed_chapter: lastCommitted }) + "\n",
     "utf8"
   );
-  fs.writeFileSync(path.join(book, "追踪", "上下文.md"), "> 状态修订：0\n", "utf8");
+  fs.writeFileSync(path.join(book, "추적", "문맥.md"), "> 状态修订：0\n", "utf8");
 }
 
 try {
@@ -62,13 +62,13 @@ try {
   assert.equal(plugin.id, "oh-story.story-hooks");
   assert.equal(typeof plugin.setup, "function");
 
-  // OpenCode 2.x 插件上下文的最小替身：只提供插件用到的 location / tool.hook / session.hook。
+  // OpenCode 2.x 플러그인 문맥의 최소 대역: 플러그인이 사용하는 location / tool.hook / session.hook만 제공한다.
   const hooks = { tool: {}, session: {} };
   const register = (domain) => async (name, callback) => {
     hooks[domain][name] = callback;
     return { dispose: async () => {} };
   };
-  // setup 在项目外的 cwd 里跑：真实后台服务加载插件时 process.cwd() 也不是用户项目。
+  // setup을 프로젝트 밖의 cwd에서 실행한다. 실제 백그라운드 서비스가 플러그인을 로드할 때도 process.cwd()는 사용자 프로젝트가 아니다.
   process.chdir(os.tmpdir());
   try {
     await plugin.setup({
@@ -83,7 +83,7 @@ try {
   assert.equal(typeof hooks.tool["execute.after"], "function");
   assert.equal(typeof hooks.session.compaction, "function");
 
-  // async 包一层：钩子同步 throw 也表现为 rejected promise，与运行时的 Promise 包装一致。
+  // async로 감싸 동기 throw도 거부된 promise로 나타나게 한다. 런타임의 Promise 래핑과 같다.
   const before = async (tool, input) => hooks.tool["execute.before"]({ tool, input });
   const after = async (tool, input, content) => {
     const event = { tool, input, status: "completed", result: { content } };
@@ -91,195 +91,195 @@ try {
     return event.result.content;
   };
 
-  fs.mkdirSync("book/正文", { recursive: true });
-  fs.mkdirSync("book/大纲", { recursive: true });
-  fs.mkdirSync("book/追踪", { recursive: true });
-  fs.writeFileSync("book/追踪/上下文.md", "# 上下文\n当前位置\n", "utf8");
+  fs.mkdirSync("book/본문", { recursive: true });
+  fs.mkdirSync("book/개요", { recursive: true });
+  fs.mkdirSync("book/추적", { recursive: true });
+  fs.writeFileSync("book/추적/문맥.md", "# 上下文\n当前位置\n", "utf8");
   fs.writeFileSync(".active-book", "book\n", "utf8");
 
   await expectBlocked(
-    () => before("write", { path: "book/正文/第001章_开局.md" }),
+    () => before("write", { path: "book/본문/제001장_开局.md" }),
     "new long prose without an outline"
   );
 
-  fs.writeFileSync("book/大纲/细纲_第1章.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
+  fs.writeFileSync("book/개요/상세개요_제1장.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
   await assert.rejects(
-    () => before("write", { path: "book/正文/第001章_开局.md" }),
-    /_tracking-state\.json 缺失/,
+    () => before("write", { path: "book/본문/제001장_开局.md" }),
+    /_tracking-state\.json이 없습니다/,
     "long prose with outline but no tracking checkpoint must fail closed"
   );
   writeCleanState("book");
-  // 细纲文件在但只有标题：照拦，文案说清是细纲空了。
-  fs.writeFileSync("book/大纲/细纲_第1章.md", "# 细纲\n## 目标情绪\n", "utf8");
+  // 상세 개요 파일은 있지만 제목뿐이면 계속 차단하며 상세 개요가 비었다고 명확히 안내한다.
+  fs.writeFileSync("book/개요/상세개요_제1장.md", "# 细纲\n## 目标情绪\n", "utf8");
   await assert.rejects(
-    () => before("write", { path: "book/正文/第001章_开局.md" }),
-    /第 1 章的细纲（book\/大纲\/细纲_第1章\.md）是空的/,
+    () => before("write", { path: "book/본문/제001장_开局.md" }),
+    /제1장의 상세 개요\(book\/개요\/상세개요_제1장\.md\)가 비어 있습니다/,
     "long prose with an empty outline must be blocked"
   );
-  fs.writeFileSync("book/大纲/细纲_第1章.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
-  await before("write", { path: "book/正文/第001章_开局.md" });
+  fs.writeFileSync("book/개요/상세개요_제1장.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
+  await before("write", { path: "book/본문/제001장_开局.md" });
 
-  // 2.x 后台服务一个进程服务多个项目，process.cwd() 不是用户项目：守卫只认 ctx.location。
-  // 换到项目外的 cwd 后，有细纲的章照样放行、无细纲的章照样按项目内路径拦截。
+  // 2.x 백그라운드 서비스의 한 프로세스가 여러 프로젝트를 담당하므로 process.cwd()는 사용자 프로젝트가 아니다. 검사기는 ctx.location만 따른다.
+  // cwd를 프로젝트 밖으로 옮겨도 상세 개요가 있는 장은 허용하고 없는 장은 프로젝트 내부 경로를 기준으로 차단한다.
   process.chdir(os.tmpdir());
   try {
-    await before("write", { path: "book/正文/第001章_开局.md" });
+    await before("write", { path: "book/본문/제001장_开局.md" });
     await assert.rejects(
-      () => before("write", { path: "book/正文/第005章_外部.md" }),
-      /第 5 章缺少细纲（book\/大纲\/细纲_第005章\.md）/,
+      () => before("write", { path: "book/본문/제005장_外部.md" }),
+      /제 5 장에 상세 개요가 없습니다\(book\/개요\/상세개요_제005장\.md\)/,
       "project root must come from ctx.location, not process.cwd()"
     );
   } finally {
     process.chdir(tmp);
   }
 
-  // shell 变量展不开：仍拦，但如实说路径没解析出来，不谎报缺细纲。
+  // 셸 변수를 확장할 수 없으면 여전히 차단하되 경로 해석 실패를 사실대로 알리고 상세 개요가 없다고 잘못 보고하지 않는다.
   await assert.rejects(
-    () => before("shell", { command: 'PROJ=$PWD/book; cat draft.md > "$PROJ/正文/第001章_开局.md"' }),
-    (error) => /未展开的 shell 变量/.test(error.message) && !/缺少细纲/.test(error.message),
+    () => before("shell", { command: 'PROJ=$PWD/book; cat draft.md > "$PROJ/본문/제001장_开局.md"' }),
+    (error) => /치환되지 않은 셸 변수/.test(error.message) && !/상세 개요가 없습니다/.test(error.message),
     "shell-variable prose target must be blocked as unresolved, not as a missing outline"
   );
 
-  fs.mkdirSync("bare/正文", { recursive: true });
+  fs.mkdirSync("bare/본문", { recursive: true });
   await expectBlocked(
-    () => before("write", { path: "bare/正文/第1章_首章.md" }),
+    () => before("write", { path: "bare/본문/제1장_首章.md" }),
     "bare long project without scaffolding must fail closed"
   );
 
-  fs.mkdirSync("cwd-book/正文", { recursive: true });
-  fs.mkdirSync("cwd-book/大纲", { recursive: true });
+  fs.mkdirSync("cwd-book/본문", { recursive: true });
+  fs.mkdirSync("cwd-book/개요", { recursive: true });
   await assert.rejects(
     () =>
       before("shell", {
-        command: "cat draft.md > 正文/第8章_相对.md",
+        command: "cat draft.md > 본문/제8장_相对.md",
         workdir: path.join(tmp, "cwd-book"),
       }),
-    /cwd-book\/大纲/,
+    /cwd-book\/개요/,
     "relative Shell target must resolve from the tool workdir"
   );
   await assert.rejects(
-    () => before("shell", { command: "cat draft.md > 正文/第8章_相对.md", workdir: "cwd-book" }),
-    /cwd-book\/大纲/,
+    () => before("shell", { command: "cat draft.md > 본문/제8장_相对.md", workdir: "cwd-book" }),
+    /cwd-book\/개요/,
     "relative workdir must resolve from the session directory"
   );
-  fs.writeFileSync("cwd-book/大纲/细纲_第8章.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
+  fs.writeFileSync("cwd-book/개요/상세개요_제8장.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
   writeCleanState("cwd-book", 7);
   await before("shell", {
-    command: "cat draft.md > 正文/第8章_相对.md",
+    command: "cat draft.md > 본문/제8장_相对.md",
     workdir: path.join(tmp, "cwd-book"),
   });
 
-  fs.writeFileSync("book/正文/第002章_续写.md", "已有正文。\n", "utf8");
-  await before("edit", { path: "book/正文/第002章_续写.md" });
+  fs.writeFileSync("book/본문/제002장_续写.md", "已有正文。\n", "utf8");
+  await before("edit", { path: "book/본문/제002장_续写.md" });
   fs.writeFileSync(
-    "book/追踪/_tracking-state.json",
+    "book/추적/_tracking-state.json",
     JSON.stringify({ schema_version: 4, state_revision: 1, last_committed_chapter: 0 }) + "\n",
     "utf8"
   );
   await assert.rejects(
-    () => before("edit", { path: "book/正文/第002章_续写.md" }),
-    /mode=revision 事务重建派生视图/,
+    () => before("edit", { path: "book/본문/제002장_续写.md" }),
+    /mode=revision 트랜잭션을 다시 제출해 파생 문서를 재구성/,
     "existing prose revision must be blocked while derived state is inconsistent"
   );
   writeCleanState("book", 3);
 
   await assert.rejects(
-    () => before("shell", { command: "cat draft.md > book/正文/第003章_绕过.md" }),
-    /写正文被拦截[\s\S]*已从 Shell 命令识别到正文写入目标/,
+    () => before("shell", { command: "cat draft.md > book/본문/제003장_绕过.md" }),
+    /본문 쓰기 차단[\s\S]*Shell 명령에서 본문 쓰기 대상을 확인했습니다/,
     "shell redirect must be blocked without claiming the static parser is unbypassable"
   );
-  await before("shell", { command: "grep 'book/正文/第003章_绕过.md' notes.md" });
+  await before("shell", { command: "grep 'book/본문/제003장_绕过.md' notes.md" });
 
-  // patch 是 OpenCode 的 edit 类工具，部分模型只暴露它、隐藏 write/edit：
-  // 守卫与落盘兜底都必须认它，否则那类模型整场没有大纲守卫和正文兜底。
+  // patch는 OpenCode의 edit 계열 도구다. 일부 모델은 patch만 노출하고 write/edit는 숨긴다.
+  // 사전 검사와 저장 후 보완 검사 모두 이를 인식해야 한다. 그렇지 않으면 그 모델의 전체 실행에서 개요 검사와 본문 보완 검사가 사라진다.
   const addPatch = (target) =>
     `*** Begin Patch\n*** Add File: ${target}\n+正文第一句。\n*** End Patch\n`;
   await expectBlocked(
-    () => before("patch", { patchText: addPatch("book/正文/第004章_补丁.md") }),
+    () => before("patch", { patchText: addPatch("book/본문/제004장_补丁.md") }),
     "patch must not bypass the outline guard"
   );
-  fs.writeFileSync("book/大纲/细纲_第4章.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
-  await before("patch", { patchText: addPatch("book/正文/第004章_补丁.md") });
+  fs.writeFileSync("book/개요/상세개요_제4장.md", "# 细纲\n江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。\n", "utf8");
+  await before("patch", { patchText: addPatch("book/본문/제004장_补丁.md") });
 
-  // *** Move to: 是 patch 的搬家/改名形态，落盘路径是目的地。目标抽取的各形态（Delete+Move、
-  // 搬出 正文/、纯 Delete）归 test-prose-net-parity.sh B 段；这里只验插件把 patchText 交给核、
-  // 并按目的地章号拦下（源 draft.md 不是正文，本就不该被判）。
+  // *** Move to:는 patch의 이동/이름 변경 형식이며 저장 경로는 목적지다. 대상 추출의 각 형태(Delete+Move,
+  // 본문/ 밖으로 이동, 순수 Delete)는 test-prose-net-parity.sh B절에서 검사한다. 여기서는 플러그인이 patchText를 코어에 넘기고
+  // 목적지 장 번호로 차단하는지만 확인한다(원본 draft.md는 본문이 아니므로 검사 대상으로 판단하면 안 됨).
   const movePatch = (source, destination) =>
     `*** Begin Patch\n*** Update File: ${source}\n*** Move to: ${destination}\n+正文第一句。\n*** End Patch\n`;
   await assert.rejects(
-    () => before("patch", { patchText: movePatch("draft.md", "book/正文/第009章_搬家.md") }),
-    /写正文被拦截[\s\S]*第 9 章缺少细纲/,
+    () => before("patch", { patchText: movePatch("draft.md", "book/본문/제009장_搬家.md") }),
+    /본문 쓰기 차단[\s\S]*제 9 장에 상세 개요가 없습니다/,
     "patch *** Move to: 的拦截判据必须算在目的地章号上"
   );
 
   fs.mkdirSync("short", { recursive: true });
-  fs.writeFileSync("short/设定.md", "# 设定\n", "utf8");
+  fs.writeFileSync("short/설정.md", "# 설정\n", "utf8");
   await expectBlocked(
-    () => before("write", { path: "short/正文.md" }),
+    () => before("write", { path: "short/본문.md" }),
     "new short prose without section outline"
   );
-  fs.writeFileSync("short/小节大纲.md", "# 小节大纲\n", "utf8");
-  await before("write", { path: "short/正文.md" });
+  fs.writeFileSync("short/구간개요.md", "# 小节大纲\n", "utf8");
+  await before("write", { path: "short/본문.md" });
 
   fs.writeFileSync(
-    "book/正文/第001章_开局.md",
+    "book/본문/제001장_开局.md",
     `${"街灯一盏盏亮起。".repeat(30)}\nTODO 此处待补`,
     "utf8"
   );
-  const afterOutput = await after("write", { path: "book/正文/第001章_开局.md" }, "write complete");
+  const afterOutput = await after("write", { path: "book/본문/제001장_开局.md" }, "write complete");
   assert.match(afterOutput, /^write complete\n\n/);
-  assert.match(afterOutput, /正文兜底检测/);
-  assert.match(afterOutput, /占位符/);
+  assert.match(afterOutput, /본문 보완 검사/);
+  assert.match(afterOutput, /자리표시자/);
 
-  // content 是结构化数组时追加一段 text，不改写原有条目
-  const structured = await after("write", { path: "book/正文/第001章_开局.md" }, [
+  // content가 구조화 배열이면 기존 항목을 다시 쓰지 않고 text 항목 하나를 추가한다.
+  const structured = await after("write", { path: "book/본문/제001장_开局.md" }, [
     { type: "text", text: "write complete" },
   ]);
   assert.equal(structured[0].text, "write complete");
-  assert.match(structured.at(-1).text, /正文兜底检测/);
+  assert.match(structured.at(-1).text, /본문 보완 검사/);
 
   fs.writeFileSync("notes.md", "TODO\n", "utf8");
   assert.equal(await after("write", { path: "notes.md" }, "unchanged"), "unchanged");
 
   fs.writeFileSync(
-    "book/正文/第004章_补丁.md",
+    "book/본문/제004장_补丁.md",
     `${"街灯一盏盏亮起。".repeat(30)}\nTODO 此处待补`,
     "utf8"
   );
   const patchAfterOutput = await after(
     "patch",
-    { patchText: addPatch("book/正文/第004章_补丁.md") },
+    { patchText: addPatch("book/본문/제004장_补丁.md") },
     "patch applied"
   );
-  assert.match(patchAfterOutput, /正文兜底检测/);
-  assert.match(patchAfterOutput, /占位符/);
+  assert.match(patchAfterOutput, /본문 보완 검사/);
+  assert.match(patchAfterOutput, /자리표시자/);
 
   assert.equal(await after("patch", { patchText: addPatch("notes.md") }, "unchanged"), "unchanged");
 
-  // 搬家式补丁的写后兜底：要扫的是**目的地**那一章。只认 Add/Update File 时这里抽到 draft.md，
-  // 网整条空过——搬进 正文/ 的章带着 TODO 也没人回话。
+  // 이동 패치의 쓰기 후 보완 검사: **목적지**의 장을 검사해야 한다. Add/Update File만 인식하면 여기서 draft.md를 추출해
+  // 검사 전체가 빈 상태로 통과하므로 본문/로 옮긴 장에 TODO가 있어도 아무 알림이 없다.
   fs.writeFileSync(
-    "book/正文/第009章_搬家.md",
+    "book/본문/제009장_搬家.md",
     `${"街灯一盏盏亮起。".repeat(30)}\nTODO 此处待补`,
     "utf8"
   );
   const moveAfterOutput = await after(
     "patch",
-    { patchText: movePatch("draft.md", "book/正文/第009章_搬家.md") },
+    { patchText: movePatch("draft.md", "book/본문/제009장_搬家.md") },
     "patch applied"
   );
-  assert.match(moveAfterOutput, /正文兜底检测（book\/正文\/第009章_搬家\.md）/);
-  assert.match(moveAfterOutput, /占位符/);
+  assert.match(moveAfterOutput, /본문 보완 검사\(book\/본문\/제009장_搬家\.md）/);
+  assert.match(moveAfterOutput, /자리표시자/);
 
-  // 失败的工具调用不做写后兜底：结果原样保留
-  const failed = { tool: "write", input: { path: "book/正文/第001章_开局.md" }, status: "error", error: { message: "x" } };
+  // 실패한 도구 호출에는 쓰기 후 보완 검사를 하지 않고 결과를 그대로 유지한다.
+  const failed = { tool: "write", input: { path: "book/본문/제001장_开局.md" }, status: "error", error: { message: "x" } };
   await hooks.tool["execute.after"](failed);
   assert.equal(failed.result, undefined);
 
-  // 非写类工具必须在 dispatch 前返回，不为 read/grep/... fork 一次 git rev-parse
-  // （插件常驻 OpenCode 服务进程，这笔同步 execSync 会卡事件循环）。
-  // 用只记账的 git shim 顶掉 PATH：读类工具后账本必须为空，写类工具后必须有记录——
-  // 后一条防止这个断言变成永真。
+  // 쓰기 계열이 아닌 도구는 dispatch 전에 반환하며 read/grep/... 때문에 git rev-parse를 매번 fork하면 안 된다.
+  // 플러그인은 OpenCode 서비스 프로세스에 상주하므로 동기 execSync 호출이 이벤트 루프를 막는다.
+  // 기록만 하는 git shim으로 PATH를 대체한다. 읽기 도구 후에는 기록이 비고 쓰기 도구 후에는 기록이 있어야 한다.
+  // 두 번째 조건은 이 단언이 항상 참이 되는 것을 방지한다.
   if (process.platform !== "win32") {
     const shimDir = path.join(tmp, "bin");
     const gitLog = path.join(tmp, "git-calls.log");
@@ -300,7 +300,7 @@ try {
         false,
         "non-write tools must not fork git rev-parse"
       );
-      await before("write", { path: "book/正文/第002章_续写.md" });
+      await before("write", { path: "book/본문/제002장_续写.md" });
       assert.match(
         fs.readFileSync(gitLog, "utf8"),
         /rev-parse/,
@@ -313,10 +313,10 @@ try {
 
   const compact = { system: [] };
   await hooks.session.compaction(compact);
-  assert(compact.system.some((part) => part.type === "text" && part.text.includes("Writing context: book/追踪/上下文.md")));
+  assert(compact.system.some((part) => part.type === "text" && part.text.includes(`Writing context: ${path.join("book", "추적", "문맥.md")}`)));
 
-  // 共享核 staged commit 检查也会拉 git。直接调用已部署布局中的真实模块，代理只记录并
-  // 转发，确保断言命中 stagedMarkdownWarnings() 实际传给 spawnSync 的 options。
+  // 공유 코어의 staged commit 검사도 git을 호출한다. 실제 배포 배치의 모듈을 직접 호출하고 프록시는 기록과 전달만 수행해
+  // stagedMarkdownWarnings()가 실제로 spawnSync에 넘기는 options를 검증한다.
   const require = createRequire(import.meta.url);
   const core = require(path.join(deployDir, "lib", "story_hook_core.js"));
   core.stagedMarkdownWarnings(tmp);

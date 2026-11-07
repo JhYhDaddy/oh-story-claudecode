@@ -1,98 +1,94 @@
-# demo — real output samples
+# demo — 실제 산출물 예시
 
-[中文](README.md)
+[기존 중국어판의 한국어 번역](README.md) · [한국어 데모 본문](ko/README.md)
 
-Real output from the skills, browsable as files.
+Oh Story 각 스킬의 실제 출력입니다. 파일을 열어 내용을 직접 살펴볼 수 있습니다.
 
-> **Provenance**: *曾将爱意私藏* and *让你管账号，你高燃混剪炸全网* are this project author's own
-> published works, so both the source text and the deconstruction are included here.
-> *Coiling Dragon* (《盘龙》) is a Qidian classic used only as **input** for deconstruction —
-> this directory holds our generated analysis, not the original prose.
+> **자료의 소유권**: 《曾将爱意私藏》(한때 사랑을 숨겼다)와 《让你管账号，你高燃混剪炸全网》(계정을 맡겼더니 열혈 편집 영상으로 인터넷을 뒤흔들었다)은 이 프로젝트 작가의 작품으로, 원문과 분석 결과를 함께 공개합니다. 《盘龙》(반룡)은 치디엔의 고전 장편으로 분석의 **입력 자료**로만 사용합니다. 이 디렉터리에는 생성한 분석 산출물만 있으며 원작 본문은 없습니다.
 >
-> In every case the skills' **output** is the deconstruction report, plot-node list, technique notes,
-> character/plot/setting files and tracking state.
+> 각 예시에서 스킬이 생성한 **출력**은 작품 분석 보고서, 플롯 노드, 집필 기법, 인물·플롯·설정 파일과 추적 상태 파일입니다.
+>
+> 한국어 번역은 [ko/](ko/README.md)에서 볼 수 있습니다. 원본 소설과 기계가 읽는 분석·추적 파일은 실행 검사와 실제 기록을 보존하기 위해 원래 경로에 유지하며, 한국어 본문은 같은 구조의 별도 경로에 제공합니다. 명령·파일명·필드 식별자는 원문을 유지합니다.
 
-## Cover generation example
-![Cover example — Sword Dao Supreme](封面-剑道独尊.png)
+## 표지 생성 예시
+![표지 예시 — 검도독존](封面-剑道独尊.png)
 
+## 작품 분석 데모 — 반룡
 
-## Deconstruction demo — Coiling Dragon
-Historical output from `/story-long-analyze` on the first 23 chapters of *Coiling Dragon*, preserving the files and structure of that run:
+`/story-long-analyze`가 《반룡》 첫 23장을 분석한 과거 산출물이며 당시 파일과 구조를 보존합니다.
 
 ```
 demo/拆文库/盘龙/
-├── 概要.md              # Novel overview + chapter index
-├── 拆文报告.md           # 5-dimension scoring + pacing analysis + takeaways
-├── 文风.md              # Benchmark voice: sentence rhythm, punctuation, dialogue subtext, emotion pacing
+├── 概要.md              # 작품 전체 개요 + 장별 색인
+├── 拆文报告.md           # 5차원 점수 + 리듬 분석 + 참고할 점
+├── 文风.md              # 비교 작품 문체: 문장 리듬/문장부호/대사의 숨은 뜻/감정 리듬
 ├── 章节/
-│   ├── 第1章_深度拆解.md … 第3章_深度拆解.md  # One deep analysis per Golden-3 chapter
-│   └── 第1章_摘要.md … 第23章_摘要.md          # One summary file per chapter
+│   ├── 第1章_深度拆解.md … 第3章_深度拆解.md  # 핵심 첫 세 장의 장별 심층 분석
+│   └── 第1章_摘要.md … 第23章_摘要.md          # 장마다 요약 파일 하나
 ├── 角色/
-│   ├── 林雷.md           # Protagonist full profile
-│   ├── 霍格.md           # Core supporting
-│   ├── 希尔曼.md         # Core supporting
-│   ├── 希里.md           # Functional character
-│   ├── 德林柯沃特.md      # Core supporting
-│   ├── 沃顿.md           # Functional character
-│   └── 角色关系.md        # Relationship network
+│   ├── 林雷.md           # 주인공 전체 프로필
+│   ├── 霍格.md           # 핵심 조연
+│   ├── 希尔曼.md         # 핵심 조연
+│   ├── 希里.md           # 기능적 인물
+│   ├── 德林柯沃特.md      # 핵심 조연
+│   ├── 沃顿.md           # 기능적 인물
+│   └── 角色关系.md        # 관계망
 ├── 剧情/
-│   ├── 故事线.md          # Framework + 4 plotlines + 2 storylines
-│   ├── 强者过境与魔法启蒙.md etc.  # Five scene-level plot units
-│   ├── 节奏.md            # Pacing + key-info progression + emotional trigger eruption rhythm
-│   └── 情绪模块.md        # Reader needs + emotional engine + reusable writing modules
+│   ├── 故事线.md          # 구조 식별 + 플롯 4개 + 이야기선 2개
+│   ├── 强者过境与魔法启蒙.md 등  # 장면별 플롯 단위 5개
+│   ├── 节奏.md            # 리듬/핵심 정보 전개/감정 자극과 폭발의 리듬
+│   └── 情绪模块.md        # 독자 욕구/감정 동력/재사용 가능한 집필 모듈
 └── 设定/
     ├── 世界观/
-    │   ├── 背景设定.md    # Core rules + special settings
-    │   ├── 力量体系.md    # Battle qi + magic + ranks
-    │   ├── 地理.md        # Andaluxia + Yulan Continent
-    │   └── 金手指.md      # Panlong Ring + Delin Cowort
+    │   ├── 背景设定.md    # 핵심 규칙 + 특수 설정
+    │   ├── 力量体系.md    # 투기 + 마법 + 등급
+    │   ├── 地理.md        # 안달루시아 + 위란 대륙
+    │   └── 金手指.md      # 반룡 반지 + 더린 커워트
     └── 势力/
-        └── 巴鲁克家族.md  # Baluk family (dragon-blood lineage)
+        └── 巴鲁克家族.md  # 용혈 혈통 가문 프로필
 ```
 
-Long-form deconstruction produces style, rhythm and emotion-module references. The current writing workflow reads relevant material from `对标/{书名}/`; the book’s own style takes priority, benchmark style fills unspecified dimensions, and the book’s outline owns the plot.
+장편 분석은 문체·리듬·감정 모듈 자료를 생성합니다. 현재 집필 흐름은 필요할 때 `对标/{书名}/`에서 읽습니다. 작품 고유 문체가 우선이고 비교 작품은 지정되지 않은 표현 차원을 보완하며, 구체적인 플롯은 현재 작품의 상세 개요를 따릅니다.
 
+## 작품 분석 데모 — 한때 사랑을 숨겼다(단편)
 
-## Deconstruction demo — Once I Hid My Love (曾将爱意私藏, short-form)
-`/story-short-analyze` deconstructing the short story 《曾将爱意私藏》 (~8,500 chars, win-back / "faked-death" genre):
+`/story-short-analyze`가 단편 《曾将爱意私藏》(약 8,500자, 후회남의 재회 시도 · 죽음을 가장한 잠적)을 분석한 전체 출력입니다.
 
 ```
 demo/拆文库/曾将爱意私藏/
-├── 原文/原文.txt        # Source backup
-├── 拆文报告.md          # Story core + 5-dim scores + 6-facet payoff + cognitive reversal + 9-layer resonance
-├── 情节节点.md          # 54 plot points (source quotes + emotion markers −9~+9)
-├── 写作手法.md          # POV / dialogue / info-gap / object-hook — 11 techniques
-└── _meta.json           # structure_counts (deconstruction acceptance counts)
+├── 原文/原文.txt        # 원문 백업
+├── 拆文报告.md          # 이야기 핵심 + 5차원 점수 + 6차원 절정 + 인식 반전 + 9단계 공감
+├── 情节节点.md          # 플롯 노드 54개(원문 인용 + 감정 표식 −9~+9)
+├── 写作手法.md          # 시점/대화/정보 격차/사물 후킹 등 11개 기법
+└── _meta.json           # 구조 집계 structure_counts(분석 검수 근거)
 ```
 
-Short-form deconstruction outputs `拆文报告 / 情节节点 / 写作手法`; downstream `/story-short-write` writes a new same-genre story from them.
+단편 분석은 `拆文报告 / 情节节点 / 写作手法`을 생성하며 후속 `/story-short-write`가 이를 바탕으로 같은 장르의 새 단편을 씁니다.
 
+## 가져오기 데모 — 계정을 맡겼더니 열혈 편집 영상으로 인터넷을 뒤흔들었다(장편 이어쓰기 프로젝트)
 
-## Import demo — 让你管账号，你高燃混剪炸全网 (long-form continuation project)
-Run `/story-setup` first, then use `/story-import` to reverse-build the author's already-published first 20 chapters (~37k Chinese chars) into a continuation-ready writing project. Continue with `/story-long-write 日更` or `/story-long-write 写第21章`:
+먼저 `/story-setup`으로 집필 프로젝트를 배포하는 것을 권장합니다. 이어 `/story-import`로 작가가 이미 공개한 첫 20장(약 3.7만 자)을 역분석하여 이어 쓸 수 있는 집필 프로젝트로 재구성합니다. 마지막으로 `/story-long-write 日更` 또는 `/story-long-write 写第21章`으로 이어 씁니다.
 
 ```
 demo/长篇/让你管账号，你高燃混剪炸全网/
-├── 正文/        Chapters 001–020 (published source text)
-├── 大纲/        大纲.md · 卷纲_第1卷.md · 细纲_第001–020章.md (one file per chapter)
-├── 设定/        角色/ (6 character files) · 世界观/{background · cheat-system}
-│                关系.md · 题材定位.md · 文风.md
+├── 正文/        제001–020장(공개된 원문)
+├── 大纲/        大纲.md · 卷纲_第1卷.md · 细纲_第001–020章.md(장마다 파일 하나)
+├── 设定/        角色/(인물 파일 6개)
+│                世界观/{背景设定·金手指} · 关系.md · 题材定位.md · 文风.md
 └── 追踪/        _tracking-state.json · 上下文.md · 伏笔.md · 逐章记录/
-                 角色状态/{角色名}.md · 时间线/{作者真相.md · 读者已知.md}
+                 角色状态/{角色名}.md · 时间线/{作者真相.md·读者已知.md}
 ```
 
-Per-chapter extraction (events / characters / settings / foreshadowing / timeline) is reverse-engineered into a continuation bible, so the author seamlessly continues from chapter 21.
+장별 추출(사건·인물·설정·복선·시간선)로 이어쓰기용 설정집을 역구성하여 작가가 21장부터 자연스럽게 집필을 이어 갑니다.
 
-## Published continuation artifacts
+## 공개된 이어쓰기 산출물
 
-| Path | What it is |
+| 경로 | 내용 |
 |---|---|
-| [`长篇/…/正文/第021章_离别怎么会开花.md`](长篇/让你管账号，你高燃混剪炸全网/正文/第021章_离别怎么会开花.md) | Chapter 21, continued by `/story-long-write` in one real session (2,068 chars, chapter check green; the README video is this session) |
-| [`长篇/…/大纲/细纲_第021章.md`](长篇/让你管账号，你高燃混剪炸全网/大纲/细纲_第021章.md) · [`设定/角色/谭守义.md`](长篇/让你管账号，你高燃混剪炸全网/设定/角色/谭守义.md) | The blueprint the skill wrote first (0 blocking structural findings) and the new character card |
-| [`长篇/…/.deslop-whitelist`](长篇/让你管账号，你高燃混剪炸全网/.deslop-whitelist) · [`追踪/逐章记录/第021章.md`](长篇/让你管账号，你高燃混剪炸全网/追踪/逐章记录/第021章.md) | The book-local style whitelist the skill created itself; the chapter-21 tracking record (with its retirement log) |
-| [`设定/角色/陆振国.md`](长篇/让你管账号，你高燃混剪炸全网/设定/角色/陆振国.md) · [`大纲/卷纲_第1卷.md`](长篇/让你管账号，你高燃混剪炸全网/大纲/卷纲_第1卷.md) · [`设定/关系.md`](长篇/让你管账号，你高燃混剪炸全网/设定/关系.md) | What the author's one-line ruling at the end of the video ("the sceptic is a military-affairs influencer") turned into: a new character card, plus the volume outline and relationship table updated to match (second session, 6½ minutes) |
-| [`去AI味对照/`](去AI味对照/README_EN.md) | Real scan output from the `/story-deslop` checker: 8 findings on an AI-flavored sample vs zero on the clean rewrite |
+| [`长篇/…/正文/第021章_离别怎么会开花.md`](长篇/让你管账号，你高燃混剪炸全网/正文/第021章_离别怎么会开花.md) | `/story-long-write`가 실제 세션 한 번에서 이어 쓴 21장(2,068자, chapter check 전체 통과; README 상단 영상이 이 세션 기록) |
+| [`长篇/…/大纲/细纲_第021章.md`](长篇/让你管账号，你高燃混剪炸全网/大纲/细纲_第021章.md) · [`设定/角色/谭守义.md`](长篇/让你管账号，你高燃混剪炸全网/设定/角色/谭守义.md) | 스킬이 먼저 보완한 상세 개요(구조 검수 차단 0건)와 새 인물 설정 카드 |
+| [`长篇/…/.deslop-whitelist`](长篇/让你管账号，你高燃混剪炸全网/.deslop-whitelist) · [`追踪/逐章记录/第021章.md`](长篇/让你管账号，你高燃混剪炸全网/追踪/逐章记录/第021章.md) | 스킬이 직접 만든 작품별 문체 허용 목록과 21장 추적 트랜잭션의 장별 기록(‘본 장에서 종료된 항목 등록’ 포함) |
+| [`设定/角色/陆振国.md`](长篇/让你管账号，你高燃混剪炸全网/设定/角色/陆振国.md) · [`大纲/卷纲_第1卷.md`](长篇/让你管账号，你高燃混剪炸全网/大纲/卷纲_第1卷.md) · [`设定/关系.md`](长篇/让你管账号，你高燃混剪炸全网/设定/关系.md) | 영상 마지막에 작가가 ‘의혹을 제기하는 쪽은 군사 분야 유명 인플루언서로 하자’고 한 말의 반영 결과: 새 인물 카드와 권별 개요·관계표의 동시 갱신(두 번째 세션, 6분 30초) |
+| [`去AI味对照/`](去AI味对照/README_EN.md) | `/story-deslop` 검사기의 실제 출력: 인위적인 AI 문체 예시에서 8건 검출, 자연스러운 본문에서는 0건 |
 
-> `追踪/` was advanced to chapter 21 by the skill itself, in the same real session, through `storyctl.py chapter commit`
-> (`state_revision` 0 → 1); every derived view is re-rendered from `_tracking-state.json`. `.deslop-whitelist` was also
-> registered by the skill after reading `设定/文风.md`.
+> 스킬은 같은 실제 세션에서 `storyctl.py chapter commit`으로 `追踪/`를 21장까지 진행했습니다(`state_revision` 0 → 1). 파생 뷰는 모두 `_tracking-state.json`에서 다시 생성했습니다. `.deslop-whitelist`도 스킬이 `设定/文风.md`를 읽고 직접 등록했습니다.

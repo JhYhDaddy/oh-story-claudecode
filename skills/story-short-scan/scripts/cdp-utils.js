@@ -1,10 +1,8 @@
 /**
- * CDP 工具函数 — 各平台采集脚本的公共依赖
- *
- * 使用方式：
+ * CDP 유틸리티 — 플랫폼별 수집 스크립트의 공통 의존성.
+ * 사용법:
  *   const { ab, sleep, evalJSON, evalJSONBase64, scrollLoad, getArg, safeStr, localDateStamp } = require("./cdp-utils");
- *
- * 前置：
+ * 사전 실행:
  *   node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
  */
 
@@ -13,16 +11,11 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * On Windows `agent-browser` is an npm shim (agent-browser.cmd/.ps1) that
- * forwards to the real target — the native agent-browser-win32-*.exe or a
- * bundled Node CLI. Node refuses to execFile the `.cmd` without a shell
- * (CVE-2024-27980), and routing the argv array through a shell mangles it: the
- * `.cmd`'s `%*` is re-tokenized by cmd.exe (splitting on spaces, breaking on
- * & | ^), and calling the shim by bare name from powershell.exe collapses the
- * whole array into a single space-joined argument. The exact locus differs by
- * runtime, so instead of hardening any one shell path we bypass shells entirely:
- * read the `.cmd` shim, recover the real program plus its fixed leading args,
- * and execFile that target directly with the argv array — verbatim, no shell.
+ * Windows의 `agent-browser`는 실제 agent-browser-win32-*.exe 또는 포함된 Node CLI로 전달하는 npm shim(.cmd/.ps1)이다.
+ * Node는 셸 없는 `.cmd` execFile을 거부한다(CVE-2024-27980). argv 배열을 셸로 보내면 변형된다.
+ * `.cmd`의 `%*`는 cmd.exe에서 다시 토큰화되어 공백으로 나뉘고 & | ^에서 깨진다. PowerShell에서 이름만으로 shim을 호출하면
+ * 전체 배열이 공백으로 합쳐진 단일 인자가 된다. 문제 지점이 런타임마다 달라 특정 셸 경로를 보강하는 대신 셸을 완전히 우회한다.
+ * `.cmd`를 읽어 실제 프로그램과 고정 선행 인자를 복구한 뒤 argv 배열을 그대로 전달해 직접 execFile한다.
  */
 function resolveWindowsAgentBrowser(argv) {
   const dirs = String(process.env.PATH || "").split(path.delimiter);
@@ -60,9 +53,8 @@ function resolveWindowsAgentBrowser(argv) {
 }
 
 /**
- * Build a shell-free invocation. POSIX runs the native `agent-browser` binary
- * directly; Windows resolves the npm `.cmd` shim to that native target so the
- * argument array is passed verbatim, never routed through cmd.exe/PowerShell.
+ * 셸 없는 호출을 만든다. POSIX는 기본 `agent-browser` 바이너리를 직접 실행하고 Windows는 npm `.cmd`에서 실제 대상을 찾는다.
+ * 인자 배열은 그대로 전달하며 cmd.exe/PowerShell을 거치지 않는다.
  */
 function buildAgentBrowserInvocation(port, args, platform = process.platform) {
   const argv = ["--cdp", String(port), ...args.map(String)];
@@ -73,14 +65,14 @@ function buildAgentBrowserInvocation(port, args, platform = process.platform) {
 }
 
 // ---------------------------------------------------------------------------
-// agent-browser 工具函数
+// agent-browser 유틸리티
 // ---------------------------------------------------------------------------
 
 /**
- * 调用 agent-browser CLI
- * @param {number} port - CDP 端口
- * @param  {...string} args - agent-browser 参数
- * @returns {string} stdout（trim 后）
+ * agent-browser CLI 호출.
+ * @param {number} port - CDP 포트
+ * @param {...string} args - agent-browser 인자
+ * @returns {string} 앞뒤 공백을 제거한 stdout
  */
 function ab(port, ...args) {
   const invocation = buildAgentBrowserInvocation(port, args);
@@ -103,7 +95,7 @@ function ab(port, ...args) {
   }
 }
 
-/** 等待 ms 毫秒（跨平台，不依赖系统 sleep 命令） */
+/** ms 밀리초 대기. 크로스 플랫폼이며 시스템 sleep 명령에 의존하지 않는다. */
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
@@ -126,38 +118,35 @@ function parseJSONResult(raw) {
 }
 
 /**
- * 在浏览器内执行 JS，并解析 JSON 返回值。
- * 一律走 base64（-b）：正文提取用的 JS 常含引号、反斜杠等，作为命令行参数时在 Windows 上
- * 无法逐字透传（.cmd 的 %* 与 PowerShell 都会二次解析）。base64 让参数只含 [A-Za-z0-9+/=]，
- * 和各采集脚本已在用的 evalJSONBase64 走同一条安全通道。
+ * 브라우저 안에서 JS를 실행하고 JSON 반환값을 파싱한다.
+ * 항상 base64(-b)를 쓴다. 본문 추출 JS의 따옴표·역슬래시는 Windows 명령행에서 .cmd %*와 PowerShell의 재파싱으로 그대로 전달되지 않는다.
+ * base64는 인자를 [A-Za-z0-9+/=]로 제한하며 수집 스크립트의 evalJSONBase64와 같은 안전한 경로를 사용한다.
  */
 function evalJSON(port, js) {
   return evalJSONBase64(port, js);
 }
 
-/**
- * 通过 agent-browser 的 base64 参数执行复杂 JS，避免命令行转义和参数边界问题。
- */
+/** agent-browser의 base64 인자로 복잡한 JS를 실행해 명령행 이스케이프·인자 경계 문제를 피한다. */
 function evalJSONBase64(port, js) {
   const encoded = Buffer.from(String(js), "utf8").toString("base64");
   return parseJSONResult(ab(port, "eval", "-b", encoded));
 }
 
 /**
- * 安全地将值插入浏览器 eval 字符串。
- * 使用 JSON.stringify 确保值不会因特殊字符（引号、反斜杠等）破坏 eval 字符串。
- * @param {*} val - 要插入的值
- * @returns {string} JSON 字符串表示（含引号）
+ * 값을 브라우저 eval 문자열에 안전하게 삽입한다.
+ * JSON.stringify로 따옴표·역슬래시 등이 eval 문자열을 깨뜨리지 않게 한다.
+ * @param {*} val - 삽입할 값
+ * @returns {string} 따옴표를 포함한 JSON 문자열 표현
  */
 function safeStr(val) {
   return JSON.stringify(String(val));
 }
 
 /**
- * 滚动页面加载更多内容
- * @param {number} port - CDP 端口
- * @param {number} times - 滚动次数
- * @param {number} [interval=1000] - 每次滚动间隔（ms）
+ * 페이지를 스크롤해 추가 내용을 로드한다.
+ * @param {number} port - CDP 포트
+ * @param {number} times - 스크롤 횟수
+ * @param {number} [interval=1000] - 스크롤 간격(ms)
  */
 function scrollLoad(port, times, interval = 1000) {
   for (let i = 0; i < times; i++) {
@@ -166,7 +155,7 @@ function scrollLoad(port, times, interval = 1000) {
   }
 }
 
-/** 解析 --xxx 参数 */
+/** --xxx 인자를 파싱한다. */
 function getArg(args, name) {
   const i = args.indexOf(name);
   if (i >= 0) return i + 1 < args.length ? args[i + 1] : null;
@@ -176,11 +165,11 @@ function getArg(args, name) {
 }
 
 /**
- * 输出文件名用的日期戳（YYYYMMDD），一律取**本地日历日**。
- * 不能用 new Date().toISOString().slice(0,10)：那是 UTC 日期，比 UTC+8 晚 8 小时。
- * 文件名是各采集脚本唯一的去重键（一个榜单一天一份），北京时间 00:00-08:00 之间的采集
- * 会退回「昨天」的文件名，静默覆盖前一晚采到的同名报告，且这份数据被标成前一天。
- * @param {Date} [date] - 默认当前时间
+ * 출력 파일명 날짜(YYYYMMDD)는 항상 현지 달력 날짜를 쓴다.
+ * new Date().toISOString().slice(0,10)은 UTC 날짜라 UTC+8보다 8시간 늦으므로 쓰면 안 된다.
+ * 파일명은 순위별 하루 한 파일이라는 유일한 중복 키다. 베이징 00:00–08:00 수집에서 UTC를 쓰면 어제 파일명으로 돌아가
+ * 전날 밤의 같은 이름 보고서를 덮고 데이터를 전날 것으로 표시한다.
+ * @param {Date} [date] - 기본 현재 시각
  * @returns {string} YYYYMMDD
  */
 function localDateStamp(date) {
@@ -192,9 +181,8 @@ function localDateStamp(date) {
 }
 
 /**
- * Run a scraper entrypoint and turn empty/partial output into machine-readable
- * CLI status. Legacy entrypoints may return an integer; multi-target scrapers
- * return {planned,written,failed,partial,partialReasons}.
+ * 수집 진입점을 실행해 빈·부분 출력을 기계 판독 가능한 CLI 상태로 바꾼다.
+ * 이전 진입점은 정수를, 다중 대상 수집기는 {planned,written,failed,partial,partialReasons}를 반환할 수 있다.
  */
 function runCli(main, label) {
   Promise.resolve()

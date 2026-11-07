@@ -1,67 +1,66 @@
-# 各编程 Agent 的部署与安装排查
+# 호스트별 배포와 설치 문제 해결
 
-[English](hosts_EN.md)
+[영문판의 한국어 번역](hosts_EN.md)
 
-Oh Story 为 7 款编程 Agent 提供部署适配，另支持 Web AI / 通用文件模式。本页说明各宿主的部署条件、限制与安装排查；
-日常使用只需 README 的[安装](../README.md#安装)一节。
+Oh Story는 코딩 에이전트 호스트 7종의 배포 어댑터와 웹 AI·기타 에이전트용 일반 파일 방식을 지원합니다. 이 문서는 배포 조건, 알려진 한계, 설치 문제 해결을 설명합니다. 일상 사용에는 README의 [설치](../README.md#安装) 절만 읽어도 됩니다.
 
-## 安装排查：Windows 报错、环境检查、marketplace 路径
+## 설치 문제 해결: Windows 오류, 환경 검사, 마켓플레이스 경로
 
-Windows 上偶尔会看到 `ENOENT ... mkdir` 报错但末尾仍显示 `Done!`，这是有技能没装全。story-setup 的参考资料目录整个缺了一块时，跑 `/story-setup` 会提示参考资料包不完整；其它形式的残缺不一定有提示。无论有没有报错，重跑同一条安装命令即可修复。
+Windows에서 `ENOENT ... mkdir` 오류가 나도 마지막에 `Done!`이 표시되는 경우가 있습니다. 일부 스킬이 완전히 설치되지 않았다는 뜻입니다. story-setup 참조 묶음의 하위 디렉터리가 통째로 없으면 `/story-setup`이 불완전한 참조 묶음이라고 알리지만 다른 종류의 누락은 알리지 않을 수 있습니다. 오류 표시 여부와 관계없이 같은 설치 명령을 다시 실행하면 복구됩니다.
 
-排查已安装环境时，向 Agent 说「用 story-setup 检查写作环境」，或给 story-setup 传入 `check` 参数。它按目标 CLI 的部署清单检查并给出处理建议；仅检查不会改动项目，需要修复时仍走原来的 setup 流程。
+설치 환경을 진단하려면 에이전트에 “story-setup으로 집필 환경을 검사해줘”라고 요청하거나 스킬에 `check` 인자를 전달합니다. 대상 CLI의 배포 목록을 확인하고 처리 방법을 안내하며 검사만으로 프로젝트를 수정하지 않습니다. 복구는 기존 설정 흐름을 따릅니다.
 
-这条 `npx skills` 独立安装路径不经过 Claude Code 或 ZCode marketplace，不受下方插件打包身份调整影响。
+이 독립 `npx skills` 설치 방식은 Claude Code·ZCode 마켓플레이스를 거치지 않으므로 아래 플러그인 식별자 변경의 영향을 받지 않습니다.
 
 ## Claude Code
 
-marketplace 名保持 `oh-story-skills`，其中现在只有一个 `oh-story` bundle，由 Claude Code 从仓库根自动发现全部 14 个 Skills：
+마켓플레이스 이름은 `oh-story-skills`로 유지하고 이제 단일 `oh-story` 번들만 제공합니다. Claude Code가 저장소 루트에서 14개 스킬을 자동 탐색합니다.
 
 ```bash
 claude plugin marketplace add https://github.com/zenstory-ai/oh-story-claudecode
 claude plugin install oh-story@oh-story-skills
 ```
 
-安装后使用 `/oh-story:story-setup`、`/oh-story:story dashboard` 等命令。旧插件用户按[升级指南](../skills/story-setup/UPGRADING.md#插件打包身份迁移v079-同版本修复)迁移；该身份迁移始于 v0.7.9 的同版本修复；仍使用旧插件身份的用户需主动刷新市场并重装。命令详见 [Claude Code 插件参考](https://code.claude.com/docs/en/plugins-reference)。
+설치 후 `/oh-story:story-setup`, `/oh-story:story dashboard` 등을 사용합니다. 기존 사용자는 [이전 안내](../skills/story-setup/UPGRADING.md#插件打包身份迁移v079-同版本修复)를 따릅니다. 식별자 이전은 v0.7.9의 같은 버전 수정에서 시작됐으며, 이전 플러그인 식별자를 사용한다면 직접 마켓플레이스를 새로 고치고 재설치해야 합니다. 명령은 [Claude Code 플러그인 참조](https://code.claude.com/docs/en/plugins-reference)를 확인하세요.
 
 ## Antigravity
 
-先用 `/skills` 或自然语言运行 `story-setup`，它会自动识别当前宿主（`target_cli=antigravity`），判断不出时才会问你。它只在当前写作项目创建/更新 14 个 `.agents/skills/` 已知目录、7 个 `.agents/agents/agent-name/agent.md` 已知定义（`agent-name` 替换为实际名称）、`.agents/rules/oh-story.md`、两个 `.agents/hooks/` runtime 文件与 `.agents/hooks.json` 的 `oh-story` 管理组；其他用户 Skills、Agents、Rules、Hooks 和 hook groups 都保留，部署器本身不会写 `~/.gemini/`。项目内 Skills 使用真实目录；若 `.agents/skills` 已是 symlink，会先解释 git diff 并征求明确迁移同意，未同意绝不沿链接写入。Hook 依赖 PATH 中的 `node`；部署后新开 conversation，再分别在 IDE 与交互式 `agy` 中 smoke test。命令行写作可从项目目录启动交互式 `agy`，确认 `/skills`、`/agents`、`/hooks` 已发现 oh-story 后再发任务。**print 模式（`agy -p`）必须带 `--add-dir "$PWD"`**：实测 agy 1.2.10 带上它会加载工作区 `.agents/`（14 个 skills、7 个 agents 与 hooks），不带则一个都不加载，skill 回退、甚至把普通模型输出写到 `~/.gemini/antigravity-cli/scratch/`。测试后检查 scratch 没有意外小说产物。
+`/skills`나 자연어로 `story-setup`을 실행하면 현재 호스트(`target_cli=antigravity`)를 자동 판별하고 불명확할 때만 질문합니다. 현재 집필 프로젝트에서 알려진 `.agents/skills/` 디렉터리 14개, `.agents/agents/agent-name/agent.md` 정의 7개(`agent-name`은 실제 이름), `.agents/rules/oh-story.md`, `.agents/hooks/` 실행 파일 2개, `.agents/hooks.json`의 관리 대상 `oh-story` 그룹만 생성·갱신합니다. 그 밖의 사용자 스킬·에이전트·규칙·훅·훅 그룹은 보존하고 배포기는 `~/.gemini/`에 쓰지 않습니다. 프로젝트 스킬은 실제 디렉터리를 사용합니다. `.agents/skills`가 이미 심볼릭 링크라면 Git 변경 영향을 설명하고 명시적인 이전 동의를 받아야 하며, 동의 없이 링크를 따라 쓰지 않습니다. 훅은 PATH의 `node`가 필요합니다. 배포 후 새 대화를 열고 IDE와 대화형 `agy`를 각각 시험합니다. 명령줄 집필은 프로젝트 디렉터리에서 대화형 `agy`를 실행하고 `/skills`, `/agents`, `/hooks`가 oh-story를 발견한 뒤 작업을 요청합니다. **출력 모드 `agy -p`에는 반드시 `--add-dir "$PWD"`를 전달합니다.** agy 1.2.10 실측에서 이 옵션을 주면 작업 공간 `.agents/`의 스킬 14개·에이전트 7개·훅을 읽지만, 빼면 아무것도 읽지 않아 스킬이 대체 경로로 실행되고 일반 모델 출력이 `~/.gemini/antigravity-cli/scratch/`에 저장될 수 있었습니다. 시험 후 임시 디렉터리에 뜻하지 않은 소설 산출물이 없는지 확인하세요.
 
 ## Codex
 
-repo 内直接使用：Codex 会扫描 `$REPO_ROOT/.agents/skills`（指向 `skills/` 的 symlink）发现 14 个 skill；用 `$story`、`$story-setup` 或 `/skills` 调用。Windows 上 git 需开 `core.symlinks=true`，否则 symlink 失效，改走下方 `$story-setup` 部署。
+저장소에서 직접 사용할 때 Codex는 `skills/`를 가리키는 심볼릭 링크인 `$REPO_ROOT/.agents/skills`를 탐색해 14개 스킬을 찾습니다. `$story`, `$story-setup`, `/skills`로 호출합니다. Windows에서는 Git의 `core.symlinks=true`가 필요합니다. 심볼릭 링크가 유효하지 않으면 아래 `$story-setup` 배포 방식을 사용합니다.
 
-跑 `$story-setup` 部署到写作项目后，会写入 `.codex/agents/*.toml`、`.codex/hooks.json`、`.codex/hooks/{story_codex_hook.py,run-story-hook.sh,run-story-hook.cmd}` 和 `.codex/skills/story-setup/references/agent-references/`；请信任项目 `.codex/` 配置层并在 `/hooks` review/trust hooks、新开 Codex 会话，让 custom agents 生效。**在 `/hooks` 信任之前，Codex 会静默跳过这些 hooks，包括写正文前的大纲守卫**，不报错也不提示；自动化里的 `codex exec` 可加 `--dangerously-bypass-hook-trust`。
+집필 프로젝트에서 `$story-setup`을 실행하면 `.codex/agents/*.toml`, `.codex/hooks.json`, `.codex/hooks/{story_codex_hook.py,run-story-hook.sh,run-story-hook.cmd}`, `.codex/skills/story-setup/references/agent-references/`를 작성합니다. 프로젝트 `.codex/` 설정 계층을 신뢰하고 `/hooks`에서 훅을 검토·신뢰한 뒤 새 Codex 세션을 열어 사용자 정의 에이전트를 로드합니다. **`/hooks`에서 신뢰하기 전에는 본문 작성 전 개요 보호기를 포함한 훅을 Codex가 조용히 건너뛰며 오류나 알림이 없습니다.** 자동화의 `codex exec`에는 `--dangerously-bypass-hook-trust`를 전달할 수 있습니다.
 
 ## ZCode
 
-在 Plugin Management 中添加本仓库，安装 `oh-story`，即可调用全部 14 个 Skills/Commands。市场名可能显示 `oh-story-zcode`（根 catalog）或 `oh-story-skills`（Claude catalog）；选择其中一个即可，内容相同。旧版多条目安装按[升级指南](../skills/story-setup/UPGRADING.md#插件打包身份迁移v079-同版本修复)迁移。`$story-setup` 选择 `target_cli=zcode` 会部署 `.zcode/skills/`、`.zcode/commands/`、`.zcode/hooks/story_zcode_hook.js`，安全合并 `.zcode/config.json` 与根 `AGENTS.md`；Hook 依赖 PATH 中的 `node`。当前 ZCode 支持插件子代理；oh-story 插件注册 7 个专业角色，按当前 `Agent` 工具派发，只有角色或工具不可用时才降级。独立安装 Skills 不会注册这些角色，需启用插件；不创建 `.zcode/agents/` 或写入用户 home。升级插件后重新运行 `$story-setup` 更新项目快照和旧 AGENTS 指令，再新开会话。现有 Hook 适配不注册 `PreCompact` / `SessionEnd`，compact 后由 `SessionStart` 恢复上下文。见 [ZCode 插件](https://zcode.z.ai/en/docs/plugin)与[子代理文档](https://zcode.z.ai/en/docs/subagents)。
+플러그인 관리에서 이 저장소를 추가하고 `oh-story`를 설치하면 14개 스킬·명령을 사용할 수 있습니다. 마켓플레이스는 루트 카탈로그의 `oh-story-zcode` 또는 Claude 카탈로그의 `oh-story-skills`로 표시될 수 있으며 내용이 같으므로 하나를 선택합니다. 여러 항목을 설치한 구버전은 [이전 안내](../skills/story-setup/UPGRADING.md#插件打包身份迁移v079-同版本修复)를 따릅니다. `$story-setup`에서 `target_cli=zcode`를 선택하면 `.zcode/skills/`, `.zcode/commands/`, `.zcode/hooks/story_zcode_hook.js`를 배포하고 `.zcode/config.json`과 루트 `AGENTS.md`를 안전하게 병합합니다. 훅은 PATH의 `node`가 필요합니다. 현재 ZCode는 플러그인 하위 에이전트를 지원하며 oh-story가 전문 역할 7개를 등록해 현재 `Agent` 도구로 배정합니다. 역할이나 도구를 사용할 수 없을 때만 대체 실행합니다. 스킬만 독립 설치하면 역할이 등록되지 않으므로 플러그인을 활성화해야 합니다. `.zcode/agents/`를 만들거나 사용자 홈에 정의를 쓰지 않습니다. 플러그인 갱신 후 `$story-setup`을 다시 실행해 프로젝트 스냅샷과 이전 AGENTS 지침을 갱신하고 새 세션을 여세요. 현재 훅 어댑터는 `PreCompact`·`SessionEnd`를 등록하지 않으며 압축 후 `SessionStart`로 맥락을 복원합니다. 공식 [플러그인](https://zcode.z.ai/en/docs/plugin)과 [하위 에이전트 문서](https://zcode.z.ai/en/docs/subagents)를 참조하세요.
 
 ## OpenCode
 
-需要 **OpenCode 2.x**（`curl -fsSL https://opencode.ai/v2/install | bash` 或 `npm i -g @opencode/cli`）；1.x 加载不了写正文守卫插件，story-setup 会拦下并提示升级，已按 1.x 部署过的项目升级后重跑 story-setup。全局安装后 opencode 自动从 `~/.claude/skills/` 发现 skills；首次用自然语言触发 story-setup（如「用 story-setup 部署网文写作环境」），部署后 slash command 自动加载，没出现就运行 `opencode reload`。部分 hook 行为与 Claude Code 有差异（session-start / session-end / compact 等），详见 [CONTRIBUTING.md](../CONTRIBUTING.md) 的 OpenCode 章节。
+**OpenCode 2.x**가 필요합니다(`curl -fsSL https://opencode.ai/v2/install | bash` 또는 `npm i -g @opencode/cli`). 1.x는 본문 보호 플러그인을 읽지 못하므로 story-setup이 중단하고 업그레이드를 안내합니다. 1.x로 배포한 프로젝트는 업그레이드 후 story-setup을 다시 실행합니다. 전역 설치 후 OpenCode가 `~/.claude/skills/`에서 스킬을 자동 탐색합니다. 최초에는 “story-setup으로 웹소설 집필 환경을 배포해줘”처럼 자연어로 호출합니다. 배포 후 슬래시 명령은 자동 로드되며 나타나지 않으면 `opencode reload`를 실행합니다. 세션 시작·종료·압축 등 일부 훅 동작은 Claude Code와 다릅니다. 자세한 내용은 [CONTRIBUTING.md](../CONTRIBUTING.md)의 OpenCode 절에 있습니다.
 
 ## OpenClaw
 
-当前支持 skills-only：OpenClaw 可从 workspace `skills/`、`.agents/skills`、`~/.agents/skills`、`~/.openclaw/skills` 等 skill root 发现本项目 14 个 skill；`SKILL.md` 已按 OpenClaw 要求使用单行 `name` / `description` 与单行 JSON `metadata.openclaw`。`story-setup` 选择 `target_cli=openclaw` 时会把 skills 复制到项目 `skills/` 并写入 OpenClaw 版 `AGENTS.md`；agents/hooks 暂不部署，写正文前大纲守卫在 OpenClaw 下是 skill 内软约束。部署后如未显示新 skills，请新开 OpenClaw session 或等待 watcher 刷新。
+현재는 스킬만 지원합니다. OpenClaw는 작업 공간 `skills/`, `.agents/skills`, `~/.agents/skills`, `~/.openclaw/skills` 등의 스킬 루트에서 14개 스킬을 찾습니다. `SKILL.md`는 한 줄 `name`·`description`, 한 줄 JSON `metadata.openclaw` 형식을 사용합니다. `story-setup`에서 `target_cli=openclaw`를 선택하면 프로젝트 `skills/`로 스킬을 복사하고 OpenClaw용 `AGENTS.md`를 씁니다. 에이전트·훅은 아직 배포하지 않으므로 본문 작성 전 개요 보호는 런타임 강제가 아닌 스킬 지침상의 제약입니다. 새 스킬이 보이지 않으면 OpenClaw 새 세션을 열거나 감시기의 갱신을 기다리세요.
 
 ## Reasonix
 
-当前支持 skills + 原生 plugin manifest：Reasonix 原生扫描项目 skill root（`.agents/skills` 等，指向 `skills/` 的 symlink）发现 14 个 skill，用 `reasonix doctor capabilities` 校验；也可用根 `reasonix-plugin.json` 走 `reasonix plugin install`。`story-setup` 选择 `target_cli=reasonix` 时会把 skills 复制到项目 `skills/` 并写入 Reasonix 版 `AGENTS.md`；hooks/custom agents 暂不部署，涉及专业 Agent 的 skill 走 solo/direct fallback。Windows 未启用 symlink 时改走原生 plugin。
+현재 스킬과 네이티브 플러그인 매니페스트를 지원합니다. Reasonix는 프로젝트 스킬 루트(`.agents/skills` 등, `skills/` 대상 심볼릭 링크)를 기본 탐색해 14개 스킬을 찾습니다. `reasonix doctor capabilities`로 확인하며 루트 `reasonix-plugin.json`을 통한 `reasonix plugin install`도 가능합니다. `story-setup`에서 `target_cli=reasonix`를 선택하면 프로젝트 `skills/`에 복사하고 Reasonix용 `AGENTS.md`를 씁니다. 훅·사용자 정의 에이전트는 아직 배포하지 않아 전문 에이전트가 필요한 스킬은 단독·직접 실행으로 대체합니다. Windows에서 심볼릭 링크가 꺼져 있다면 네이티브 플러그인을 사용합니다.
 
-## Web AI / 通用 Agent
+## 웹 AI와 일반 에이전트
 
-平台能读取 GitHub 仓库或项目文件时，可让 Agent 读取 `skills/*/SKILL.md` 与对应 `references/`；需要本地副本时，`story-setup` 可选 `target_cli=generic`，只写通用 `AGENTS.md` 和 `skills/`。无本项目 hooks/custom agents 的环境按 skill 内软约束或 solo/direct fallback 执行。
+플랫폼이 GitHub 저장소나 프로젝트 파일을 읽을 수 있다면 에이전트에 `skills/*/SKILL.md`와 관련 `references/`를 읽게 합니다. 로컬 복사본이 필요하면 `story-setup`에서 `target_cli=generic`을 선택해 일반 `AGENTS.md`와 `skills/`만 작성합니다. 이 프로젝트의 훅·사용자 정의 에이전트가 없는 환경에서는 스킬 지침상의 제약이나 단독·직접 대체 실행을 사용합니다.
 
-**OpenClaw / Reasonix / 通用路径的目录残留要手动清：** 这三条路径的 skill 副本在项目 `skills/` 里，重跑 `/story-setup` 执行的就是项目里那份，自动清理到不了。项目里若出现 `skills/story-setup/references/agent-references/agent-references/`（可能嵌了多层）或 `skills/story-setup/skills/`，手动删掉。要让项目里的 skill 文本本身更新，还需要重新安装本项目后，用新包覆盖项目 `skills/` 下这 14 个目录（`browser-cdp` 与 `story*`）。
+**OpenClaw·Reasonix·일반 배포의 중첩 디렉터리는 수동 정리가 필요합니다.** 이 세 방식은 프로젝트 `skills/`에 스킬 복사본을 두므로 `/story-setup`을 재실행하면 그 복사본이 실행돼 자동 정리가 해당 위치에 도달하지 못합니다. 프로젝트에 `skills/story-setup/references/agent-references/agent-references/`(여러 번 중첩될 수 있음) 또는 `skills/story-setup/skills/`가 있다면 수동으로 삭제합니다. 스킬 텍스트 자체를 갱신하려면 이 프로젝트를 다시 설치하고 새 패키지로 프로젝트 `skills/`의 14개 디렉터리(`browser-cdp`와 `story*`)를 덮어써야 합니다.
 
-升级后如果项目里已经跑过 `/story-setup`，建议在项目根重跑一次 `/story-setup`，同步 hooks / agents / references。每版变更见 [CHANGELOG.md](../CHANGELOG.md) 与 [Releases](https://github.com/zenstory-ai/oh-story-claudecode/releases)。
+업그레이드한 프로젝트에서 이미 `/story-setup`을 실행했다면 루트에서 `/story-setup`을 다시 실행해 훅·에이전트·참조 자료를 동기화하는 것이 좋습니다. 버전별 변경은 [CHANGELOG.md](../CHANGELOG.md)와 [릴리스](https://github.com/zenstory-ai/oh-story-claudecode/releases)에 있습니다.
 
-**多 agent 协作要先部署再新开会话：** 7 个专业 agent（story-architect、narrative-writer、consistency-checker 等）由 `/story-setup` 写入项目 `.claude/agents/`，由 `$story-setup` 写入 `.codex/agents/*.toml`，或由 Antigravity `story-setup` 生成 `.agents/agents/agent-name/agent.md`（`agent-name` 替换为实际名称）。Antigravity 使用 `invoke_subagent` + 同名 `TypeName`；运行时未暴露 custom subagent 时按 skill 明确降级 solo/direct。判断是否生效：新会话里跑 `/story-review`，报告开头「这次怎么审的」写着几个视角（完整审或精简审）即注册成功；写着「我一个人审」说明还在旧会话，或当前运行时未暴露该 agent。
+**여러 에이전트의 협업은 배포 후 새 세션이 필요합니다.** story-architect·narrative-writer·consistency-checker 등 전문 에이전트 7개를 `/story-setup`은 `.claude/agents/`에, `$story-setup`은 `.codex/agents/*.toml`에 씁니다. Antigravity의 `story-setup`은 `.agents/agents/agent-name/agent.md`에 생성합니다(`agent-name`은 실제 이름). Antigravity는 `invoke_subagent`와 같은 이름의 `TypeName`으로 호출하며 런타임에 하위 에이전트가 없으면 스킬이 단독·직접 대체 실행을 명시합니다. 새 세션에서 `/story-review`를 실행해 시작 부분의 “이번 검토 방식”에 여러 관점(전체·간소화 검토)이 표시되면 등록된 것입니다. “혼자 검토함”이면 이전 세션이거나 현재 런타임이 해당 에이전트를 제공하지 않는 상태입니다.
 
-**导入续写顺序：** 推荐先在写作项目根运行 `/story-setup`（部署 hooks/agents/AGENTS），新开/刷新会话后运行 `/story-import` 导入已有小说，再用 `/story-long-write 写第N章` 续写（N 是导入后的下一章，会先补这一章的细纲）。也可以直接运行 `/story-import`；它会先检测是否已 setup，未部署时让你选择先去 setup 或继续串行导入。
+**원고 가져오기와 이어 쓰기 순서:** 먼저 집필 프로젝트 루트에서 `/story-setup`으로 훅·에이전트·AGENTS를 배포합니다. 세션을 새로 시작하거나 갱신한 뒤 `/story-import`로 기존 소설을 가져오고 `/story-long-write 写第N章`으로 이어 씁니다. N은 가져온 범위 다음 장이며 해당 장의 상세 개요부터 보완합니다. `/story-import`를 바로 실행할 수도 있습니다. 배포가 없으면 먼저 setup을 실행할지, 직렬 가져오기를 계속할지 선택하게 합니다.
 
-**作者习惯由写作流程管理：** `story-long-write` 与 `story-short-write` 负责记录、确认、整理和按需查询作者记忆。可以直接向写作 skill 提要求，也可以对 `/story` 说“记住我的写作习惯”，由它路由到对应写作 skill；部署后的项目里直接说「记住：……」同样走写作流程，不进编程工具自带的记忆。去 AI 味与审查沿用写作流程传入的文风要求。
+**작가의 습관은 집필 워크플로가 관리합니다.** `story-long-write`와 `story-short-write`가 작가 메모리를 기록·확인·정리하고 필요할 때 조회합니다. 집필 스킬에 직접 요청하거나 `/story`에 “내 집필 습관을 기억해줘”라고 요청하면 해당 집필 스킬로 전달합니다. 배포된 프로젝트에서 “기억해줘: …”라고 해도 집필 흐름을 따르며 코딩 도구 자체의 메모리에 넣지 않습니다. AI 문체 제거·원고 검토는 집필 흐름이 전달한 문체 요구를 사용합니다.
 
-作者记忆分两级：全局、题材、流程类偏好进工作区 `.story/作者记忆/`（编号 `AP`），只属于某本书的偏好进该书目录下的 `.story/作者记忆/`（编号 `BP`），随书归档、迁移；看到 `Author Memory Receipt` 才算写入成功。普通写作只查询本次相关的已确认条目，交给写手的习惯原文每次查询不超过 2KB，装不下的会在章末汇报里用原话告诉作者；不把完整画像、候选和历史塞进正文 prompt。它与每本书的剧情追踪分开，当前要求、本书设定和硬性门禁始终优先。
+작가 메모리는 두 계층입니다. 전역·장르·워크플로 선호는 작업 공간 `.story/작가기억/`의 `AP` 항목으로, 특정 책의 선호는 해당 책 `.story/작가기억/`의 `BP` 항목으로 저장해 책과 함께 보관·이동합니다. `Author Memory Receipt`가 반환돼야 기록 성공입니다. 일반 집필은 이번 작업에 관련된 확인된 항목만 조회합니다. 집필자에게 전달하는 습관 원문은 조회마다 최대 2 KB이며 들어가지 못한 내용은 장 끝 보고에서 작가의 원문 그대로 알립니다. 전체 프로필·후보·이력을 본문 프롬프트에 넣지 않습니다. 책별 플롯 추적과는 별개이며 현재 요구, 이 책의 설정, 필수 검증 관문이 항상 우선합니다.

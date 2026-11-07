@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""Build the mechanical, content-addressed chapter index.
-
-The CSV is the only source for chapter boundaries. This script never writes
-analysis progress and never interprets story semantics.
+"""기계적·내용 주소 기반 장 색인을 생성한다.
+CSV가 장 경계의 유일한 출처다. 분석 진행 상황을 쓰거나 이야기 의미를 해석하지 않는다.
 """
 
 from __future__ import annotations
@@ -76,7 +74,7 @@ def decode_source(raw: bytes) -> str:
 
 
 def physical_lines(text: str) -> List[str]:
-    """Split on LF only so CSV line numbers agree with grep -n and editors."""
+    """CSV 행 번호가 grep -n·편집기와 일치하도록 LF로만 나눈다."""
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines.pop()
@@ -224,8 +222,8 @@ def validate_numbering(candidates: Sequence[Dict[str, Any]]) -> None:
     previous = None  # type: Optional[Dict[str, Any]]
     for position, candidate in enumerate(candidates, start=1):
         number = candidate.get("number_value")
-        # 第0章 behaves like a prologue. The first positive chapter may start at
-        # any number so excerpts such as 第五章 can be indexed.
+        # 第0章은 프롤로그처럼 취급한다. 첫 양수 장 번호는
+        # 임의 번호일 수 있어 第五章 같은 발췌문도 색인할 수 있다.
         if number is None or number == 0:
             continue
         if previous is None:
@@ -251,10 +249,8 @@ def normalized_chapter_text(lines: Sequence[str], start_line: int, end_line: int
 
 
 def fold_leading_specials(candidates: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
-    """Merge 楔子/序章/第0章… before the first numbered chapter into that chapter.
-
-    Only on request: it reproduces the numbering of older runs that did not
-    count a prologue, so their 第N章 files keep pointing at the same chapter.
+    """첫 번호 장 앞의 楔子/序章/第0章 등을 첫 장에 합친다.
+    요청할 때만 수행한다. 프롤로그를 세지 않던 이전 실행의 번호를 재현해 第N章 파일이 같은 장을 가리키게 한다.
     """
     first = next((index for index, item in enumerate(candidates)
                   if item.get("number_value") is not None and item["number_value"] >= 1), None)
@@ -356,16 +352,14 @@ class RebuildMismatch(ValueError):
 
 
 REBUILD_MISMATCH_MESSAGE = (
-    "重建章节表时发现，%s。照这样继续，已拆好的章节会和原文错开，所以章节表没有改。请选一种："
-    "① 换回上次拆文时用的那份原文再继续（推荐）；② 换一个新目录，整本重新拆。"
+    "장 목록 재구성 중 문제가 발견됐습니다: %s. 계속하면 기존 분석과 원문의 장 번호가 어긋나므로 목록을 변경하지 않았습니다. 다음 중 하나를 선택하세요: "
+    "① 기존 분석에 사용한 원문으로 되돌린 뒤 계속(권장). ② 새 폴더에서 작품 전체를 다시 분석."
 )
 
 
 def index_was_folded(old_rows: Sequence[Dict[str, Any]], new_rows: Sequence[Dict[str, Any]]) -> bool:
-    """True when the existing index merged a prologue into chapter one.
-
-    A folded index starts with a numbered chapter although the text opens with
-    楔子/序章/第0章; a rebuild keeps that numbering instead of shifting it.
+    """기존 색인이 프롤로그를 1장에 합쳤으면 True.
+    이런 색인은 원문이 楔子/序章/第0章으로 시작해도 번호 장으로 시작한다. 재구축 시 번호를 밀지 않고 유지한다.
     """
     old_first = str(old_rows[0].get("source_chapter", "")) if old_rows else ""
     new_first = str(new_rows[0].get("source_chapter", "")) if new_rows else ""
@@ -378,11 +372,11 @@ def compare_rebuild(old_rows: Sequence[Dict[str, Any]], new_rows: Sequence[Dict[
         if mapping_signature(old_row) != mapping_signature(new_rows[position]):
             raise RebuildMismatch(
                 "chapter_mapping_ambiguous:position=%s" % (position + 1),
-                REBUILD_MISMATCH_MESSAGE % ("第%s章和上次的章节表对不上（上次是「%s」，这次是「%s」）" % (
+                REBUILD_MISMATCH_MESSAGE % ("제%s장이 기존 장 목록과 다릅니다(기존 ‘%s’, 현재 ‘%s’)" % (
                     position + 1, old_row.get("title", ""), new_rows[position]["title"])))
     if len(new_rows) < len(old_rows):
         raise RebuildMismatch("chapter_mapping_ambiguous:index_would_shrink",
-                              REBUILD_MISMATCH_MESSAGE % "这次认出的章节比上次少")
+                              REBUILD_MISMATCH_MESSAGE % "이번에 인식한 장 수가 이전보다 적습니다")
     return [position for position, row in enumerate(new_rows, start=1)
             if position > len(old_rows) or old_rows[position - 1].get("chapter_sha256") != row["chapter_sha256"]]
 
@@ -394,7 +388,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--locator-path")
     parser.add_argument("--rebuild", action="store_true")
     parser.add_argument("--fold-prologue", action="store_true",
-                        help="merge 楔子/序章/第0章 before the first numbered chapter into it")
+                        help="첫 번호 장 앞의 프롤로그(楔子/序章/第0章)를 첫 장에 합침")
     return parser.parse_args()
 
 
@@ -416,8 +410,8 @@ def main() -> int:
             raise ValueError("source_not_found:%s" % args.source)
         raw = args.source.read_bytes()
         source_hash = sha256(raw)
-        locator_path = (args.locator_path or "原文/%s" % args.source.name).replace("\\", "/")
-        if not locator_path.startswith("原文/") or ".." in locator_path.split("/"):
+        locator_path = (args.locator_path or "원문/%s" % args.source.name).replace("\\", "/")
+        if not locator_path.startswith("원문/") or ".." in locator_path.split("/"):
             raise ValueError("locator_path_must_stay_under_original")
         if args.output.exists() and not args.output.is_file():
             raise ValueError("output_is_not_file:%s" % args.output)
@@ -425,7 +419,7 @@ def main() -> int:
             reusable = reusable_index(args.output, source_hash, locator_path)
             if reusable is None:
                 return fail("existing_index_incompatible",
-                            "原文和上次建章节表时不一样了（内容、文件名或识别规则变了）。确认原文就是要拆的版本后，再重建章节表。")
+                            "원문이 이전 장 목록 생성 당시와 다릅니다(내용·파일명·인식 규칙 변경). 분석할 원문 버전이 맞는지 확인한 뒤 장 목록을 다시 생성하세요.")
             _, existing_rows = reusable
             print(json.dumps({"ok": True, "reused": True, "parsed_source": False,
                               "chapters": len(existing_rows), "pending_chapters": []}, ensure_ascii=False))

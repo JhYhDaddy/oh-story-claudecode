@@ -1,7 +1,7 @@
 ---
-description: 短篇网文扫榜。分析知乎盐言、番茄短篇等平台热门数据。
+description: 단편 웹소설 순위 조사. 즈후 옌옌·판체 단편 등 플랫폼의 인기 자료를 분석한다.
 ---
 
-请使用 story-short-scan skill，帮助我扫描和分析短篇网文榜单数据。
+story-short-scan 스킬로 단편 웹소설 순위 자료 조사와 분석을 도와주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

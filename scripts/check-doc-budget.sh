@@ -1,20 +1,20 @@
 #!/bin/bash
-# check-doc-budget.sh — 热路径文档预算守卫（防 skill / agent 模板无声膨胀）
+# check-doc-budget.sh — 자주 읽는 문서의 예산 보호(스킬/에이전트 템플릿의 조용한 팽창 방지)
 #
-# 背景：skill 文本是每个用户每次会话都要付的 token。逐条加规则每次都只贵一点点，
-# 累积起来就是日更路径翻倍。本守卫给「每次会话或每章都进上下文」的文件设上限，
-# 超了就红，逼作者要么删等量旧文本，要么显式在 scripts/doc-budget.json 里调高预算。
+# 배경: 스킬 텍스트는 모든 사용자가 매 세션 지불하는 토큰이다. 규칙 하나의 비용 증가는 작아도
+# 누적되면 일일 작업 경로의 비용이 두 배가 된다. 매 세션 또는 매 장 컨텍스트에 들어가는 파일에 상한을 둔다.
+# 초과하면 실패해 같은 양의 기존 텍스트를 삭제하거나 scripts/doc-budget.json에서 예산을 명시적으로 늘리게 한다.
 #
-# 度量：去掉所有空白后的字符数。中英文都算，改标点/换行/缩进不影响读数。
-# 冷路径（story-setup 部署、UPGRADING、拆文库模板）不登记，不受限。
+# 측정: 모든 공백을 제거한 문자 수. 중국어와 영어 모두 세며 문장부호/줄바꿈/들여쓰기 변경은 수치에 영향을 주지 않는다.
+# 드물게 읽는 경로(story-setup 배포, UPGRADING, 작품 분석 라이브러리 템플릿)는 등록하거나 제한하지 않는다.
 #
-# 路径（paths）按「一个角色的一次调用」登记，语义：
-#   files      无条件读取；写成 `文件#小节标题` 只计该小节（到下一个同级或更高级标题为止，代码围栏里的 # 不算）。
-#   generated  由脚本拼出的任务包：以 `--project <临时目录> <args>` 运行脚本，读它输出 JSON 的 brief 文件，去掉其中的仓库根路径后计字（包里的绝对路径不随机器改变计量）。
-#   branches   条件读取，默认互斥：每条分支 = 基础 + 本分支文件，各自对照自己的 budget。
-#   stacking   会在同一次调用里叠加的分支：slots 里每个槽至多取一条分支，槽与槽可以同时发生；
-#              守卫枚举全部组合（同一文件只算一次，整份已读则其小节不重复计），取最坏的一组对照 stacking.budget。
-#   path_ceiling.limit 是每次调用的硬上限（v0.8.2 起 35000）；豁免只列在 path_ceiling.exempt 并写明原因。
+# paths는 역할 하나의 호출 한 번 단위로 등록하며 의미는 다음과 같다.
+#   files      무조건 읽는다. `파일#절 제목`은 해당 절만 센다(동급 이상 다음 제목까지, 코드 펜스의 #은 제외).
+#   generated  스크립트 생성 작업 묶음. `--project <임시 디렉터리> <args>`로 실행하고 출력 JSON의 brief 파일에서 저장소 루트 경로를 뺀 뒤 센다(절대 경로 때문에 기기별 측정치가 달라지지 않도록).
+#   branches   조건부 읽기. 기본적으로 상호 배타적이며 각 분기 = 기본 + 분기 파일을 각자 budget과 비교한다.
+#   stacking   같은 호출에서 중첩되는 분기. slots의 슬롯마다 분기를 최대 하나 선택하며 여러 슬롯은 동시에 발생할 수 있다.
+#              모든 조합을 열거해 최악의 경우를 stacking.budget과 비교한다(동일 파일은 한 번만, 전체 파일을 읽었으면 하위 절 중복 제외).
+#   path_ceiling.limit는 호출당 엄격한 상한(v0.8.2부터 35000)이다. 예외는 path_ceiling.exempt에만 사유와 함께 기록한다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -61,9 +61,9 @@ const fail = [];
 const note = [];
 const strip = (text) => text.replace(/\s/g, "").length;
 
-// 取「文件#小节」：从标题行到下一个同级或更高级标题（跳过代码围栏里的行）。
+// 파일#절 추출: 제목 줄부터 다음 동급/상위 제목까지(코드 펜스 안 줄 제외).
 const sectionOf = (text, anchor) => {
-  const lines = text.split("\n");
+  const lines = text.split(/\r\n?|\n/);
   let fence = false;
   let start = -1;
   let level = 0;
@@ -79,7 +79,7 @@ const sectionOf = (text, anchor) => {
   return start >= 0 ? lines.slice(start).join("\n") : null;
 };
 
-// 读数：null = 文件不存在；undefined = 小节找不到（两种都报错，不静默当 0）。
+// 측정값: null = 파일 없음, undefined = 절 없음. 둘 다 오류이며 조용히 0으로 처리하지 않는다.
 const cache = new Map();
 const weigh = (entry) => {
   if (cache.has(entry)) return cache.get(entry);
@@ -108,7 +108,7 @@ const findPython = () => {
   }
   return null;
 };
-// 由脚本拼出的任务包：跑一次拿 chars；拼包失败或输出不认得都报错。
+// 스크립트 생성 작업 묶음: 한 번 실행해 chars를 얻는다. 생성 실패나 알 수 없는 출력은 오류다.
 const generatedWeight = (gen) => {
   const key = `gen:${gen.script} ${(gen.args || []).join(" ")}`;
   if (cache.has(key)) return cache.get(key);
@@ -125,7 +125,7 @@ const generatedWeight = (gen) => {
     try {
       const out = JSON.parse(last);
       chars = out.chars;
-      // 包里写的是参考文件绝对路径，长度随机器上的仓库位置变；按去掉仓库根后的文本计量，各机器结果一致。
+      // 묶음의 절대 참조 경로 길이는 기기별 저장소 위치에 따라 달라 루트 경로를 제거한 텍스트로 측정한다.
       if (Number.isInteger(chars) && out.brief && fs.existsSync(out.brief)) {
         chars = strip(fs.readFileSync(out.brief, "utf8").split(repoRoot + path.sep).join(""));
       }
@@ -161,8 +161,8 @@ for (const entry of manifest.files) {
 console.log("");
 console.log("已登记路径合计（不含项目资料与未登记条件项）");
 console.log("".padEnd(78, "-"));
-// 路径硬上限：每个角色每次调用（含每条条件分支与每组叠加）的加载不得超过 path_ceiling.limit；
-// 豁免只列在 path_ceiling.exempt 里并写明原因，预算值本身也不许调过上限。
+// 경로 상한: 역할별 호출(각 조건 분기와 중첩 조합 포함)의 로드량은 path_ceiling.limit를 넘으면 안 된다.
+// 예외는 path_ceiling.exempt에 사유와 함께만 기록하며 예산 자체도 상한 위로 올릴 수 없다.
 const ceiling = manifest.path_ceiling || null;
 if (ceiling && !(Number.isFinite(ceiling.limit) && ceiling.limit > 0)) {
   fail.push(`path_ceiling.limit 缺失或不是正数（现为 ${JSON.stringify(ceiling.limit)}）——拼错会让硬上限静默失效`);
@@ -170,7 +170,7 @@ if (ceiling && !(Number.isFinite(ceiling.limit) && ceiling.limit > 0)) {
 const ceilingOn = ceiling && Number.isFinite(ceiling.limit) && ceiling.limit > 0;
 const exemptGroups = new Set((ceiling && ceiling.exempt) || []);
 
-// 一次调用读到的东西：同一文件只算一次；整份已读时它的小节不再另算。
+// 한 호출에서 읽는 내용은 동일 파일을 한 번만 세며 전체를 읽었으면 하위 절을 별도로 세지 않는다.
 const total = (entries, generated, label) => {
   const set = [...new Set(entries)];
   const whole = new Set(set.filter((e) => !e.includes("#")));
@@ -204,9 +204,9 @@ const checkPath = (label, budget, entries, generated, group) => {
     fail.push(`路径「${label}」超过硬上限 ${ceiling.limit} 字（实际 ${sum}，预算 ${budget}）：${ceiling.why}`);
   }
 };
-// agent 模板 frontmatter 的 `skills: [...]` 会把整份 SKILL.md 预加载进该 agent 的每次调用；
-// 这部分以前不进任何预算（写手曾因此每次多付一整份 story-deslop）。登记了 agent 的路径自动计入，
-// 而带预加载的 agent 模板必须至少有一条 agent 路径，否则预加载就又成了看不见的成本。
+// 에이전트 프런트매터 `skills: [...]`는 매 호출마다 SKILL.md 전체를 미리 로드한다.
+// 이전에는 예산에 포함되지 않아 집필자가 매번 story-deslop 전체 비용을 추가 지불했다. 등록된 에이전트 경로는 자동 포함하며
+// 사전 로드 템플릿은 최소 하나의 agent 경로가 있어야 비용이 다시 숨지 않는다.
 const AGENT_DIR = "skills/story-setup/references/templates/agents";
 const preloads = (rel) => {
   const abs = path.join(repoRoot, rel);
@@ -216,7 +216,7 @@ const preloads = (rel) => {
   if (inline) return inline[1].split(",").map((s) => s.trim()).filter(Boolean);
   const block = head.match(/^skills:[ \t]*\r?\n((?:[ \t]+-[^\n]*\n?)+)/m);
   if (block) return block[1].split("\n").map((s) => s.replace(/^[ \t]+-[ \t]*/, "").trim()).filter(Boolean);
-  // 读不出的 skills 写法不能当成「没有预加载」放过去。
+  // 해석 불가능한 skills 표기를 사전 로드 없음으로 간주해 통과시키면 안 된다.
   if (/^skills:/m.test(head)) fail.push(`${rel} 的 skills 预加载写法认不出，改成 skills: [a, b] 或逐行 - a`);
   return [];
 };
@@ -239,7 +239,7 @@ for (const group of manifest.paths || []) {
     checkPath(group.label, group.budget, files, generated, group.label);
   }
   if (!group.stacking) continue;
-  // 叠加：每个槽至多取一条分支，槽之间可同时发生；枚举全部组合取最坏。
+  // 중첩: 슬롯별 분기를 최대 하나 선택하고 슬롯 간 동시 발생을 허용한다. 모든 조합 중 최악을 택한다.
   const byLabel = new Map((group.branches || []).map((b) => [b.label, b]));
   const slots = group.stacking.slots || [];
   const seen = new Set();

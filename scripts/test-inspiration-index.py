@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for the three-layer inspiration index (EM-card based)."""
+"""3계층 영감 색인(EM 카드 기반)의 회귀 테스트."""
 
 from __future__ import annotations
 
@@ -121,8 +121,8 @@ def write(path: Path, text: str) -> None:
 
 
 def make_workspace(base: Path, book: str = "测试书", module_text: str = EM_MODULE_TEXT) -> Path:
-    write(base / "拆文库" / book / "剧情" / "情绪模块.md", module_text)
-    return base / "灵感库"
+    write(base / "작품분석실" / book / "플롯" / "감정모듈.md", module_text)
+    return base / "영감자료실"
 
 
 def index_rows(root: Path) -> list[dict[str, str]]:
@@ -151,7 +151,7 @@ def test_register_and_idempotence() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         payload = MODULE["register_atoms"](root, module_path, "测试书")
         require(payload["atoms_full"] == 2 and payload["atoms_index"] == 1, f"应登记 2 完整卡＋1 索引条目：{payload}")
         rows = index_rows(root)
@@ -169,7 +169,7 @@ def test_parse_genre_variants() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base, book="体裁书", module_text=GENRE_VARIANT_MODULE)
-        module_path = base / "拆文库" / "体裁书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "体裁书" / "플롯" / "감정모듈.md"
         payload = MODULE["register_atoms"](root, module_path, "体裁书")
         require(payload["atoms_full"] == 2 and payload["atoms_index"] == 1,
                 f"短编号/分隔符/粗体表格/粗体列表/同义字段名都必须被识别：{payload}")
@@ -182,7 +182,7 @@ def test_register_rejects_incomplete_and_leaky_cards() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base, book="残卡书", module_text=INCOMPLETE_CARD)
-        module_path = base / "拆文库" / "残卡书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "残卡书" / "플롯" / "감정모듈.md"
         try:
             MODULE["register_atoms"](root, module_path, "残卡书")
             raise AssertionError("字段不全的 EM 卡必须报错")
@@ -191,8 +191,8 @@ def test_register_rejects_incomplete_and_leaky_cards() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base, book="泄漏书", module_text=LEAKY_CARD)
-        write(base / "拆文库" / "泄漏书" / "角色" / "张三.md", "# 张三\n")
-        module_path = base / "拆文库" / "泄漏书" / "剧情" / "情绪模块.md"
+        write(base / "작품분석실" / "泄漏书" / "인물" / "张三.md", "# 张三\n")
+        module_path = base / "작품분석실" / "泄漏书" / "플롯" / "감정모듈.md"
         try:
             MODULE["register_atoms"](root, module_path, "泄漏书")
             raise AssertionError("机制字段带角色名必须报错")
@@ -203,38 +203,38 @@ def test_register_rejects_incomplete_and_leaky_cards() -> None:
 def test_workspace_gate_and_check_atoms() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
-        # 沙箱布局：root 上方没有 拆文库/ → 必须显式失败，不得静默空名单
-        orphan_root = base / "孤立" / "灵感库"
-        write(base / "孤立" / "情绪模块.md", EM_MODULE_TEXT)
+        # 샌드박스 배치: root 위에 작품분석실/가 없으면 명시적으로 실패해야 하며 조용히 빈 목록을 반환하면 안 된다.
+        orphan_root = base / "孤立" / "영감자료실"
+        write(base / "孤立" / "감정모듈.md", EM_MODULE_TEXT)
         try:
-            MODULE["register_atoms"](orphan_root, base / "孤立" / "情绪模块.md", "测试书")
+            MODULE["register_atoms"](orphan_root, base / "孤立" / "감정모듈.md", "测试书")
             raise AssertionError("找不到工作区必须报错")
         except ValueError as exc:
             require("workspace_not_located" in str(exc), f"须报 workspace_not_located：{exc}")
 
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         payload = MODULE["register_atoms"](root, module_path, "测试书")
         require(payload["character_roster"] == 0, f"名单规模必须报出：{payload}")
         require(any("character_roster_missing" in warning for warning in payload["warnings"]),
-                f"无 角色/ 的书必须给 warning：{payload}")
+                f"无 인물/ 的书必须给 warning：{payload}")
 
-        # 一次报全：缺字段与泄漏并存时两个错误码同时出现
-        write(base / "拆文库" / "问题书" / "剧情" / "情绪模块.md",
+        # 한 번에 모두 보고: 필드 누락과 유출이 함께 있으면 두 오류 코드가 모두 나와야 한다.
+        write(base / "작품분석실" / "问题书" / "플롯" / "감정모듈.md",
               INCOMPLETE_CARD + "\n### EM-002 张三登场\n\n| 字段 | 内容 |\n|---|---|\n"
               "| 读者想看什么 | 张三翻盘。 |\n| 情绪链 | 链。 |\n| 戏剧单元 | 单元。 |\n"
               "| 可替换项 | 场景 |\n| 不可照搬 | 张三的台词 |\n")
-        write(base / "拆文库" / "问题书" / "角色" / "张三.md", "# 张三\n")
+        write(base / "작품분석실" / "问题书" / "인물" / "张三.md", "# 张三\n")
         try:
-            MODULE["register_atoms"](root, base / "拆文库" / "问题书" / "剧情" / "情绪模块.md", "问题书")
+            MODULE["register_atoms"](root, base / "작품분석실" / "问题书" / "플롯" / "감정모듈.md", "问题书")
             raise AssertionError("问题卡必须报错")
         except ValueError as exc:
             require("em_fields_missing" in str(exc) and "source_specific_name_in_mechanism" in str(exc),
                     f"必须一次报出全部问题：{exc}")
 
-        # check-atoms 只读：报告同样的问题且不动索引
+        # check-atoms는 읽기 전용이다. 같은 문제를 보고하되 색인은 바꾸지 않는다.
         before = (root / "灵感索引.csv").read_bytes()
-        report = MODULE["check_atoms"](root, base / "拆文库" / "问题书" / "剧情" / "情绪模块.md", "问题书")
+        report = MODULE["check_atoms"](root, base / "작품분석실" / "问题书" / "플롯" / "감정모듈.md", "问题书")
         require(not report["ok"] and len(report["errors"]) == 2, f"check-atoms 须报全错误：{report}")
         require((root / "灵感索引.csv").read_bytes() == before, "check-atoms 不得写盘")
         clean = MODULE["check_atoms"](root, module_path, "测试书")
@@ -297,7 +297,7 @@ def test_multiline_values_and_leak_tiering() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base, book="多行书", module_text=MULTILINE_MODULE)
-        module_path = base / "拆文库" / "多行书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "多行书" / "플롯" / "감정모듈.md"
         payload = MODULE["register_atoms"](root, module_path, "多行书")
         require(payload["atoms_full"] == 1, f"多行字段值必须被吸收成有效值：{payload}")
 
@@ -305,8 +305,8 @@ def test_multiline_values_and_leak_tiering() -> None:
         base = Path(temporary)
         root = make_workspace(base, book="分级书", module_text=TIERING_MODULE)
         for name in ("王二", "剑客"):
-            write(base / "拆文库" / "分级书" / "角色" / f"{name}.md", f"# {name}\n")
-        module_path = base / "拆文库" / "分级书" / "剧情" / "情绪模块.md"
+            write(base / "작품분석실" / "分级书" / "인물" / f"{name}.md", f"# {name}\n")
+        module_path = base / "작품분석실" / "分级书" / "플롯" / "감정모듈.md"
         report = MODULE["check_atoms"](root, module_path, "分级书")
         require(not report["ok"], f"空值与反模式必须拦下：{report}")
         require(any("em_field_value_empty" in error and "可替换项" in error for error in report["errors"]),
@@ -325,7 +325,7 @@ def test_validate_cba_closure_and_markers() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         MODULE["register_atoms"](root, module_path, "测试书")
         write(root / "跨书灵感聚合" / "CBA-001_压低预期后兑现.md",
               "# CBA-001：压低预期后兑现\n\n- 验证状态：单书假设\n- 来源：测试书/EM-001\n\n## 共同机制链\n缺口 → 爆发。\n")
@@ -344,7 +344,7 @@ def test_validate_cba_closure_and_markers() -> None:
         require(drift["axis_inventory"]["题材"] == ["玄幻"], f"须给出该轴现存值供纠词：{drift}")
 
         resolved = MODULE["resolve"](root, ["测试书/EM-002", "CBA-001"])
-        require(resolved["ok"] and resolved["resolved"][0]["location"].endswith("情绪模块.md#EM-002"),
+        require(resolved["ok"] and resolved["resolved"][0]["location"].endswith("감정모듈.md#EM-002"),
                 f"EM 引用必须解析回情绪模块锚点:{resolved}")
 
 
@@ -369,7 +369,7 @@ def test_vocabulary_guard() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         MODULE["register_atoms"](root, module_path, "测试书")
         write(root / "跨书灵感聚合" / "CBA-001_卡.md",
               "# CBA-001：卡\n\n- 验证状态：单书假设\n- 来源：测试书/EM-001\n")
@@ -377,21 +377,21 @@ def test_vocabulary_guard() -> None:
                                   source_book="测试书", path="跨书灵感聚合/CBA-001_卡.md",
                                   source_ids="测试书/EM-001", tags=CBA_TAGS))
         require(not MODULE["validate"](root), "无词表文件时维持旧行为不报错")
-        write(root / "标签词表.md", VOCABULARY_TEXT)
+        write(root / "태그목록.md", VOCABULARY_TEXT)
         require(not MODULE["validate"](root), "标签值全在词表内必须通过：" + ";".join(MODULE["validate"](root)))
         require(MODULE["query"](root, ["题材=玄幻", "情绪=期待"], 6)["vocabulary_loaded"], "query 须报告词表已加载")
 
-        write(root / "标签词表.md", VOCABULARY_TEXT.replace("- 泄底过早", "- 铺垫不足"))
+        write(root / "태그목록.md", VOCABULARY_TEXT.replace("- 泄底过早", "- 铺垫不足"))
         errors = MODULE["validate"](root)
         require(any("tag_value_not_in_vocabulary:风险=泄底过早" in error for error in errors),
                 f"表外值必须点名：{errors}")
 
-        write(root / "标签词表.md", VOCABULARY_TEXT.replace("- 认知反转", "- 认知反转\n* 高潮前\n- 高潮"))
+        write(root / "태그목록.md", VOCABULARY_TEXT.replace("- 认知反转", "- 认知反转\n* 高潮前\n- 高潮"))
         errors = MODULE["validate"](root)
         require(not errors and "高潮前" in MODULE["load_vocabulary"](root)["读者需求"],
                 f"子串关系的正常值（高潮前/高潮）不能被当成同义拦下，`* 值` 也要读入：{errors}")
 
-        write(root / "标签词表.md", "# 标签词表\n\n## 题材\n- 玄幻\n")
+        write(root / "태그목록.md", "# 标签词表\n\n## 题材\n- 玄幻\n")
         errors = MODULE["validate"](root)
         require(any("vocabulary_axis_missing" in error for error in errors),
                 f"词表缺必填轴必须报：{errors}")
@@ -401,7 +401,7 @@ def test_coverage_reports_uncovered_atoms() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         MODULE["register_atoms"](root, module_path, "测试书")
         write(root / "跨书灵感聚合" / "CBA-001_压低预期后兑现.md",
               "# CBA-001：压低预期后兑现\n\n- 验证状态：单书假设\n- 来源：测试书/EM-001\n")
@@ -419,7 +419,7 @@ def test_validate_rejects_path_reference_in_card() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         MODULE["register_atoms"](root, module_path, "测试书")
         write(root / "跨书灵感聚合" / "CBA-001_带路径.md",
               "# CBA-001：带路径\n\n- 验证状态：单书假设\n- 来源：[IA-001](../原子灵感/测试书/IA-001.md)\n")
@@ -434,7 +434,7 @@ def test_validate_set_mismatch_and_nm_rules() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-") as temporary:
         base = Path(temporary)
         root = make_workspace(base)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         MODULE["register_atoms"](root, module_path, "测试书")
         module_text = module_path.read_text(encoding="utf-8")
         write(module_path, module_text + "\n### EM-005 新增机制\n\n| 字段 | 内容 |\n|---|---|\n| 读者想看什么 | 新需求。 |\n| 情绪链 | 链。 |\n| 戏剧单元 | 单元。 |\n| 可替换项 | 项。 |\n| 不可照搬 | 专名。 |\n")
@@ -461,7 +461,7 @@ def test_parser_and_gate_hardening() -> None:
     card = "| 字段 | 内容 |\n|---|---|\n| 读者想看什么 | 甲 |\n| 情绪链 | 乙 |\n| 戏剧单元 | 丙 |\n| 可替换项 | 丁 |\n| 不可照搬 | 戊 |\n"
     with tempfile.TemporaryDirectory(prefix="ilib-harden-") as temporary:
         base = Path(temporary)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
 
         root = make_workspace(base, module_text="## 可复现模块卡\n\n### EM-002\n\n" + card)
         report = MODULE["check_atoms"](root, module_path, "测试书")
@@ -483,12 +483,12 @@ def test_parser_and_gate_hardening() -> None:
 
         make_workspace(base, book="乙书", module_text=LEAKY_CARD)
         make_workspace(base)
-        report = MODULE["check_atoms"](root, base / "拆文库" / "乙书" / "剧情" / "情绪模块.md", "测试书")
+        report = MODULE["check_atoms"](root, base / "작품분석실" / "乙书" / "플롯" / "감정모듈.md", "测试书")
         require(any("module_book_mismatch" in error for error in report["errors"]), f"--book 与 --module 必须同书：{report}")
 
-        write(base / "拆文库" / "泄漏书" / "角色" / "主角" / "01-张三.md", "角色卡")
+        write(base / "작품분석실" / "泄漏书" / "인물" / "主角" / "01-张三.md", "角色卡")
         leaky_root = make_workspace(base, book="泄漏书", module_text=LEAKY_CARD.replace("| 可替换项 | 场景 |", "| 可替换项 | 张三 → 任意主角 |"))
-        report = MODULE["check_atoms"](leaky_root, base / "拆文库" / "泄漏书" / "剧情" / "情绪模块.md", "泄漏书")
+        report = MODULE["check_atoms"](leaky_root, base / "작품분석실" / "泄漏书" / "플롯" / "감정모듈.md", "泄漏书")
         require(report["character_roster"] == 1 and any("replaceable_antipattern:张三" in error for error in report["errors"]),
                 f"子目录与编号前缀的角色卡也要进泄漏门名单：{report}")
 
@@ -512,7 +512,7 @@ def test_parser_does_not_block_legit_modules() -> None:
     with tempfile.TemporaryDirectory(prefix="ilib-legit-") as temporary:
         base = Path(temporary)
         root = make_workspace(base, module_text=legit)
-        module_path = base / "拆文库" / "测试书" / "剧情" / "情绪模块.md"
+        module_path = base / "작품분석실" / "测试书" / "플롯" / "감정모듈.md"
         report = MODULE["check_atoms"](root, module_path, "测试书")
         require(report["ok"] and report["cards_full"] == 2, f"分隔行、非门禁字段重复、提到 EM 的普通标题与缩进多行值都不能挡住登记：{report}")
         cards, _, _ = MODULE["parse_em_module"](legit)
@@ -524,7 +524,7 @@ def test_parser_does_not_block_legit_modules() -> None:
         require(any("em_header_unrecognized" in error for error in report["errors"]), f"`## EM-xxx` 卡头必须报错：{report}")
 
         make_workspace(base, book="乙书", module_text=LEAKY_CARD)
-        report = MODULE["check_atoms"](root, base / "拆文库" / "乙书" / "剧情" / "情绪模块.md", ".")
+        report = MODULE["check_atoms"](root, base / "작품분석실" / "乙书" / "플롯" / "감정모듈.md", ".")
         require(any("book_name_invalid" in error for error in report["errors"]), f"`--book .` 必须拒绝：{report}")
 
         make_workspace(base)

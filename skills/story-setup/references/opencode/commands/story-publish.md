@@ -1,7 +1,7 @@
 ---
-description: 整理番茄小说发布资料，核对来源、适用条件与待确认字段。
+description: 판체 소설 출판 자료 정리. 출처·적용 조건·확인할 필드를 대조한다.
 ---
 
-请使用 story-publish skill，准备发布平台书籍资料并核对当前适配依据。
+story-publish 스킬로 출판 플랫폼의 도서 자료를 준비하고 현재 적용 근거를 확인해 주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

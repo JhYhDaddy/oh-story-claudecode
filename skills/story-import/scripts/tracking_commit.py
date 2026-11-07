@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Maintain one structured story state and its deterministic Markdown views.
+"""단일 구조화된 이야기 상태와 결정적 Markdown 뷰를 관리한다.
 
-The language model supplies compact semantic JSON.  This tool validates and
-merges that input in memory, renders every derived view, then atomically writes
-``_tracking-state.json`` last as the single commit point. Per-project locking
-serializes concurrent writers before revision and wordcount checks.
+언어 모델이 간결한 의미 JSON을 공급하면 메모리에서 검증·병합하고 모든 파생 뷰를 렌더링한다.
+마지막으로 유일한 커밋 지점인 ``_tracking-state.json``을 원자적으로 쓴다.
+프로젝트별 잠금으로 리비전·글자 수 검사 전에 동시 작성자를 직렬화한다.
 """
 
 from __future__ import annotations
@@ -26,7 +25,7 @@ from typing import Any
 
 
 _WORDCOUNT_CORE_PATH = Path(__file__).with_name("wordcount_core.py")
-if not _WORDCOUNT_CORE_PATH.is_file():  # pragma: no cover - broken deployment
+if not _WORDCOUNT_CORE_PATH.is_file():  # pragma: no cover - 배포 손상
     raise RuntimeError("TOOL_UNAVAILABLE: wordcount_core.py")
 _WORDCOUNT_CORE_SPEC = importlib.util.spec_from_file_location(
     "story_wordcount_core", _WORDCOUNT_CORE_PATH
@@ -45,7 +44,7 @@ CONTEXT_TARGET_BYTES = 8192
 CONTEXT_MAX_BYTES = 12288
 SNAPSHOT_TARGET_BYTES = 4096
 SNAPSHOT_MAX_BYTES = 8192
-# 下一章热上下文里列出的活跃角色，不是核心角色总数；体积仍由 CONTEXT_MAX_BYTES 兜底。
+# 다음 장의 즉시 참조 컨텍스트에 열거하는 활성 인물 수이며 핵심 인물 총수가 아니다. 크기는 CONTEXT_MAX_BYTES가 제한한다.
 ACTIVE_CHARACTER_MAX = 20
 
 CONTEXT_HEADINGS = (
@@ -60,16 +59,16 @@ CONTEXT_HEADINGS = (
 FORESHADOW_STATUSES = ("已埋", "已回收", "已过期", "放弃")
 FORESHADOW_IMPORTANCE = ("高", "中", "低")
 REVEAL_STATUSES = ("未揭示", "部分揭示", "已揭示")
-# 伏笔与时间线条目里模型常用的同义写法：含义明确的直接改成正式名，不让一次提交为措辞失败。
+# 모델이 복선·시간선 항목에 자주 쓰는 명확한 동의어는 정식 이름으로 바꿔 표현 때문에 제출이 실패하지 않게 한다.
 ACTION_ALIASES = {
     "add": "upsert", "new": "upsert", "create": "upsert", "update": "upsert", "plant": "upsert",
     "advance": "upsert", "resolve": "upsert", "insert": "upsert",
     "新增": "upsert", "埋设": "upsert", "更新": "upsert", "推进": "upsert", "回收": "upsert",
     "remove": "delete", "删除": "delete",
 }
-# 带状态含义的伏笔动作词：它们也映射成 upsert，但动作词本身说了伏笔走到哪一步。
-# status 缺省时按动作词补上（意图只有这一个来源，不会猜错）；status 与动作词矛盾时退回，
-# 因为无法判断是动作词用错还是状态写错——静默改任何一边都可能把没回收的伏笔记成已回收。
+# 상태 의미를 가진 복선 동작어도 upsert로 매핑하지만 단어 자체가 복선의 진행 단계를 나타낸다.
+# status가 없으면 유일한 의도 출처인 동작어로 보충한다. status와 동작어가 충돌하면 반려한다.
+# 어느 쪽이 잘못됐는지 판단할 수 없으며 조용히 고치면 미회수 복선을 회수 완료로 기록할 수 있기 때문이다.
 FORESHADOW_ACTION_STATUS = {
     "resolve": "已回收", "回收": "已回收",
     "advance": "已埋", "推进": "已埋",
@@ -96,17 +95,17 @@ WINDOWS_RESERVED_NAMES = {
 }
 RETIRED_TRACKING_PATHS = (
     "_tracking-meta.json",
-    "阶段摘要.md",
-    "角色状态.md",
-    "时间线.md",
-    "摘要",
-    "时间线/事件库.json",
+    "단계요약.md",
+    "인물상태.md",
+    "시간선.md",
+    "요약",
+    "시간선/사건목록.json",
 )
-RETIRED_ARCHIVE_DIR = "_旧追踪存档"
+RETIRED_ARCHIVE_DIR = "_이전추적보관"
 
 
 class TrackingError(ValueError):
-    """Expected validation or tracking-state error."""
+    """예상 가능한 검증 오류 또는 추적 상태 오류."""
 
 
 def require(condition: bool, message: str) -> None:
@@ -138,14 +137,14 @@ def as_int(value: object, label: str, *, minimum: int = 0) -> int:
 
 
 def as_chapter(value: object, label: str, *, minimum: int = 1) -> int:
-    """章号：模型常写成 "22"。纯数字字符串按整数收，语义不变；其余照旧报错。"""
+    """장 번호: 모델이 자주 쓰는 숫자 문자열 "22"는 의미를 유지하며 정수로 받고 나머지는 기존처럼 오류로 처리한다."""
     if isinstance(value, str) and value.strip().isdecimal():
         value = int(value.strip())
     return as_int(value, label, minimum=minimum)
 
 
 def with_aliases(row: dict[str, Any], aliases: dict[str, str]) -> dict[str, Any]:
-    """把含义明确的同义字段名改成正式字段名；正式字段已在时不动，留给未知字段报错。"""
+    """뜻이 명확한 동의 필드를 정식 이름으로 바꾼다. 정식 필드가 이미 있으면 그대로 두어 알 수 없는 필드 오류로 처리한다."""
     row = dict(row)
     for alias, canonical in aliases.items():
         if alias in row and canonical not in row:
@@ -164,19 +163,19 @@ def normalize_action(value: object, label: str, *, allow_delete: bool) -> str:
 def require_known_keys(mapping: dict[str, Any], allowed: set[str], label: str) -> None:
     unknown = set(mapping) - allowed
     require(not unknown, f"{label} contains unsupported fields: {', '.join(sorted(unknown))}"
-                         f"（只收 {', '.join(sorted(allowed))}）")
+                         f"(허용 값: {', '.join(sorted(allowed))})")
 
 
-# 事务校验期间收集全部超长字段，一次报完；None 表示逐条立即报错（初始化、状态读取等路径）。
+# 트랜잭션 검증 중 길이 초과 필드를 모아 한꺼번에 보고한다. None은 초기화·상태 읽기 등에서 즉시 개별 오류를 보고한다.
 _LENGTH_ISSUES: list[str] | None = None
 
 
 def length_hint(label: str, text: str, max_bytes: int) -> str:
-    """把字节上限换算成字数：模型写的是中文，只看得懂「要删几个字」。"""
+    """바이트 상한을 글자 수로 바꾼다. 중국어를 쓰는 모델에는 몇 글자를 줄여야 하는지 알려줘야 한다."""
     size = len(text.encode("utf-8"))
     allowed = max(1, max_bytes * len(text) // size)
-    return (f"{label} exceeds {max_bytes} bytes（现 {len(text)} 字，上限约 {allowed} 字，"
-            f"至少删 {len(text) - allowed} 字）")
+    return (f"{label} exceeds {max_bytes} bytes(현재 {len(text)}자, 상한 약 {allowed}자, "
+            f"최소 {len(text) - allowed}자 삭제 필요)")
 
 
 def clean_text(value: object, label: str, *, allow_empty: bool = False, max_bytes: int = 768) -> str:
@@ -220,10 +219,8 @@ def byte_size(text: str) -> int:
 
 
 def emit(text: str, *, error: bool = False) -> None:
-    """Write UTF-8 bytes directly.
-
-    Windows 的文本 stdout 是 cp1252（含中文即 UnicodeEncodeError），stderr 默认
-    backslashreplace（中文被转义成反斜杠码位，作者看不懂）。两条路都要绕开。
+    """UTF-8 바이트를 직접 쓴다.
+    Windows 텍스트 stdout은 cp1252라 중국어에서 UnicodeEncodeError가 나고 stderr 기본 backslashreplace는 중국어를 읽기 어려운 코드 포인트로 바꾼다. 둘 다 우회한다.
     """
     stream = sys.stderr if error else sys.stdout
     stream.flush()
@@ -268,7 +265,7 @@ def write_if_changed(path: Path, payload: str) -> None:
 
 
 def tracking_root(project: Path) -> Path:
-    return project.resolve() / "追踪"
+    return project.resolve() / "추적"
 
 
 def state_path(project: Path) -> Path:
@@ -288,7 +285,7 @@ def project_write_lock(project: Path, *, timeout_seconds: float = 10.0):
         except FileExistsError:
             if time.monotonic() >= deadline:
                 raise TrackingError(
-                    "tracking commit lock is busy or stale; retry, or remove 追踪/.tracking-commit.lock after confirming no commit is running"
+                    "tracking commit lock is busy or stale; retry, or remove 추적/.tracking-commit.lock after confirming no commit is running"
                 )
             time.sleep(0.05)
     try:
@@ -305,12 +302,12 @@ def project_write_lock(project: Path, *, timeout_seconds: float = 10.0):
 
 def delta_path(tracking: Path, chapter: int) -> Path:
     width = max(3, len(str(chapter)))
-    return tracking / "逐章记录" / f"第{chapter:0{width}d}章.md"
+    return tracking / "장별기록" / f"제{chapter:0{width}d}장.md"
 
 
 def find_retired_tracking_paths(tracking: Path) -> list[str]:
     found = [relative for relative in RETIRED_TRACKING_PATHS if (tracking / relative).exists()]
-    found.extend(sorted(path.name for path in tracking.glob("基线_截至第*章.md")))
+    found.extend(sorted(path.name for path in tracking.glob("기준_종료제*장.md")))
     return found
 
 
@@ -320,10 +317,8 @@ def require_no_retired_tracking_paths(tracking: Path) -> None:
 
 
 def archive_retired_tracking_paths(tracking: Path) -> list[str]:
-    """Move a pre-transaction 追踪/ aside so init can build the current protocol in place.
-
-    Nothing is parsed or converted: the old files are kept verbatim for the author to
-    consult, and the new state is reconstructed from the init document alone.
+    """트랜잭션 도입 전 추적/을 옆으로 옮겨 init이 현재 프로토콜을 그 자리에 만들게 한다.
+    이전 파일은 파싱·변환 없이 작가 참고용으로 그대로 보존한다. 새 상태는 init 문서만으로 재구성한다.
     """
     retired = find_retired_tracking_paths(tracking)
     if not retired:
@@ -332,9 +327,9 @@ def archive_retired_tracking_paths(tracking: Path) -> list[str]:
     for relative in retired:
         require(
             not (archive / relative).exists(),
-            f"追踪/{RETIRED_ARCHIVE_DIR}/{relative} already exists; move it away before initializing",
+            f"추적/{RETIRED_ARCHIVE_DIR}/{relative} already exists; move it away before initializing",
         )
-    # 先全量校验再搬运；中断后重跑时已搬走的条目不再出现在待搬列表里，可直接续做。
+    # 전체 검증 후 이동한다. 중단 후 재실행하면 이미 옮긴 항목은 대기 목록에서 빠져 바로 이어갈 수 있다.
     for relative in retired:
         target = archive / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -362,14 +357,14 @@ def validate_position(value: object, label: str = "context.position") -> dict[st
 
 
 def joined_text(value: object) -> object:
-    """单句字段写成了字符串列表时按「；」连成一句，内容不丢。"""
+    """단문 필드가 문자열 목록이면 ‘；’로 이어 내용을 잃지 않고 한 문장으로 만든다."""
     if isinstance(value, list) and value and all(isinstance(item, str) for item in value):
         return "；".join(value)
     return value
 
 
 def as_text_list(value: object) -> object:
-    """列表字段只写了一句时当作一项。"""
+    """목록 필드에 한 문장만 있으면 항목 하나로 취급한다."""
     return [value] if isinstance(value, str) and value.strip() else value
 
 
@@ -459,11 +454,11 @@ def normalize_foreshadow_change(
     if implied is not None:
         if row.get("status") in (None, ""):
             row["status"] = implied
-        right = "回收了就写 status=已回收" if implied == "已回收" else "只是推进、还没回收就写 status=已埋"
+        right = "회수했다면 status=已回收로 적으세요" if implied == "已回收" else "진전만 있고 아직 회수하지 않았다면 status=已埋로 적으세요"
         require(
             row["status"] == implied,
-            f"{label}.action={raw_action} 与 status={row['status']} 矛盾：{right}；"
-            "不是这个意思就把 action 改成 upsert 并写实际状态",
+            f"{label}.action={raw_action}과(와) status={row['status']}가 모순됩니다: {right}. "
+            "그 뜻이 아니라면 action을 upsert로 바꾸고 실제 상태를 적으세요",
         )
     planted_chapter = as_chapter(row.get("planted_chapter"), f"{label}.planted_chapter")
     require(planted_chapter <= through_chapter, f"{label}.planted_chapter cannot be in the future")
@@ -523,7 +518,7 @@ def render_foreshadow(rows: dict[str, dict[str, Any]], revision: int) -> str:
     lines = [
         "# 伏笔当前状态",
         "",
-        f"> 状态修订：{revision}。每个 ID 只保留一行当前状态；历史变化见 `逐章记录/`。",
+        f"> 状态修订：{revision}。每个 ID 只保留一行当前状态；历史变化见 `장별기록/`。",
         "",
         "| ID | 内容 | 埋设章 | 计划回收章 | 状态 | 重要度 | 最近变更章 |",
         "|---|---|---:|---:|---|---|---:|",
@@ -781,11 +776,11 @@ def normalize_delta(
         name = safe_file_component(change.get("name"), f"delta.character_changes[{index}].name")
         existing = existing_core_names.get(portable_name_key(name))
         is_core = name in snapshots or existing is not None
-        # 本章退役的角色记录最后一次变化即可，不必再交一份马上要删的快照。
+        # 이번 장에 퇴역한 인물은 마지막 변화만 기록하며 곧 삭제할 스냅샷을 추가 제출할 필요가 없다.
         require(
             not is_core or name in snapshots or portable_name_key(name) in retiring,
-            f"core character {name} changed but has no current snapshot: 把 draft 输出 current_snapshots 里"
-            f"「{name}」的快照整份改成本章结束时的状态，放进 character_snapshots",
+            f"core character {name} changed but has no current snapshot:  draft 출력의 current_snapshots에서 "
+            f"‘{name}’의 스냅샷 전체를 이번 장 종료 시점의 상태로 수정해 character_snapshots에 넣으세요",
         )
         character_changes.append(
             {"name": name, "change": clean_text(change.get("change"), f"delta.character_changes[{index}].change", max_bytes=360)}
@@ -833,7 +828,7 @@ def normalize_delta(
 
 
 def render_commitments(commitments: list[str]) -> list[str]:
-    # 常见情形一行用「；」连写；有承诺原文自带「；」时连写就拆不回来，改成逐条缩进子项。
+    # 일반적으로 ‘；’로 한 줄에 잇지만 약속 원문에도 이 기호가 있으면 되돌릴 수 없으므로 항목별 들여쓰기 형식을 쓴다.
     if any("；" in item for item in commitments):
         return ["- 下一章承诺："] + [f"  - {item}" for item in commitments]
     return ["- 下一章承诺：" + ("；".join(commitments) or "无")]
@@ -881,7 +876,7 @@ def render_delta(chapter: int, title: str, delta: dict[str, Any], core_names: se
         f"角色状态：{name}" for name in delta.get("retired_characters", [])
     ]
     if retired:
-        # 退役条目在此留档，续写状态卡收缩后仍可回查当初撤下了什么。
+        # 퇴역 항목을 여기 보관해 이어쓰기 상태 카드가 축소된 뒤에도 무엇을 내렸는지 조회할 수 있다.
         lines.extend(["", "## 本章退役登记"])
         lines.extend(f"- {item}" for item in retired)
     payload = "\n".join(lines) + "\n"
@@ -890,9 +885,9 @@ def render_delta(chapter: int, title: str, delta: dict[str, Any], core_names: se
         longest = sorted((line for line in lines if line.startswith("- ")), key=len, reverse=True)[:3]
         allowed = DELTA_MAX_BYTES * len(payload) // size
         raise TrackingError(
-            f"chapter delta is {size} bytes; hard cap is {DELTA_MAX_BYTES}（逐章记录现 {len(payload)} 字，"
-            f"上限约 {allowed} 字，至少压缩 {len(payload) - allowed} 字；最长几项："
-            + "；".join(f"{line[2:18]}…（{len(line) - 2} 字）" for line in longest) + "）")
+            f"chapter delta is {size} bytes; hard cap is {DELTA_MAX_BYTES}(장별 기록 현재 {len(payload)}자, "
+            f"상한 약 {allowed}자, 최소 {len(payload) - allowed}자 축약 필요. 가장 긴 항목: "
+            + "；".join(f"{line[2:18]}…({len(line) - 2}자)" for line in longest) + "）")
     return payload
 
 
@@ -1018,13 +1013,13 @@ def normalize_transaction(project: Path, state: dict[str, Any], document: object
         transaction = _normalize_transaction(project, state, document)
     finally:
         issues, _LENGTH_ISSUES = _LENGTH_ISSUES, None
-    require(not issues, f"{len(issues)} 个字段超长，一次改完再提交：" + "；".join(issues))
+    require(not issues, f"{len(issues)}개 필드가 길이 한도를 초과했습니다. 모두 수정한 뒤 제출하세요: " + "；".join(issues))
     return transaction
 
 
-# 本文件在 story-long-write / story-review / story-import 三份逐字相同；只有 story-long-write 带 storyctl.py。
-RECOUNT_HINT = ("修订请用 story-long-write 的 storyctl.py chapter commit（带外用 chapter accept-current-length）"
-                "提交同一份事务，它会重新计数并清理本章工作目录")
+# 이 파일은 story-long-write / story-review / story-import에서 동일하다. storyctl.py는 story-long-write에만 있다.
+RECOUNT_HINT = ("수정본은 story-long-write의 storyctl.py chapter commit으로 "
+                "같은 트랜잭션을 제출하세요(분량 범위 밖이면 chapter accept-current-length 사용). 글자 수를 다시 계산하고 이번 장 작업 폴더를 정리합니다")
 
 
 def _normalize_transaction(project: Path, state: dict[str, Any], document: object) -> dict[str, Any]:
@@ -1068,14 +1063,14 @@ def _normalize_transaction(project: Path, state: dict[str, Any], document: objec
             wordcount_core.validate_current_wordcount_record, project, chapter, wordcount_input
         )
     elif mode == "revision" and str(chapter) in state["wordcount_records"]:
-        # 已提交字数记录的章节：正文或目标改过却绕开 storyctl 提交修订，会留下过期的 actual/body_sha256。
-        # 只核对记录钉住的正文与目标；细纲事后补的「字数范围」不算过期。
+        # 글자 수 기록을 제출한 장에서 본문·목표 변경 후 storyctl을 우회해 수정 제출하면 actual/body_sha256이 오래된 값으로 남는다.
+        # 기록에 고정된 본문과 목표만 대조한다. 나중에 상세 개요에 추가한 ‘字数范围’는 만료로 보지 않는다.
         try:
             drift = wordcount_core.wordcount_record_drift(project, chapter, state["wordcount_records"][str(chapter)])
         except wordcount_core.WordcountError as exc:
-            raise TrackingError(f"第{chapter}章的字数记录无法核对（{exc}）；{RECOUNT_HINT}") from exc
+            raise TrackingError(f"제{chapter}장의 분량 기록을 대조할 수 없습니다({exc}). {RECOUNT_HINT}") from exc
         if drift:
-            raise TrackingError(f"第{chapter}章{'和'.join(drift)}已改；{RECOUNT_HINT}")
+            raise TrackingError(f"제{chapter}장의 {', '.join({'正文': '본문', '字数目标': '목표 분량'}.get(item, item) for item in drift)}이(가) 변경되었습니다. {RECOUNT_HINT}")
     return {
         "mode": mode,
         "chapter": chapter,
@@ -1108,8 +1103,8 @@ def merge_transaction(state: dict[str, Any], transaction: dict[str, Any]) -> dic
         next_state["wordcount_records"][str(chapter)] = transaction["wordcount"]
 
     next_context = transaction["context"]
-    # 退役说的是「从此刻起离开当前状态」，只有 append 的逐章记录代表此刻；
-    # 修订记录属于被改写的旧章，落在那里会谎报退役发生的章节。
+    # 퇴역은 지금부터 현재 상태에서 빠진다는 뜻이다. append의 장별 기록만 현재 시점을 나타내며
+    # 수정 기록은 과거 장에 속하므로 거기에 넣으면 퇴역 발생 장을 잘못 보고하게 된다.
     is_revision = transaction["mode"] == "revision"
     require(
         not (is_revision and transaction["delta"]["retired_characters"]),
@@ -1127,7 +1122,7 @@ def merge_transaction(state: dict[str, Any], transaction: dict[str, Any]) -> dic
         )
         next_state["characters"].pop(name)
 
-    # 上下文条目是整份提交的；漏写会静默丢历史裁定，因此掉落必须显式声明。
+    # 컨텍스트 항목은 통째로 제출한다. 누락하면 과거 판정이 조용히 사라지므로 제거를 명시해야 한다.
     previous_items = set(state["context"]["long_term_constraints"]) | set(state["context"]["continuity_risks"])
     dropped = previous_items - (set(next_context["long_term_constraints"]) | set(next_context["continuity_risks"]))
     require(
@@ -1186,29 +1181,29 @@ def merge_transaction(state: dict[str, Any], transaction: dict[str, Any]) -> dic
 def render_views(state: dict[str, Any]) -> dict[str, str]:
     revision = state["state_revision"]
     views = {
-        "上下文.md": render_context(state),
-        "伏笔.md": render_foreshadow(state["foreshadow"], revision),
+        "문맥.md": render_context(state),
+        "복선.md": render_foreshadow(state["foreshadow"], revision),
     }
     author, reader = render_timeline_views(state["timeline"], revision)
-    views["时间线/作者真相.md"] = author
-    views["时间线/读者已知.md"] = reader
+    views["시간선/작가용진실.md"] = author
+    views["시간선/독자가아는사실.md"] = reader
     for name, snapshot in state["characters"].items():
-        views[f"角色状态/{name}.md"] = render_snapshot(
+        views[f"인물상태/{name}.md"] = render_snapshot(
             name, snapshot, state["last_committed_chapter"], revision
         )
     return views
 
 
 def write_views(tracking: Path, views: dict[str, str]) -> None:
-    # 上下文携带 next revision，先写它；任何后续失败都会让 hook/check 发现
-    # 上下文 revision 与最后提交的 _tracking-state.json 不一致。
-    write_if_changed(tracking / "上下文.md", views["上下文.md"])
-    for relative in sorted(path for path in views if path != "上下文.md"):
+    # 컨텍스트는 다음 리비전을 담으므로 먼저 쓴다. 이후 실패하면 hook/check가
+    # 컨텍스트 리비전과 마지막 제출 _tracking-state.json의 불일치를 감지한다.
+    write_if_changed(tracking / "문맥.md", views["문맥.md"])
+    for relative in sorted(path for path in views if path != "문맥.md"):
         write_if_changed(tracking / relative, views[relative])
     expected_character_files = {
-        Path(relative).name for relative in views if relative.startswith("角色状态/")
+        Path(relative).name for relative in views if relative.startswith("인물상태/")
     }
-    character_dir = tracking / "角色状态"
+    character_dir = tracking / "인물상태"
     character_dir.mkdir(parents=True, exist_ok=True)
     for path in character_dir.glob("*.md"):
         if path.name not in expected_character_files:
@@ -1221,11 +1216,11 @@ def warn_sizes(views: dict[str, str], delta_payload: str | None = None) -> None:
             f"WARNING: chapter delta is {byte_size(delta_payload)} bytes; target is <= {DELTA_TARGET_BYTES}",
             error=True,
         )
-    context_size = byte_size(views["上下文.md"])
+    context_size = byte_size(views["문맥.md"])
     if context_size > CONTEXT_TARGET_BYTES:
         emit(f"WARNING: hot context is {context_size} bytes; target is <= {CONTEXT_TARGET_BYTES}", error=True)
     for relative, payload in views.items():
-        if not relative.startswith("角色状态/"):
+        if not relative.startswith("인물상태/"):
             continue
         size = byte_size(payload)
         if size > SNAPSHOT_TARGET_BYTES:
@@ -1242,17 +1237,17 @@ def _initialize_locked(project: Path, document: object) -> dict[str, Any]:
     views = render_views(state)
     state_payload = json_payload(state)
 
-    # 输入全部校验通过后才动用户文件，失败的 init 不会挪走任何东西。
+    # 입력 검증을 모두 통과한 후 사용자 파일을 건드린다. 실패한 init은 어떤 파일도 옮기지 않는다.
     archived = archive_retired_tracking_paths(tracking)
-    for directory in (tracking / "逐章记录", tracking / "角色状态", tracking / "时间线"):
+    for directory in (tracking / "장별기록", tracking / "인물상태", tracking / "시간선"):
         directory.mkdir(parents=True, exist_ok=True)
     write_views(tracking, views)
     atomic_write_text(state_path(project), state_payload)
     warn_sizes(views)
     if archived:
         emit(
-            f"NOTE: 旧追踪结构已原样移入 追踪/{RETIRED_ARCHIVE_DIR}/：{', '.join(archived)}；"
-            "当前状态以本次 init 输入为准，旧文件不参与解析。",
+            f"NOTE: 이전 추적 구조를 그대로 추적/{RETIRED_ARCHIVE_DIR}/에 옮겼습니다: {', '.join(archived)}. "
+            "현재 상태는 이번 init 입력을 기준으로 하며 이전 파일은 해석에 사용하지 않습니다.",
             error=True,
         )
     return state
@@ -1272,14 +1267,14 @@ def _apply_transaction_locked(project: Path, document: object) -> dict[str, Any]
     path = delta_path(tracking, transaction["chapter"])
     previous_record = parse_chapter_record(path) if transaction["mode"] == "revision" else None
     if previous_record is not None:
-        # 退役只在 append 发生；修订重写旧章记录时把当初的退役登记原样带过来，不让它随修订消失。
+        # 퇴역은 append에서만 발생한다. 수정 시 과거 퇴역 등록을 그대로 가져와 사라지지 않게 한다.
         transaction["delta"]["retired_context_items"] = previous_record["retired"]
 
     delta_payload = render_delta(
         transaction["chapter"],
         transaction["title"],
         transaction["delta"],
-        # 本章退役的角色在 next_state 里已被删除，但本章记录里仍应标为核心。
+        # 이번 장에 퇴역한 인물은 next_state에서 삭제되었어도 이번 장 기록에서는 여전히 핵심 인물로 표시해야 한다.
         set(next_state["characters"]) | set(transaction["delta"]["retired_characters"]),
     )
     views = render_views(next_state)
@@ -1292,7 +1287,7 @@ def _apply_transaction_locked(project: Path, document: object) -> dict[str, Any]
 
     write_if_changed(path, delta_payload)
     write_views(tracking, views)
-    # 唯一权威文件最后落盘；在此之前失败可用同一事务直接重跑。
+    # 유일한 기준 파일은 마지막에 저장한다. 그전 실패는 같은 트랜잭션으로 바로 재시도할 수 있다.
     atomic_write_text(state_path(project), next_state_payload)
     warn_sizes(views, delta_payload)
     if previous_record is not None:
@@ -1303,11 +1298,11 @@ def _apply_transaction_locked(project: Path, document: object) -> dict[str, Any]
 def warn_emptied_record(chapter: int, previous: dict[str, Any], delta: dict[str, Any]) -> None:
     labels = {"character_changes": "角色变化", "foreshadow_changes": "伏笔变化", "timeline_events": "时间与揭示",
               "constraints": "连贯性约束", "next_chapter_commitments": "下一章承诺"}
-    emptied = [f"{label}（原有 {len(previous[key])} 项）" for key, label in labels.items()
+    emptied = [f"{label}(기존 {len(previous[key])}개 항목)" for key, label in labels.items()
                if previous[key] and not delta[key]]
     if emptied:
-        emit(f"WARNING: 第{chapter}章修订把逐章记录的 " + "、".join(emptied)
-             + " 清空了；修订的 delta 是本章完整记录，不是只写改动。不是有意删除就用 draft 重新预填后再提交。", error=True)
+        emit(f"WARNING: 제{chapter}장 수정으로 장별 기록에서 다음 항목을 비웠습니다: " + "、".join(emptied)
+             + ". 수정의 delta에는 이번 장의 전체 기록이 필요합니다. 의도한 삭제가 아니라면 draft로 다시 미리 채운 뒤 제출하세요.", error=True)
 
 
 def apply_transaction(project: Path, document: object) -> dict[str, Any]:
@@ -1323,8 +1318,8 @@ def check_project(project: Path) -> dict[str, Any]:
     required_delta_start = state["imported_through_chapter"] + 1
     for chapter in range(required_delta_start, last_chapter + 1):
         require(delta_path(tracking, chapter).exists(), f"chapter delta {chapter} is missing")
-    for path in (tracking / "逐章记录").glob("第*章.md"):
-        match = re.fullmatch(r"第(\d+)章\.md", path.name)
+    for path in (tracking / "장별기록").glob("제*장.md"):
+        match = re.fullmatch(r"제(\d+)장\.md", path.name)
         require(match is not None, f"chapter delta has an invalid filename: {path.name}")
         chapter = as_int(int(match.group(1)), f"chapter delta {path.name}", minimum=1)
         require(path == delta_path(tracking, chapter), f"chapter delta {chapter} filename is not canonical")
@@ -1340,14 +1335,14 @@ def check_project(project: Path) -> dict[str, Any]:
             f"derived view differs from _tracking-state.json: {relative}",
         )
     expected_character_files = {
-        Path(relative).name for relative in expected_views if relative.startswith("角色状态/")
+        Path(relative).name for relative in expected_views if relative.startswith("인물상태/")
     }
-    actual_character_files = {path.name for path in (tracking / "角色状态").glob("*.md")}
+    actual_character_files = {path.name for path in (tracking / "인물상태").glob("*.md")}
     require(actual_character_files == expected_character_files, "character snapshot files differ from tracking state")
     return state
 
 
-# 事务草稿里各文本字段的字数上限（按全中文估：UTF-8 每字 3 字节），写进提示，免得模型反复试错。
+# 트랜잭션 초안의 텍스트별 글자 수 상한(전부 중국어라 가정해 UTF-8 글자당 3바이트)을 안내에 써 모델의 반복 시행착오를 줄인다.
 DRAFT_LIMITS = {
     "delta.result": 160, "character_changes[].change": 120, "foreshadow_changes[].summary": 120,
     "timeline_events[].objective_fact / reader_knowledge": 160, "context.position.story_time / scene": 80,
@@ -1360,8 +1355,8 @@ RECORD_SECTIONS = {"角色变化": "character_changes", "伏笔变化": "foresha
 
 
 def parse_chapter_record(path: Path) -> dict[str, Any] | None:
-    """读回本工具自己渲染的逐章记录（render_delta 的固定格式），供修订草稿预填与修订提交核对。
-    这是对自家确定性输出的逆运算，不是解析手写 Markdown；读不到返回 None。"""
+    """도구가 생성한 장별 기록(render_delta의 고정 형식)을 다시 읽어 수정 초안 채우기와 제출 대조에 사용한다.
+    수기 Markdown 파싱이 아닌 자체 결정적 출력의 역연산이며 읽지 못하면 None이다."""
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
@@ -1391,7 +1386,7 @@ def parse_chapter_record(path: Path) -> dict[str, Any] | None:
                 record["result"] = item[len("结果："):]
             elif item.startswith("下一章承诺："):
                 value = item[len("下一章承诺："):]
-                # 空值 = 逐条子项格式（render_commitments），后面的缩进行逐条读回。
+                # 빈 값은 항목별 하위 목록 형식(render_commitments)이며 뒤의 들여쓴 행을 개별 항목으로 읽는다.
                 in_commitments = value == ""
                 record["next_chapter_commitments"] = [] if value in ("无", "") else value.split("；")
             continue
@@ -1402,8 +1397,8 @@ def parse_chapter_record(path: Path) -> dict[str, Any] | None:
 
 
 def record_prefill(state: dict[str, Any], record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
-    """把已提交的逐章记录还原成修订 delta：结果、承诺、约束、角色变化按记录原文；伏笔与时间线
-    取受影响 ID 的当前值（修订提交的就是截至最新章的当前值）。另返回记录里核心角色的当前快照。"""
+    """제출된 장별 기록을 수정 delta로 복원한다. 결과·약속·제약·인물 변화는 원문을 사용하고 복선·시간선은 영향받은 ID의 현재 값을 쓴다.
+    수정 제출은 최신 장까지의 현재 값이다. 기록 속 핵심 인물의 현재 스냅샷도 반환한다."""
     notes: list[str] = []
     changes = []
     for line in record["character_changes"]:
@@ -1420,14 +1415,14 @@ def record_prefill(state: dict[str, Any], record: dict[str, Any]) -> tuple[dict[
             identifier = parts[0]
             if len(parts) > 1 and parts[1] == "删除当前登记":
                 if identifier in current:
-                    notes.append(f"{label} {identifier} 本章删过、后来又登记了，没有预填删除，确需删除自行加回")
+                    notes.append(f"{label} {identifier}은(는) 이번 장에서 삭제한 뒤 다시 등록되어 삭제를 미리 채우지 않았습니다. 삭제가 필요하면 직접 추가하세요")
                 else:
                     prefilled.append({"action": "delete", "id": identifier})
             elif identifier in current:
                 prefilled.append({"action": "upsert", **{key: copy.deepcopy(value) for key, value in current[identifier].items()
                                                          if key not in ("updated_chapter", "first_recorded_chapter")}})
             else:
-                notes.append(f"{label} {identifier} 已在后续章节删除，没有预填")
+                notes.append(f"{label} {identifier}은(는) 이후 장에서 삭제되어 미리 채우지 않았습니다")
         return prefilled
 
     delta = {
@@ -1442,43 +1437,42 @@ def record_prefill(state: dict[str, Any], record: dict[str, Any]) -> tuple[dict[
 
 
 def entry_shapes(chapter: int) -> dict[str, Any]:
-    """draft 当场给出每类条目的形状：模型填 delta 时手里只有空数组，字段名、整数、枚举都靠猜，
-    首次提交几乎都因此被退回。取值从校验用的同一组常量生成，不另立一套。"""
+    """draft에서 항목별 형식을 즉시 제공한다. 빈 배열만 있으면 모델이 필드 이름·정수·열거형을 추측해 첫 제출이 거의 모두 반려된다.
+    값은 검증과 같은 상수에서 생성하며 별도 체계를 만들지 않는다."""
     return {
-        "delta.character_changes[]": {"name": "角色名", "change": "一句话：本章起了什么变化"},
+        "delta.character_changes[]": {"name": "인물명", "change": "이번 장에서 일어난 변화를 한 문장으로 작성"},
         "delta.foreshadow_changes[]": {
-            "action": "upsert（撤掉整条写 delete，只带 id）", "id": "F007", "summary": "伏笔一句话",
-            "planted_chapter": chapter, "planned_resolution_chapter": "计划回收章的整数，未定写 null",
+            "action": "upsert(전체 항목을 없애려면 delete로 적고 id만 포함)", "id": "F007", "summary": "복선을 한 문장으로 작성",
+            "planted_chapter": chapter, "planned_resolution_chapter": "계획된 회수 장 번호를 정수로 작성. 미정이면 null",
             "status": "|".join(FORESHADOW_STATUSES), "importance": "|".join(FORESHADOW_IMPORTANCE),
         },
         "delta.timeline_events[]": {
-            "action": "upsert（撤掉整条写 delete，只带 id）", "id": "E012", "story_time": "故事内时间",
-            "objective_fact": "客观发生了什么", "reader_knowledge": "读者此刻知道/以为什么",
+            "action": "upsert(전체 항목을 없애려면 delete로 적고 id만 포함)", "id": "E012", "story_time": "작품 속 시간",
+            "objective_fact": "객관적으로 일어난 사건", "reader_knowledge": "독자가 현재 알고 있거나 믿는 내용",
             "reveal_status": "|".join(REVEAL_STATUSES),
-            "reveal_chapter": f"已揭示或部分揭示时写揭示章的整数（不晚于 {chapter}），未揭示写 null",
-            "characters": ["角色名"],
+            "reveal_chapter": f"공개 또는 일부 공개라면 공개 장 번호를 정수로 작성({chapter}장 이하). 미공개면 null",
+            "characters": ["인물명"],
         },
-        "character_snapshots.{角色名}": {
-            **{key: "一句话" for key in SNAPSHOT_TEXT_FIELDS},
-            **{key: ["一条一句"] for key in SNAPSHOT_LIST_FIELDS},
+        "character_snapshots.{인물명}": {
+            **{key: "한 문장" for key in SNAPSHOT_TEXT_FIELDS},
+            **{key: ["항목당 한 문장"] for key in SNAPSHOT_LIST_FIELDS},
         },
     }
 
 
 def draft_transaction(project: Path, chapter: int) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """按当前 state 预填一份逐章事务：修订号、模式、章名和整份提交的上下文当前值都填好。
-    新章（append）调用方只写本章变化；另返回在场核心角色的当前快照，供有变化时整份改写后放进事务。
-    新章的故事时间与场景留空：它们必须是本章结束时的位置，沿用上一章的值能静默提交，
-    所以不预填，上一章的值另行返回作参考。
-    修订（revision）的 delta 是修订后本章的完整记录，所以按已提交的逐章记录预填，调用方在上面改；
-    第三项返回 {"notes": [...], "prefilled": bool}：没能预填的条目，以及逐章记录是否读到。"""
+    """현재 state로 장별 트랜잭션의 리비전·모드·장 제목·전체 제출 컨텍스트를 미리 채운다.
+    새 장(append)은 호출자가 이번 변화만 쓴다. 현장 핵심 인물의 현재 스냅샷도 반환해 변화가 있으면 전체를 고쳐 넣게 한다.
+    새 장의 시간·장면은 장 끝 위치여야 하므로 비운다. 이전 값을 그대로 제출하는 실수를 막고 이전 값은 별도 참고로 반환한다.
+    수정(revision)의 delta는 수정 후 장 전체 기록이므로 제출된 장별 기록으로 채워 호출자가 수정한다.
+    세 번째 반환값 {"notes": [...], "prefilled": bool}은 채우지 못한 항목과 장별 기록 읽기 성공 여부다."""
     state = load_state(project)
     last = state["last_committed_chapter"]
     require(1 <= chapter <= last + 1, f"draft chapter must be between 1 and {last + 1}")
     mode = "append" if chapter == last + 1 else "revision"
     title = ""
-    for outline in sorted((project / "大纲").glob(f"细纲_第{chapter:03d}章*.md")):
-        match = re.search(rf"^#{{1,4}}\s*第\s*0*{chapter}\s*章\s*[：:]\s*(.+?)\s*$",
+    for outline in sorted((project / "개요").glob(f"상세개요_제{chapter:03d}장*.md")):
+        match = re.search(rf"^#{{1,4}}\s*(?:第|제)\s*0*{chapter}\s*(?:章|장)\s*[：:]\s*(.+?)\s*$",
                           outline.read_text(encoding="utf-8"), re.M)
         if match:
             title = match.group(1).strip()
@@ -1502,7 +1496,7 @@ def draft_transaction(project: Path, chapter: int) -> tuple[dict[str, Any], dict
             delta, snapshots_prefill, notes = record_prefill(state, record)
             title = title or record["title"]
             if chapter == last:
-                # 最新章的承诺原样在 state 里，比从记录行按「；」拆回更准。
+                # 최신 장의 약속은 state에 그대로 있어 기록 행을 ‘；’로 나누는 것보다 정확하다.
                 delta["next_chapter_commitments"] = list(state["context"]["next_chapter_commitments"])
     document = {
         "schema_version": INPUT_SCHEMA_VERSION,
@@ -1524,20 +1518,20 @@ def draft_transaction(project: Path, chapter: int) -> tuple[dict[str, Any], dict
 
 def rebuild_stale_draft(document: dict[str, Any], existing: dict[str, Any], append: bool,
                         current_characters: Any = ()) -> str:
-    """修订号变了：中间提交过别的事务。以当前状态为底，只自动合并确定安全的部分，其余列给调用方核对。
+    """리비전 변경은 다른 트랜잭션 제출을 뜻한다. 현재 상태를 바탕으로 안전한 부분만 자동 병합하고 나머지는 호출자에게 대조 목록을 준다.
 
-    新章草稿之间只可能插进修订事务，修订不能删约束与风险条目，所以当前约束与风险覆盖旧底稿：
-    旧草稿多出来的就是本章新增，delta 里声明退役的就是本章删除，可以精确合并。
-    修订草稿之间可能插进新章（新章能退役条目），在场角色名修订也能删，都无法判断谁新：
-    取当前状态，差异列出来；只有本章带了快照的新角色名自动加回。"""
+    새 장 초안 사이에는 수정만 끼어들 수 있고 수정은 제약·위험을 삭제하지 못한다. 따라서 현재 제약·위험으로 이전 바탕을 덮는다.
+    이전 초안에만 있는 항목은 이번 추가이며 delta의 퇴역 선언은 이번 삭제이므로 정확히 병합할 수 있다.
+    수정 초안 사이에는 퇴역 가능한 새 장이 들어오거나 현장 인물명이 수정으로 삭제될 수 있어 어느 것이 최신인지 판단할 수 없다.
+    현재 상태를 취하고 차이를 열거한다. 이번 장에 스냅샷이 있는 새 인물명만 자동으로 되살린다."""
     def items(value: object) -> list[str]:
         return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
 
     def norm(item: str) -> str:
         return " ".join(item.replace("|", "｜").split())
 
-    notes = ["修订号已变：context 按当前状态重建，本章已填的 delta" + ("、新增与退役的约束、结尾位置" if append else "")
-             + "已合并"]
+    notes = ["리비전이 변경되었습니다. 현재 상태로 context를 재구성하고 이번 장에 작성한 delta" + (", 추가·종료한 제약, 종료 위치" if append else "")
+             + "를 병합했습니다"]
     for key in ("delta", "character_snapshots"):
         if isinstance(existing.get(key), dict):
             document[key] = existing[key]
@@ -1567,15 +1561,15 @@ def rebuild_stale_draft(document: dict[str, Any], existing: dict[str, Any], appe
         if append and name in snapshots:
             names.append(name)
         else:
-            left_out.append(f"在场角色 {name}")
+            left_out.append(f"등장 인물 {name}")
     names[:] = [name for name in names if name not in set(items(delta.get("retired_characters")))]
     known = set(current_characters)
     for name in list(snapshots):
         if name not in known and name not in names:
             snapshots.pop(name)
-            left_out.append(f"角色快照 {name}")
+            left_out.append(f"인물 스냅샷 {name}")
     if left_out:
-        notes.append("草稿里有、当前状态没有的条目没有自动带回（可能已被别的提交退役），本章确实需要就加回："
+        notes.append("초안에만 있고 현재 상태에는 없는 항목은 자동 복원하지 않았습니다(다른 제출에서 종료했을 수 있음). 이번 장에 필요하면 직접 복원하세요: "
                      + "；".join(left_out))
     old_position = old_context.get("position") if isinstance(old_context.get("position"), dict) else {}
     position = context["position"]
@@ -1583,13 +1577,13 @@ def rebuild_stale_draft(document: dict[str, Any], existing: dict[str, Any], appe
         for key in ("story_time", "scene"):
             if isinstance(old_position.get(key), str) and old_position[key].strip():
                 position[key] = old_position[key]
-    differs = [f"{key}：草稿写的是「{old_position[key]}」，当前状态是「{position[key]}」"
+    differs = [f"{key}: 초안은 ‘{old_position[key]}’, 현재 상태는 ‘{position[key]}’"
                for key in ("volume", "volume_start_chapter")
                if key in old_position and old_position[key] != position[key]]
     if differs:
-        notes.append("卷信息与当前状态不同，已取当前状态，本章确实换卷就改回（" + "；".join(differs) + "）")
+        notes.append("권 정보가 달라 현재 상태를 적용했습니다. 이번 장에서 실제로 권이 바뀐다면 수정하세요(" + "；".join(differs) + "）")
     if snapshots:
-        notes.append("带过来的角色快照（" + "、".join(snapshots) + "）可能被中间的提交改过，逐个对照 current_snapshots 重核")
+        notes.append("가져온 인물 스냅샷(" + "、".join(snapshots) + ")은 중간 제출로 바뀌었을 수 있습니다. current_snapshots와 하나씩 대조하세요")
     return "；".join(notes)
 
 
@@ -1598,14 +1592,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in ("init", "commit"):
         subparser = subparsers.add_parser(command)
-        subparser.add_argument("--project", type=Path, required=True, help="book project root containing 追踪/")
+        subparser.add_argument("--project", type=Path, required=True, help="book project root containing 추적/")
         subparser.add_argument("--input", type=Path, required=True, help="UTF-8 JSON input document")
     check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("--project", type=Path, required=True, help="book project root containing 追踪/")
+    check_parser.add_argument("--project", type=Path, required=True, help="book project root containing 추적/")
     draft_parser = subparsers.add_parser("draft", help="write a pre-filled chapter transaction to fill in")
-    draft_parser.add_argument("--project", type=Path, required=True, help="book project root containing 追踪/")
+    draft_parser.add_argument("--project", type=Path, required=True, help="book project root containing 추적/")
     draft_parser.add_argument("--chapter", type=int, required=True)
-    draft_parser.add_argument("--out", type=Path, help="default: <project>/.story/work/第NNN章/tracking.json")
+    draft_parser.add_argument("--out", type=Path, help="default: <project>/.story/work/제NNN장/tracking.json")
     draft_parser.add_argument("--force", action="store_true",
                               help="discard an existing draft instead of only refreshing its revision")
     return parser
@@ -1619,50 +1613,50 @@ def main() -> int:
             previous_position = extra if document["mode"] == "append" else {}
             prefill_notes = extra.get("notes", []) if document["mode"] == "revision" else []
             record_prefilled = bool(extra.get("prefilled")) if document["mode"] == "revision" else False
-            out = args.out or args.project / ".story" / "work" / f"第{args.chapter:03d}章" / "tracking.json"
+            out = args.out or args.project / ".story" / "work" / f"제{args.chapter:03d}장" / "tracking.json"
             out.parent.mkdir(parents=True, exist_ok=True)
             refreshed = ""
             if out.exists() and not args.force:
-                # 重跑 draft 不冲掉已经填好的变化。修订号变了说明中间提交过别的事务：context 按当前
-                # 状态重建（沿用旧 context 会把那次变更整份覆盖回去），只带过本章自己填的部分。
+                # draft 재실행은 이미 입력한 변화를 지우지 않는다. 리비전이 바뀌었으면 다른 트랜잭션이 제출된 것이므로 context는 현재
+                # 상태로 재구성한다. 이전 context를 쓰면 그 변경 전체를 덮어쓰므로 이번 장에서 직접 입력한 부분만 가져온다.
                 existing = read_json(out)
                 require(isinstance(existing, dict) and existing.get("chapter") == document["chapter"]
                         and existing.get("mode") == document["mode"],
                         f"{out} already holds a draft for a different chapter or mode; pass --force to replace it")
                 if existing.get("expected_state_revision") == document["expected_state_revision"]:
-                    document, refreshed = existing, "已有草稿且修订号未变，原样保留"
+                    document, refreshed = existing, "기존 초안이 있고 리비전이 같아 그대로 유지했습니다"
                 else:
                     refreshed = rebuild_stale_draft(document, existing, bool(previous_position),
                                                     load_state(args.project)["characters"])
             out.write_text(json.dumps(document, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
             if document["mode"] == "revision" and not record_prefilled:
-                fill = (f"这是修订，但本章逐章记录缺失或读不了（{delta_path(Path('追踪'), args.chapter).as_posix()}），delta 没有预填："
-                        "按修订后正文把本章完整记录整份写上（结果、承诺、角色变化、伏笔、时间线、约束），没写的项不会进记录。"
-                        "角色快照、伏笔、时间线写截至最新已写章的当前值；context 原样保留全部当前条目（修订不能退役）。"
-                        "正文改过就用 story-long-write 的 storyctl.py chapter commit 提交（重新计数并清理本章工作目录）。"
-                        "不要从脚本源码或 state 文件里另找格式。")
+                fill = (f"수정 작업이지만 이번 장의 장별 기록이 없거나 읽을 수 없어({delta_path(Path('추적'), args.chapter).as_posix()}) delta를 미리 채우지 못했습니다: "
+                        "수정한 본문에 따라 이번 장의 전체 기록(결과·약속·인물 변화·복선·시간선·제약)을 작성하세요. 적지 않은 항목은 기록되지 않습니다. "
+                        "인물 스냅샷·복선·시간선은 최신 집필 장까지 반영한 현재 값을 쓰세요. context의 현재 항목은 모두 그대로 유지하세요(수정 시 종료 처리 불가). "
+                        "본문을 수정했다면 story-long-write의 storyctl.py chapter commit으로 제출하세요(재계산 후 이번 장 작업 폴더 정리). "
+                        "형식을 찾으려고 스크립트 소스나 state 파일을 따로 읽지 마세요.")
             elif document["mode"] == "revision":
-                fill = ("这是修订：delta 是修订后本章的完整记录，已按本章现有逐章记录预填（伏笔与时间线取当前值，"
-                        "记录里的核心角色快照已放进 character_snapshots）。对照修订后正文逐项改：仍成立的原样保留，"
-                        "被推翻的删掉或改写，新增的补上；不要清空后只写改动，没写的项会从本章记录里消失。"
-                        "角色快照、伏笔、时间线改成截至最新已写章的当前值；context 原样保留全部当前条目（修订不能退役）。"
-                        "正文改过就用 story-long-write 的 storyctl.py chapter commit 提交（重新计数并清理本章工作目录）。"
-                        "不要从脚本源码或 state 文件里另找格式。")
+                fill = ("수정 작업입니다. delta는 수정 후 이번 장의 전체 기록이며 기존 장별 기록으로 미리 채웠습니다(복선·시간선은 현재 값 사용, "
+                        "기록의 핵심 인물 스냅샷은 character_snapshots에 포함). 수정 본문과 항목별로 대조해 여전히 유효한 것은 유지하고, "
+                        "뒤집힌 것은 삭제·수정하며 새 항목은 보완하세요. 모두 비운 뒤 변경분만 적으면 빠진 항목이 이번 장 기록에서 사라집니다. "
+                        "인물 스냅샷·복선·시간선은 최신 집필 장까지 반영한 현재 값으로 수정하세요. context의 현재 항목은 모두 유지하세요(수정 시 종료 처리 불가). "
+                        "본문을 수정했다면 story-long-write의 storyctl.py chapter commit으로 제출하세요(재계산 후 이번 장 작업 폴더 정리). "
+                        "형식을 찾으려고 스크립트 소스나 state 파일을 따로 읽지 마세요.")
                 if prefill_notes:
-                    fill += "没能预填：" + "；".join(prefill_notes) + "。"
+                    fill += "미리 채우지 못한 항목: " + "；".join(prefill_notes) + "。"
             else:
-                fill = ("只填 delta 里本章的变化；context 其余字段已是当前值，要撤下的长期约束或连贯性风险从 context 删掉并把原文放进 "
-                        "delta.retired_context_items（仅 append）；本章有变化的核心角色把下面的当前快照整份改好放进 character_snapshots，"
-                        "并在 character_changes 写一句变化。每类条目照 shapes 的形状写，不要从脚本源码或 state 文件里另找格式。")
+                fill = ("delta에는 이번 장의 변화만 작성하세요. context의 나머지 필드는 현재 값입니다. 종료할 장기 제약·연속성 위험은 context에서 삭제하고 원문을 "
+                        "delta.retired_context_items에 넣으세요(append만 가능). 이번 장에 변화한 핵심 인물은 아래 현재 스냅샷 전체를 수정해 character_snapshots에 넣고, "
+                        "character_changes에 변화를 한 문장으로 적으세요. 항목별 형식은 shapes를 따르며 소스나 state 파일에서 따로 찾지 마세요.")
             blank = not (document["context"]["position"].get("story_time") or document["context"]["position"].get("scene"))
             if previous_position and blank:
-                fill = ("context.position 的 story_time 与 scene 留空，填本章结束时的故事时间与场景（上一章结束时见 "
-                        "previous_position；换卷时连同 volume 与 volume_start_chapter 一起改）。") + fill
+                fill = ("context.position의 story_time과 scene은 비워 두었습니다. 이번 장 종료 시점의 시간과 장면을 입력하세요(앞 장 종료 시점은 "
+                        "previous_position 참조. 권을 바꾸면 volume과 volume_start_chapter도 함께 수정). ") + fill
             payload = {
                 "draft": str(out),
                 "mode": document["mode"],
                 "expected_state_revision": document["expected_state_revision"],
-                "fill": (f"{refreshed}；要从头生成加 --force。" if refreshed else "") + fill,
+                "fill": (f"{refreshed}. 처음부터 다시 생성하려면 --force를 추가하세요." if refreshed else "") + fill,
                 "limits_chars": DRAFT_LIMITS,
                 "shapes": entry_shapes(args.chapter),
                 "current_snapshots": snapshots,

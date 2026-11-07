@@ -1,47 +1,31 @@
 #!/usr/bin/env node
 /**
- * check-outline-copy.js — 细纲照搬检测
- *
- * 治的病：细纲把情节点写成成品散文句，正文只剩誊抄，质量被锁死在细纲水平。
- * 实测正文与细纲连续重合最高 13.5%、单段最长 40 字，且重合段落多为叙述而非台词
- * ——即全章最好的那几句在细纲阶段就写完了。
- *
- * 判定：正文与同章细纲连续重合 > 阈值（默认 15 字）即报出
- * ——细纲只锁功能与结果，句子一律在正文现场写。
- *
- * 词面相同不等于不良照搬：系统面板、任务要求、固定专名本就该保持一致。因此本脚本
- * 只提供证据（位置与片段），是否重写由 agent 读上下文语义判断，同 check-ai-patterns.js
- * 的 advisory 轨——但每条都要有结论，不允许只报不改，也不为归零机械改写。
- * 判定保留的只由主会话补进细纲锚句：子代理不改大纲细纲（见 narrative-writer「不自行改纲」），
- * 否则子代理误判的重合会被自己写进白名单，主会话复扫时不再报出，第二层复核失明。
- *
- * 免报：细纲「复沓锚句」字段下列出的原话允许逐字落地——誓言、系统面板、
- * 旧案原话等写细纲时判定必须原文出现的部分，逐行一条。只扣除锚句自身的精确区间，
- * 前后剩余片段照常按阈值判定，避免紧挨锚句的照搬被顺带赦免。
- * 豁免量单独统计并在报告末尾列出，滥用锚句绕过检测时一眼可见。
- *
- * 由 narrative-writer 落盘后自查、主会话收尾复扫时调用（两侧同一份实现，口径一致）。
- * 不进 hook：正文兜底 hook 的共享核是四端共用的，不为单项检测扩面。
- *
- * 用法：
- *   node check-outline-copy.js <正文路径...>                    # 自动找同章细纲；短篇找同目录小节大纲
- *   node check-outline-copy.js --outline <细纲路径> <正文路径...> # 指定细纲
- *
- * 位置参数一律按正文处理，与 check-ai-patterns.js 的 `<file...>` 口径一致：
- * 收尾复扫用 `正文/第XXX章_*.md` 这类通配传多章时，多出来的正文不能被当成细纲吞掉
- * ——那会让首个文件比错对象、其余文件根本不检，静默退 0 报「干净」。
- *
- * 退出码：0 = 干净或未自动发现细纲而跳过；1 = 有重合待复核；
- * 2 = 参数错误、输入不可读（含已发现的细纲）或非预期异常。
- * 干净时静默；自动发现不到细纲时明确报告跳过，避免与「已检查且干净」混淆。
+ * check-outline-copy.js — 상세 개요 베끼기 탐지.
+ * 개요의 플롯 포인트를 완성된 산문으로 써 본문이 필사만 하게 되면 품질이 개요 수준에 고정된다.
+ * 실측에서 연속 중복은 최대 13.5%, 가장 긴 구간은 40자였고 대부분 대사가 아닌 서술이었다. 장의 좋은 문장을 개요 단계에서 이미 써 버린 것이다.
+ * 본문과 같은 장 개요의 연속 중복이 기준(기본 15자)을 넘으면 보고한다. 개요는 기능·결과만 확정하고 문장은 본문 작성 때 만든다.
+ * 같은 표현이 모두 나쁜 복사는 아니다. 시스템 패널·과제·고유명은 같아야 하므로 스크립트는 위치·구간 증거만 주고 agent가 문맥으로 수정 여부를 판단한다.
+ * check-ai-patterns.js advisory처럼 모든 항목에 결론이 필요하며 보고만 하거나 0건을 만들기 위해 기계적으로 고치면 안 된다.
+ * 유지할 문장은 주 세션만 개요의 반복 기준 문장에 추가한다. 하위 에이전트는 개요를 고치지 않는다(narrative-writer의 자체 개요 수정 금지).
+ * 스스로 허용 목록에 넣으면 오판한 중복이 주 세션 재검사에서 사라져 두 번째 검토가 무력화되기 때문이다.
+ * 면제: 개요 ‘复沓锚句’에 행당 하나로 적힌 맹세·시스템 패널·과거 사건 원문 등은 그대로 쓸 수 있다.
+ * 기준 문장 자체의 정확한 구간만 빼며 앞뒤 중복은 계속 판정한다. 면제량을 따로 집계해 보고서 끝에 표시하여 남용을 드러낸다.
+ * narrative-writer 저장 후 자체 검사와 주 세션 마무리 재검사에서 같은 구현을 호출한다. 네 호스트 공유 핵심 훅을 이 검사 하나 때문에 확장하지 않는다.
+ * 사용법:
+ *   node check-outline-copy.js <본문경로...>                    # 같은 장 개요 자동 검색, 단편은 같은 디렉터리 소절 개요
+ *   node check-outline-copy.js --outline <상세개요경로> <본문경로...> # 개요 지정
+ * 위치 인자는 check-ai-patterns.js의 `<file...>`처럼 모두 본문이다. `본문/제XXX장_*.md`로 여러 장을 넘길 때 추가 본문을 개요로 삼으면
+ * 첫 파일은 잘못 비교하고 나머지는 검사하지 않은 채 0으로 종료해 깨끗하다고 오보하므로 허용하지 않는다.
+ * 종료: 0=깨끗함 또는 개요 자동 검색 실패로 건너뜀, 1=검토할 중복, 2=인자 오류·입력(찾은 개요 포함) 읽기 실패·예상 밖 예외.
+ * 깨끗하면 조용히 종료하며 개요를 못 찾으면 검사를 건너뛰었다고 명시해 실제 검사 완료와 구분한다.
  */
 
 'use strict'
 const fs = require('fs')
 const path = require('path')
 
-const MIN_RUN = 16 // 判定阈值：连续重合 >15 字，即 >=16
-const REPORT_TOP = 8 // 最多列出的片段数
+const MIN_RUN = 16 // 판정 기준: 연속 중복 >15자, 즉 >=16자.
+const REPORT_TOP = 8 // 나열할 최대 구간 수.
 
 function readTextFile(p) {
   try {
@@ -65,12 +49,12 @@ function reportUsageError(message) {
   return 2
 }
 
-/** 只留汉字——剥掉标点/加粗/【】后比对，防止细纲标注造成假阴性 */
+/** 한자만 남긴다. 문장부호·강조·【】를 제거해 개요 표기 때문에 거짓 음성이 생기지 않게 한다. */
 function hanOnly(s) {
   return s.replace(/[^一-鿿]/g, '')
 }
 
-// 写后回填的完成记录不是誊抄来源。标题块包含子标题；字段块止于下一字段或标题。
+// 작성 후 채운 완료 기록은 필사 출처가 아니다. 제목 블록은 하위 제목을 포함하고 필드 블록은 다음 필드·제목에서 끝난다.
 function stripCompletionRecord(outline) {
   let headingLevel = 0
   let inField = false
@@ -97,29 +81,27 @@ function stripCompletionRecord(outline) {
 }
 
 /**
- * 抽出细纲「复沓锚句」字段下的原话，一行一条。
- * 只认这一个字段，不扫情节点序列——锚句集中在固定区块，情节点保持只写「要发生什么」。
- * 区块终止于行首无缩进的下一个字段（`- xxx`）或下一个小节标题，因此条目本身
- * 用 `1.` 编号、缩进 `-` 列表或纯文本都能正确提取，不必额外标记。
+ * 개요 ‘复沓锚句’ 아래 원문을 행당 하나씩 추출한다. 이 필드만 인식하고 플롯 포인트 배열은 검사하지 않는다.
+ * 기준 문장을 고정 블록에 모아 플롯 포인트는 일어날 일만 쓰게 한다.
+ * 블록은 들여쓰지 않은 다음 필드(`- xxx`) 또는 다음 소제목에서 끝나므로 `1.` 번호·들여쓴 `-` 목록·일반 텍스트를 별도 표식 없이 추출한다.
  */
 function extractAnchors(outline) {
   const m = outline.match(/复沓锚句[^：:\n]*[：:]([\s\S]*?)(?=\n[-*+]\s|\n#{1,6}\s|$)/)
   if (!m) return []
   return m[1]
     .split("\n")
-    // 去掉列表符号与「点N：」这类落点前缀，只留原话本身
+    // 목록 기호와 ‘点N：’ 같은 위치 접두사를 제거해 원문만 남긴다.
     .map((line) => line.replace(/^\s*[-*+]?\s*(?:\d+[.、)]\s*)?(?:点\s*\d+\s*[：:])?/, ""))
     .map((line) => hanOnly(line))
     .filter((a) => a.length >= 2)
 }
 
 /**
- * 在片段里定位锚句的精确出现区间，挖掉后返回剩余子段与豁免字数。
- * 不能只判「片段包含锚句」就整段放行——贪心扫描求的是最长延伸，锚句嵌在中间时
- * 会连同紧挨着它的未授权重合一起赦免。
+ * 구간에서 기준 문장의 정확한 위치를 제거하고 남은 하위 구간·면제 글자 수를 반환한다.
+ * 기준 문장을 포함한다는 이유로 전체를 허용하면 안 된다. 탐욕 검사는 최장 구간을 찾으므로 중간 기준 문장에 붙은 비허용 중복까지 면제할 수 있다.
  */
 function splitByAnchors(frag, anchors) {
-  // 片段完全落在某条锚句内：整段豁免（抄了锚句的一部分，仍在授权范围）
+  // 구간이 기준 문장 안에 완전히 포함되면 전체 면제다. 일부 복사도 허용 범위다.
   if (anchors.some((a) => a.includes(frag))) return { rest: [], anchoredLen: frag.length }
 
   const spans = []
@@ -128,13 +110,13 @@ function splitByAnchors(frag, anchors) {
       const at = frag.indexOf(a, from)
       if (at < 0) break
       spans.push([at, at + a.length])
-      from = at + 1 // 同一锚句重复出现要逐次记录
+      from = at + 1 // 같은 기준 문장 반복도 매번 기록한다.
     }
   }
   if (!spans.length) return { rest: [frag], anchoredLen: 0 }
 
   spans.sort((x, y) => x[0] - y[0])
-  const merged = [spans[0]] // 多锚句重叠/相邻时并成一段，避免重复计数
+  const merged = [spans[0]] // 여러 기준 문장이 겹치거나 붙으면 하나로 합쳐 중복 계산을 피한다.
   for (const [s, e] of spans.slice(1)) {
     const last = merged[merged.length - 1]
     if (s <= last[1]) last[1] = Math.max(last[1], e)
@@ -153,21 +135,21 @@ function splitByAnchors(frag, anchors) {
   return { rest, anchoredLen }
 }
 
-/** 定位同章细纲：遍历 大纲/ 按章号正则匹配，支持带后缀的文件名 */
+/** 개요/를 순회해 장 번호 정규식으로 같은 장 개요를 찾으며 접미사 파일명도 지원한다. */
 function findOutline(proseFile) {
   const base = path.basename(proseFile)
-  // 短篇没有章号：正文.md 与 小节大纲.md 在同目录平铺
-  if (base === '正文.md') {
-    const sibling = path.join(path.dirname(proseFile), '小节大纲.md')
+  // 단편에는 장 번호가 없으며 본문.md와 구간개요.md가 같은 디렉터리에 있다.
+  if (base === '본문.md') {
+    const sibling = path.join(path.dirname(proseFile), '구간개요.md')
     return fs.existsSync(sibling) ? sibling : null
   }
-  const m = base.match(/^第\s*0*(\d+)\s*章/)
+  const m = base.match(/^제\s*0*(\d+)\s*장/)
   if (!m) return null
   const chapter = m[1]
-  const dir = path.join(path.dirname(path.dirname(proseFile)), '大纲')
+  const dir = path.join(path.dirname(path.dirname(proseFile)), '개요')
   try {
     for (const file of fs.readdirSync(dir)) {
-      const fm = file.match(/^细纲_第0*(\d+)章.*\.md$/)
+      const fm = file.match(/^상세개요_제0*(\d+)장.*\.md$/)
       if (fm && fm[1] === chapter) return path.join(dir, file)
     }
   } catch (error) {
@@ -199,7 +181,7 @@ function main() {
   }
   if (!proseFiles.length) return reportUsageError('缺少正文路径')
 
-  // 逐个文件独立判定；输入错误优先于重合发现
+  // 파일별 독립 판정. 입력 오류를 중복 발견보다 우선한다.
   let status = 0
   for (const proseFile of proseFiles) {
     status = Math.max(status, checkOne(proseFile, explicitOutline))
@@ -227,15 +209,15 @@ function checkOne(proseFile, explicitOutline) {
   }
   const outline = outlineResult.text
 
-  // 正文去掉标题行后比对
+  // 본문 제목 행을 제거한 뒤 비교한다.
   const P = hanOnly(prose.replace(/^#.*$/gm, ''))
   const O = hanOnly(stripCompletionRecord(outline))
   if (P.length < MIN_RUN || O.length < MIN_RUN) return 0
 
-  // 复沓锚句列出的原话允许逐字落地，命中后计入豁免、不判誊抄
+  // 반복 기준 문장의 원문은 그대로 써도 되므로 적중하면 면제로 세고 필사로 보지 않는다.
   const anchors = extractAnchors(outline)
 
-  // 贪心扫描：每个起点二分求「仍是细纲子串」的最长延伸，命中区间不重叠
+  // 탐욕 검사: 시작점마다 개요의 부분 문자열인 최장 구간을 이진 탐색한다. 적중 구간은 겹치지 않는다.
   const hits = []
   let copied = 0
   let anchored = 0
@@ -262,7 +244,7 @@ function checkOne(proseFile, explicitOutline) {
         anchored += anchoredLen
         anchoredCount++
       }
-      // 挖掉锚句后的剩余子段仍是细纲子串，只需按阈值重判
+      // 기준 문장 제거 후 남은 부분도 개요 부분 문자열이므로 기준 길이만 다시 판정한다.
       for (const seg of rest) {
         if (seg.length >= MIN_RUN) {
           hits.push({ frag: seg, len: seg.length })
@@ -273,7 +255,7 @@ function checkOne(proseFile, explicitOutline) {
     } else i++
   }
   if (!hits.length) {
-    // 全部命中都是锚句豁免：静默放行，但把豁免量报出来供人工复核滥用
+    // 전부 기준 문장 면제이면 조용히 통과시키되 남용 검토를 위해 면제량은 보고한다.
     if (anchoredCount) {
       process.stdout.write(
         `细纲照搬检测（${path.basename(proseFile)}）：无未授权誊抄；` +
@@ -284,8 +266,8 @@ function checkOne(proseFile, explicitOutline) {
   }
 
   const rate = ((copied * 100) / P.length).toFixed(1)
-  // 短篇没有细纲：锚句登记在 小节大纲.md 末尾，措辞按短篇说，长篇原文不变
-  const isShort = path.basename(outlineFile) === '小节大纲.md'
+  // 단편은 상세 개요가 없어 구간개요.md 끝에 기준 문장을 등록한다. 안내는 단편에 맞추고 장편 원문은 유지한다.
+  const isShort = path.basename(outlineFile) === '구간개요.md'
   const guidance = isShort
     ? `逐条对照原文判断：确属把小节大纲叙述搬进正文就重写——大纲只锁功能与结果，句子在正文现场写；誓词、关键原话、固定专名等功能性重合可保留。每条都要有结论，不为归零机械改写。保留项由主会话登记进小节大纲.md 末尾「复沓锚句：」行下（每行一条原话，缩进写）再复检——子代理只重写正文或标 \`[需复核]\` 交回，不改小节大纲。`
     : `逐条对照原文判断：确属把细纲叙述搬进正文就重写——细纲只锁功能与结果，句子在正文现场写；系统面板、誓词、案卷原话、固定专名等功能性重合可保留。每条都要有结论，不为归零机械改写。保留项由主会话补进细纲「复沓锚句」——子代理只重写正文或标 \`[需复核]\` 交回，不改大纲细纲。`

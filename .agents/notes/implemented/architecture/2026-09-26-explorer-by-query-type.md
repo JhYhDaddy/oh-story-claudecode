@@ -1,32 +1,32 @@
-# Agent Note: story-explorer 按查询类型分时刻加载；agent 模板去掉持久记忆
+# Agent Note: story-explorer를 조회 유형별로 로드하고 에이전트 템플릿의 영구 메모리 제거
 
 Status: implemented
 Date: 2026-09-26
-Related: [35K 加载上限](2026-09-26-per-call-load-ceiling-35k.md)、[拆文按阶段时刻加载](2026-09-26-analyze-stages-by-moment.md)
+Related: [35K 로드 상한](2026-09-26-per-call-load-ceiling-35k.md), [작품 분석의 단계별 시점 로드](2026-09-26-analyze-stages-by-moment.md)
 
 ## Problem
 
-- **story-explorer 每次调用都整读 10.7K**：模板里约一半是 `benchmark_style_load`（写前召回对标文风）的 13 步流程与输出示例，只有写章前召回对标时才用；作者平时问「江晨现在什么状态」「F003 回收了没」、日更查旧信息、审稿查设定，都要连带读这一半。
-- **`context_load` 没有调用方**：`rg -n context_load skills scripts` 除 explorer 模板与它生成的 OpenCode / Codex 适配层外无命中。日更早已改为主会话读续写状态卡、组装脚本组写作包，文档里只剩流程、表格行和输出示例，描述里还写着「日更 Step 1 上下文加载」。
-- **四个 agent 带 `memory: project`**：character-designer、narrative-writer、story-researcher、story-architect 的 frontmatter 开着 Claude Code 的持久 agent 记忆（落在项目 `.claude/agent-memory/`）。一个工作区常有多本书，上一本书、上一次任务的记忆会进这次调用，违背「时刻之间只靠落盘文件交接」；memory 还会隐性开启 Write/Edit，story-researcher 明确 `disallowedTools: [Edit]` 却因此拿到 Edit。加它的 #7、#27、#35 没有记录理由；#52 已因同一矛盾从两个只读 agent 去掉，其余四个没跟进。
+- **story-explorer는 매 호출 10.7K 전체를 읽음**: 템플릿의 약 절반이 `benchmark_style_load`(집필 전 비교 작품 문체 조회)의 13단계 절차와 출력 예시다. 장 집필 전 비교 조회에만 필요하지만 작가가 “장천의 현재 상태”, “F003 회수 여부”를 묻거나 일일 집필에서 과거 정보를 찾고 원고 검토에서 설정을 찾을 때도 함께 읽는다.
+- **`context_load`에 호출자가 없음**: `rg -n context_load skills scripts`는 explorer 템플릿과 생성된 OpenCode / Codex 어댑터 외에 결과가 없다. 일일 집필은 이미 주 세션이 이어쓰기 상태 카드를 읽고 조립 스크립트가 집필 패키지를 구성한다. 문서에만 절차·표 행·출력 예시가 남았고 설명도 “일일 집필 Step 1 컨텍스트 로드”라고 적혀 있다.
+- **에이전트 네 개에 `memory: project`가 있음**: character-designer, narrative-writer, story-researcher, story-architect의 frontmatter가 Claude Code 영구 에이전트 메모리(프로젝트 `.claude/agent-memory/`)를 켠다. 작업 공간에 책이 여러 권이면 이전 책·작업의 기억이 이번 호출에 들어가 “시점 간 파일로만 인계” 원칙에 어긋난다. memory는 Write/Edit도 암묵적으로 활성화하여 `disallowedTools: [Edit]`인 story-researcher까지 Edit를 받는다. 이를 추가한 #7, #27, #35에는 이유가 없고 #52에서는 같은 모순으로 읽기 전용 에이전트 두 개에서 제거했지만 나머지 네 개는 남았다.
 
 ## Decision
 
-- **对标召回流程迁到按需参考**：原流程（步骤 1–13）、缺失即停规则与 `benchmark_style_load` 输出结构原文迁入 `skills/story-setup/references/agent-references/benchmark-style-load.md`（story-setup 自有文件，不属共享副本，无需登记 `shared-references.json`）。模板新增与其他 agent 一致的「参考文件路径规则」段，`benchmark_style_load` 小节只留一行「先 Read `story-setup/references/agent-references/benchmark-style-load.md`」。步骤 5 里重复的冲突说明两句合一。
-- **删除 `context_load`**：表格行、流程、固定读取量说明、输出示例一并删除；description 改为实际调用点（写前对标召回、日更查旧信息、审稿查设定、路由提问）。
-- **预算按查询类型分支**：`doc-budget.json` 的 story-explorer 路径改名「查资料」，分「普通查询」5,400（实测 5,349）与「写前对标召回」10,400（实测 10,326）两条分支锁住。
-- **去掉四个模板的 `memory: project`**：七个 agent 都不再带持久记忆。
-- **守卫跟着内容走**：`check-current-skill-contracts.py` 的主产物缺失即停、自对标忽略、书目录探针、profile_missing 区分四项断言改查新参考文件，「文风.md 不作书目录探针」的禁止规则把新文件加入扫描范围，`test-current-skill-contracts.py` 的变异用例改用新路径；`check-story-setup-deployment.sh` 的四条对标断言改查新文件，另加三条：模板必须指向新文件、模板不得再出现 `missing_primary_contract` 或 `context_load`、任何 agent 模板不得有 `memory:` 行。
-- **适配层**：OpenCode 与 Codex 的 story-explorer 重新生成；Antigravity 在部署时由 `generate-antigravity-agents.mjs` 生成并改写参考路径，仓库内无产物。`memory` 本来就不进 OpenCode / Codex 产物，这四个 agent 的适配层不变。
+- **비교 조회 절차를 조건부 참조로 이동**: 단계 1–13, 누락 시 중단 규칙과 `benchmark_style_load` 출력 구조 원문을 `skills/story-setup/references/agent-references/benchmark-style-load.md`로 옮긴다. story-setup 자체 파일이며 공유 복사본이 아니므로 `shared-references.json` 등록은 필요 없다. 템플릿에는 다른 에이전트와 같은 “참조 파일 경로 규칙” 문단을 추가한다. `benchmark_style_load` 절에는 “먼저 Read `story-setup/references/agent-references/benchmark-style-load.md`” 한 줄만 남긴다. 단계 5의 중복 충돌 설명 두 문장은 하나로 합친다.
+- **`context_load` 삭제**: 표 행, 절차, 고정 읽기량 설명과 출력 예시를 함께 삭제한다. description은 실제 호출 지점(집필 전 비교 조회, 일일 집필 과거 정보 조회, 원고 검토 설정 조회, 질문 라우팅)으로 바꾼다.
+- **조회 유형별 예산 분기**: `doc-budget.json`의 story-explorer 경로 이름을 “자료 조회”로 바꾸고 “일반 조회” 5,400(실측 5,349), “집필 전 비교 조회” 10,400(실측 10,326)의 두 분기로 고정한다.
+- **템플릿 네 개의 `memory: project` 제거**: 일곱 에이전트 모두 영구 메모리를 사용하지 않는다.
+- **검사를 내용 위치에 맞춤**: `check-current-skill-contracts.py`의 주 산출물 누락 시 중단, 자기 작품 비교 제외, 책 디렉터리 탐지, profile_missing 구분의 네 단언은 새 참조 파일을 검사한다. “문체.md를 책 디렉터리 탐지에 사용하지 않음” 금지 규칙에도 새 파일을 포함하고 `test-current-skill-contracts.py` 변이 사례는 새 경로를 사용한다. `check-story-setup-deployment.sh`의 비교 관련 단언 네 개도 새 파일로 바꾸고 세 규칙을 추가한다. 템플릿은 새 파일을 가리켜야 하고 `missing_primary_contract` 또는 `context_load`가 없어야 하며 모든 에이전트 템플릿에 `memory:` 행이 없어야 한다.
+- **어댑터**: OpenCode와 Codex의 story-explorer를 다시 생성한다. Antigravity는 배포 때 `generate-antigravity-agents.mjs`가 참조 경로를 바꿔 생성하므로 저장소에 산출물이 없다. `memory`는 원래 OpenCode / Codex 산출물에 들어가지 않아 나머지 네 에이전트 어댑터는 바뀌지 않는다.
 
 ## Alternatives considered
 
-- **保留单文件、只删字压缩**：最强理由是 explorer 本来是便宜模型（haiku），少一次 Read 更稳，且不引入「忘读参考」的风险。不采用：对标召回的步骤是一串 fail-closed 契约（缺主产物即停、书目录与文风分开判、自对标排除），删字就是删契约；按查询类型分开后普通查询直接少一半，召回时多一次 Read，与写手、架构师读参考的方式一致。
-- **把对标召回整个交还主会话、explorer 不再做**：最强理由是 benchmark-recall.md 已有主会话手工路径（a）–（g），两处描述同一件事。不采用：快捷路径让召回的大量中间读取（章节摘要、深度拆解、文风全文）留在子代理上下文，主会话只收结构化 JSON，这正是 explorer 存在的价值；本次只改加载时机，不改分工。
-- **保留 `context_load` 以备将来**：最强理由是删掉后若又需要一次性写作包，要重写流程。不采用：写作包现由组装脚本确定性产出，文档里的旧流程与现行口径（续写状态卡、事务 draft）已开始漂移，留着只会让模型在没人调用的分支上花 1K 字。
-- **四个 agent 的 memory 改为 `local` 或按书分目录**：最强理由是跨会话积累的写作偏好可能有用。不采用：记忆目录按项目根而不是按书分，`local` 只是换了位置；作者偏好已有按书落盘的作者记忆与 `设定/文风.md`，经提交校验，比 agent 自己写的记忆可审查。
+- **단일 파일을 유지하고 글자 수만 축소**: explorer는 원래 저렴한 모델(haiku)이므로 Read 하나를 줄이는 편이 안정적이며 참조 읽기를 잊을 위험도 없다. 그러나 비교 조회 절차는 주 산출물 누락 시 중단, 책 디렉터리·문체 별도 판단, 자기 작품 제외 같은 실패 시 차단 계약이다. 글자를 지우면 계약을 지우게 된다. 유형별 분리는 일반 조회를 곧바로 절반 줄이고 비교 조회에 Read 하나를 추가하며 집필자·설계자의 참조 읽기 방식과도 같다.
+- **비교 조회를 주 세션에 전부 반환**: benchmark-recall.md에 주 세션 수동 경로 (a)–(g)가 있어 같은 일을 두 번 설명하지 않아도 된다. 그러나 빠른 경로는 장 요약·심층 분석·문체 전문의 많은 중간 읽기를 하위 에이전트 컨텍스트에 두고 주 세션에는 구조화 JSON만 반환한다. 이것이 explorer의 가치이므로 이번에는 로드 시점만 바꾸고 분업은 유지한다.
+- **미래를 위해 `context_load` 유지**: 전체 집필 패키지가 다시 필요하면 절차를 다시 쓰지 않아도 된다. 그러나 지금은 조립 스크립트가 결정적으로 패키지를 만들고 예전 문서 절차는 이어쓰기 상태 카드·트랜잭션 draft와 어긋나기 시작했다. 호출되지 않는 분기에 1K자를 쓰게 할 뿐이다.
+- **네 에이전트의 memory를 `local` 또는 책별 디렉터리로 변경**: 세션 간 축적한 집필 선호가 유용할 수 있다. 그러나 메모리 디렉터리는 책이 아니라 프로젝트 루트 기준이며 `local`은 위치만 바꾼다. 작가 선호에는 이미 책별 파일에 저장하고 제출 검증하는 작가 메모리와 `设定/文风.md`가 있어 에이전트가 임의로 쓰는 메모리보다 검토하기 쉽다.
 
 ## Consequences
 
-- **收益**：explorer 普通查询 10,694 → 5,349 字（约 −50%），对标召回 10,694 → 10,326 字；删掉一个没人走的分支。四个创作 agent 每次调用只看落盘文件，多书工作区不再串书；researcher 的权限回到声明的 `[Read, Glob, Grep, Bash, Write]`。
-- **代价**：对标召回多一次 Read；旧部署的项目要重新运行 `/story-setup` 才会拿到新模板与新参考文件（旧模板自带完整流程，未重跑也能照常工作）。已部署项目里既有的 `.claude/agent-memory/` 目录不会被删，重跑后不再被读写，作者可自行清理。未跑真实模型实验：这次只搬运文本与删除无调用方分支，召回契约字句未改。
+- **이점**: explorer 일반 조회는 10,694 → 5,349자(약 −50%), 비교 조회는 10,694 → 10,326자가 된다. 호출자 없는 분기를 삭제한다. 창작 에이전트 네 개는 매 호출 저장 파일만 읽으므로 여러 책의 정보가 섞이지 않는다. researcher 권한은 선언된 `[Read, Glob, Grep, Bash, Write]`로 돌아간다.
+- **비용**: 비교 조회에 Read 하나가 추가된다. 기존 배포 프로젝트는 `/story-setup`을 다시 실행해야 새 템플릿·참조를 받는다. 이전 템플릿은 전체 절차를 포함하므로 재실행하지 않아도 계속 동작한다. 기존 `.claude/agent-memory/` 디렉터리는 삭제하지 않으며 재배포 후 읽고 쓰지 않으므로 작가가 직접 정리할 수 있다. 실제 모델 실험은 실행하지 않았다. 이번에는 텍스트 이동과 호출자 없는 분기 삭제만 하며 비교 조회 계약 문구는 바꾸지 않았다.

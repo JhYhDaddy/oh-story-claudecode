@@ -1,8 +1,8 @@
 ---
-description: 小说封面生成。根据书名、作者名和题材生成专业网文封面。
+description: 소설 표지 생성. 제목·작가명·장르를 바탕으로 전문적인 웹소설 표지를 만든다.
 skills: story-cover
 ---
 
-调用 `$story-cover` 生成或迭代小说封面。
+`$story-cover`를 호출하여 소설 표지를 생성하거나 개선한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

@@ -1,35 +1,26 @@
 #!/usr/bin/env node
 /**
- * 起点中文网 排行榜采集脚本
- *
- * 配合 browser-cdp skill 使用。先启动 Chrome CDP 环境，再运行本脚本。
- * 采集策略：
- *   1. 默认优先读取 m.qidian.com 的 SSR pageContext JSON（不依赖 CDP，规避 PC 站风控页）。
- *   2. 移动端不可用时再回退到 Chrome CDP 采集 PC 页面。
- * 输出的榜单 Markdown 格式见 aggregate-rank.js 文件头，聚合按它解析。
- *
- * 用法：
- *   node qidian-rank-scraper.js --type hotsales               # 畅销榜
- *   node qidian-rank-scraper.js --type yuepiao                 # 月票榜
- *   node qidian-rank-scraper.js --type signnewbook             # 签约作者新书榜
- *   node qidian-rank-scraper.js --type pubnewbook              # 公众作者新书榜
- *   node qidian-rank-scraper.js --type newauthor               # 新人作者新书榜
- *   node qidian-rank-scraper.js --type newsign                 # 新人签约新书榜
- *   node qidian-rank-scraper.js --type recom                   # 原创推荐榜
- *   node qidian-rank-scraper.js --type sanjiang                 # 三江推荐（/sanjiang/，非 /rank/ 路径）
- *   node qidian-rank-scraper.js --type all                     # 全部榜单
- *   node qidian-rank-scraper.js --type hotsales --mode mobile  # 仅使用移动端 SSR
- *   node qidian-rank-scraper.js --type hotsales --mode cdp     # 仅使用备用 CDP/PC 页面
- *   node qidian-rank-scraper.js --type library [--pages 3]     # 书库人气新书（只走 CDP，不进 all）
- *
- * 书库人气新书：男生·连载·30万字以下·三日内更新、人气排序的「全部作品」筛选页，
- * 翻前 N 页（--pages 取 1-10，默认 3；只对 --type library 有效，其他榜单传了直接报错）。
- * PC 页直接 HTTPS 会被风控拦，只能用 CDP 打开；字数靠解码页面的反爬字体，
- * 总推荐/签约/收费逐本取 m.qidian.com 作品页补齐。
- *
- * 前置：
- *   默认 mobile/auto 模式不需要 Chrome（--type library 除外）。
- *   cdp 模式与 --type library 需要：node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
+ * 치디안 중국어 사이트 순위 수집기. browser-cdp와 함께 사용하며 CDP 경로에서는 Chrome을 먼저 시작한다.
+ * 기본은 CDP 없이 m.qidian.com SSR pageContext JSON을 읽어 PC 보안 차단을 피한다. 모바일이 안 되면 Chrome CDP의 PC 페이지로 대체한다.
+ * 출력 Markdown은 aggregate-rank.js 머리 주석 형식이다.
+ * 사용법:
+ *   node qidian-rank-scraper.js --type hotsales               # 베스트셀러
+ *   node qidian-rank-scraper.js --type yuepiao                # 월표
+ *   node qidian-rank-scraper.js --type signnewbook            # 계약 작가 신작
+ *   node qidian-rank-scraper.js --type pubnewbook             # 일반 작가 신작
+ *   node qidian-rank-scraper.js --type newauthor              # 신인 작가 신작
+ *   node qidian-rank-scraper.js --type newsign                # 신인 계약 신작
+ *   node qidian-rank-scraper.js --type recom                  # 창작 추천
+ *   node qidian-rank-scraper.js --type sanjiang               # 삼강 추천(/sanjiang/, /rank/ 아님)
+ *   node qidian-rank-scraper.js --type all                    # 전체
+ *   node qidian-rank-scraper.js --type hotsales --mode mobile # 모바일 SSR만
+ *   node qidian-rank-scraper.js --type hotsales --mode cdp    # 대체 CDP/PC만
+ *   node qidian-rank-scraper.js --type library [--pages 3]    # 라이브러리 인기 신작, CDP 전용·all 제외
+ * 라이브러리 인기 신작은 남성·연재·30만 자 미만·3일 내 갱신을 인기순으로 정렬한 전체 작품 필터다.
+ * 앞 N페이지를 읽는다(--pages 1–10, 기본 3; library에만 유효하며 다른 순위에 주면 오류).
+ * PC 직접 HTTPS는 보안 차단되므로 CDP로만 연다. 글자 수는 보호 글꼴 해석으로, 총 추천·계약·유료 정보는 m.qidian.com 작품 페이지로 보충한다.
+ * 사전 조건: 기본 mobile/auto에는 library 외에 Chrome이 필요 없다.
+ * cdp와 library는 다음을 먼저 실행한다: node {SKILL_DIR}/browser-cdp/scripts/setup-cdp-chrome.js 9222
  */
 
 const fs = require("fs");
@@ -40,11 +31,11 @@ const { ab, sleep, evalJSON, scrollLoad, getArg, localDateStamp, runCli } = requ
 const PC_BASE_URL = "https://www.qidian.com/rank";
 const MOBILE_BASE_URL = "https://m.qidian.com";
 
-/** 验证码自动重试最大次数 */
+/** CAPTCHA 자동 재시도 최대 횟수. */
 const MAX_CAPTCHA_RETRIES = 3;
-/** 等待用户手动解决验证码的最大秒数 */
+/** 사용자 CAPTCHA 수동 해결을 기다리는 최대 초. */
 const MAX_CAPTCHA_WAIT_SEC = 120;
-/** 轮询验证码是否解除的间隔（毫秒） */
+/** CAPTCHA 해제 확인 간격(밀리초). */
 const CAPTCHA_POLL_INTERVAL = 5000;
 
 const MOBILE_HEADERS = {
@@ -92,8 +83,8 @@ const RANK_TYPES = [
     baseUrl: "https://www.qidian.com/sanjiang/",
     mobilePath: "/sanjiang/",
   },
-  // 伪榜单：全部作品筛选页翻页。只走 CDP、不进 --type all（all 默认不需要 Chrome）。
-  // 列表名带「新书」，聚合时进「新书榜」列。
+  // 가상 순위: 전체 작품 필터의 페이지 넘김. CDP 전용이며 Chrome이 필요 없는 기본 --type all에는 넣지 않는다.
+  // 목록명에 ‘新书’를 넣어 집계 시 신작 순위 열로 보낸다.
   {
     id: "library",
     label: "男频书库人气新书",
@@ -103,16 +94,15 @@ const RANK_TYPES = [
 ];
 
 // ---------------------------------------------------------------------------
-// 页面提取
+// 페이지 추출
 // ---------------------------------------------------------------------------
 
 /**
- * 提取起点 SSR 榜单页面的书籍列表。
- * 起点页面结构：.book-img-text ul > li，每个 li 内：
- *   h2 > a          → 书名+链接
- *   p.author         → 作者 | 题材 · 子题材 | 状态
- *   p.intro          → 简介
- *   p.update > a+span → 最新更新章节+日期
+ * 치디안 SSR 순위의 작품 목록을 추출한다. .book-img-text ul > li 안의 구조:
+ *   h2 > a           → 제목+링크
+ *   p.author         → 작가 | 장르·하위 장르 | 상태
+ *   p.intro          → 소개
+ *   p.update > a+span → 최신 장+날짜
  */
 function extractBookList(port) {
   const js =
@@ -128,7 +118,7 @@ function extractBookList(port) {
     "}" +
     "var lis=document.querySelectorAll('.book-img-text ul li');" +
     "if(!lis.length){" +
-    // 兜底：用 H2 链接定位
+    // 대안: H2 링크로 찾는다.
     "  var h2s=document.querySelectorAll('h2 a[href*=\"/book/\"]');" +
     "  h2s.forEach(function(a,idx){" +
     "    var c=a.parentElement;" +
@@ -147,23 +137,23 @@ function extractBookList(port) {
     "  var title=titleEl.textContent.trim();" +
     "  var href=titleEl.getAttribute('href')||titleEl.href||'';" +
     "  var url=href?(href.indexOf('http')===0?href:'https:'+href):'';" +
-    // 作者：p.author > a.name
+    // 작가: p.author > a.name
     "  var authorEl=li.querySelector('p.author a.name');" +
     "  var author=authorEl?authorEl.textContent.trim():'';" +
-    // 题材：p.author > a (非 .name 非 .go-sub-type)
+    // 장르: p.author > a(.name과 .go-sub-type 제외).
     "  var genreEls=li.querySelectorAll('p.author a');" +
     "  var genre='';var subGenre='';" +
     "  genreEls.forEach(function(a){" +
     "    if(a.classList.contains('name'))return;" +
     "    if(!genre){genre=a.textContent.trim()}else if(!subGenre){subGenre=a.textContent.trim()}" +
     "  });" +
-    // 状态：p.author > span:last-child
+    // 상태: p.author > span:last-child
     "  var statusEl=li.querySelector('p.author span');" +
     "  var status=statusEl?statusEl.textContent.trim():'';" +
-    // 简介：p.intro
+    // 소개: p.intro
     "  var introEl=li.querySelector('p.intro');" +
     "  var descText=introEl?introEl.textContent.trim():'';" +
-    // 更新：p.update
+    // 갱신: p.update
     "  var updateEl=li.querySelector('p.update');" +
     "  var updateText=updateEl?updateEl.textContent.replace(/\\s+/g,' ').trim():'';" +
     "  var metric=metrics(li.innerText||'');" +
@@ -176,7 +166,7 @@ function extractBookList(port) {
   return evalJSON(port, js) || [];
 }
 
-/** 从详情页提取标签和简介 */
+/** 상세 페이지에서 태그·소개를 추출한다. */
 function extractDetail(port) {
   const js =
     "JSON.stringify((()=>{" +
@@ -197,15 +187,15 @@ function extractDetail(port) {
 }
 
 /**
- * 检测当前页面是否被验证码/安全验证拦截。
- * 起点常见拦截页面特征：页面中出现验证码关键词，或页面缺少榜单 DOM 元素。
- * @returns {{ blocked: boolean, reason: string } | null} 若被拦截返回原因对象，否则 null
+ * 현재 페이지의 CAPTCHA·보안 검증 차단 여부를 확인한다.
+ * 일반적인 특징은 CAPTCHA 키워드가 있거나 순위 DOM 요소가 없는 것이다.
+ * @returns {{ blocked: boolean, reason: string } | null} 차단 시 사유 객체, 아니면 null
  */
 function captchaCheckJS() {
   return (
     "JSON.stringify((()=>{" +
-    // 页面上已有成片的作品链接就是正常列表页：书库页前 3000 字里有整段简介和章节名，
-    // 书里写到「验证」「拖动」之类的字不能当成被拦（会白等重试和 120 秒人工验证）。
+    // 작품 링크가 무더기로 있으면 정상 목록이다. 라이브러리 첫 3000자에는 소개 전문과 장 제목이 있어
+    // 작품 속 ‘验证’, ‘拖动’ 같은 단어를 차단으로 보면 불필요한 재시도·120초 수동 검증 대기가 발생한다.
     "if(document.querySelectorAll('a[href*=\"/book/\"]').length>=5)return {blocked:false,reason:''};" +
     "var bodyText=document.body?(document.body.innerText||'').substring(0,3000):'';" +
     "var lower=bodyText.toLowerCase();" +
@@ -216,8 +206,8 @@ function captchaCheckJS() {
     "    return {blocked:true,reason:keywords[i]};" +
     "  }" +
     "}" +
-    // li[data-rid]：书库「全部作品」筛选页的条目。该页目前也套在 .book-img-text 里，
-    // 显式列出是防它改版后被误判成被拦（白等 3 次重试 + 120 秒手动验证）
+    // li[data-rid]는 전체 작품 필터 항목이다. 현재 .book-img-text 안에 있지만
+    // 개편 후 차단으로 오판해 3회 재시도와 120초 수동 대기를 낭비하지 않도록 명시한다.
     "var hasContent=document.querySelector('.book-img-text ul li,.rank-body,.rank-list,.book-img-text,li[data-rid]');" +
     "if(!hasContent){" +
     "  return {blocked:true,reason:'页面无榜单内容(可能被拦截)'};" +
@@ -233,18 +223,16 @@ function isCaptchaPage(port) {
 }
 
 /**
- * 打开 URL 并等待页面加载，自动处理验证码拦截。
- * 重试策略：
- *   1. 正常加载页面
- *   2. 检测到验证码 → 等待递增延时后刷新重试（最多 MAX_CAPTCHA_RETRIES 次）
- *   3. 仍被拦截 → 提示用户在 Chrome CDP 窗口手动完成验证，轮询等待直到解除或超时
- *
- * @returns {boolean} true=页面已就绪，false=无法通过验证码
+ * URL을 열고 로딩을 기다리며 CAPTCHA 차단에 대응한다.
+ * 1. 페이지를 정상 로드한다.
+ * 2. CAPTCHA가 감지되면 점증 대기 후 새로고침한다(최대 MAX_CAPTCHA_RETRIES회).
+ * 3. 계속 차단되면 Chrome CDP 창에서 사용자가 수동 검증하도록 안내하고 해제·시간 초과까지 확인한다.
+ * @returns {boolean} true=준비 완료, false=CAPTCHA 통과 불가
  */
 function openWithCaptchaHandling(port, url) {
   for (let attempt = 1; attempt <= MAX_CAPTCHA_RETRIES; attempt++) {
     ab(port, "open", url);
-    // 首次 3 秒，后续每次多等 2 秒
+    // 처음 3초, 이후 매번 2초씩 더 기다린다.
     sleep(3000 + (attempt - 1) * 2000);
 
     const captcha = isCaptchaPage(port);
@@ -252,18 +240,18 @@ function openWithCaptchaHandling(port, url) {
       return true;
     }
     console.log(`  ⚠ 检测到安全拦截 (${captcha.reason})，第 ${attempt}/${MAX_CAPTCHA_RETRIES} 次重试...`);
-    // 递增等待后再次尝试
+    // 늘어난 시간만큼 기다린 후 재시도한다.
     sleep(attempt * 5000);
   }
 
-  // 自动重试全部失败 → 等待用户手动处理
+  // 자동 재시도가 모두 실패하면 사용자 수동 처리를 기다린다.
   console.log(`  ⚠ 自动重试未通过验证码，请在 Chrome CDP 窗口手动完成验证`);
   console.log(`  ⏳ 等待手动验证（最长 ${MAX_CAPTCHA_WAIT_SEC} 秒）...`);
 
   const startTime = Date.now();
   while (Date.now() - startTime < MAX_CAPTCHA_WAIT_SEC * 1000) {
     sleep(CAPTCHA_POLL_INTERVAL);
-    // 刷新页面检查验证码是否已解除
+    // 새로고침해 CAPTCHA 해제 여부를 확인한다.
     ab(port, "open", url);
     sleep(3000);
     const captcha = isCaptchaPage(port);
@@ -279,7 +267,7 @@ function openWithCaptchaHandling(port, url) {
 }
 
 // ---------------------------------------------------------------------------
-// 移动端 SSR 提取（默认路径）
+// 모바일 SSR 추출(기본 경로).
 // ---------------------------------------------------------------------------
 
 function mobileUrl(pathname) {
@@ -370,7 +358,7 @@ function normalizeMobileBook(record, idx) {
   };
 }
 
-/** 清洗简介：折叠空白，超过 100 字时优先在句末截断。 */
+/** 소개 공백을 압축하고 100자 초과 시 문장 끝에서 자르는 것을 우선한다. */
 function cleanDesc(raw) {
   const desc = String(raw || "").replace(/\s+/g, " ").trim();
   if (desc.length <= 100) return desc;
@@ -379,10 +367,10 @@ function cleanDesc(raw) {
   return (sentence ? sentence[0] : cut) + "...";
 }
 
-/** 排行榜条目里题材或字数缺失超过这个比例，「数据质量」标为有问题（多半是页面改版） */
+/** 순위 항목의 장르·글자 수 누락 비율이 이 값을 넘으면 数据质量를 문제 있음으로 표시한다(대개 페이지 개편). */
 const RANK_FIELD_MISSING_RATIO = 0.5;
 
-/** 排行榜的「数据质量」「问题摘要」两行；书库新书自己算好后经 extraLines 传入，不走这里。 */
+/** 순위의 ‘数据质量’, ‘问题摘要’ 두 행. 라이브러리 신작은 별도 계산 후 extraLines로 전달한다. */
 function rankQualityLines(books) {
   const problems = [];
   for (const [field, label] of [["genre", "题材"], ["words", "字数"]]) {
@@ -421,8 +409,8 @@ function renderMarkdown(rt, books, url, sourceMode, extraLines = []) {
       value === undefined || value === null || value === "" ? "[待补]" : String(value);
     lines.push(`**字数：${required(b.words)}**`);
     if (b.rankValue) lines.push(`**榜单值：${b.rankValue}**`);
-    // 书库新书的总推荐只有几千到几万，和月票、畅销榜的老书混算会把题材热度中位拉低两个数量级；
-    // 换个行名单列，聚合不把它当热度口径（书库按名次即人气排名），数字留在原始条目里供抽样看。
+    // 라이브러리 신작의 총 추천은 수천~수만이라 월표·베스트셀러의 기존 작품과 섞으면 장르 인기도 중앙값이 두 자릿수 규모로 낮아진다.
+    // 다른 행 이름으로 별도 표시해 인기도 기준으로 집계하지 않는다. 라이브러리 순서는 인기 순위이며 숫자는 원시 항목에 남겨 표본 검토에 쓴다.
     if (b.library) lines.push(`**新书总推荐：${required(b.newBookRecom)}**`);
     else lines.push(`**总推荐：${required(b.totalRecommendations)}**`);
     lines.push(`**签约：${required(b.signing)}**`);
@@ -483,18 +471,18 @@ async function scrapeRankMobile(rankTypeId) {
 }
 
 // ---------------------------------------------------------------------------
-// 书库人气新书（--type library）：全部作品筛选页翻页 + 反爬字体解码 + 移动端详情补字段
+// 라이브러리 인기 신작(--type library): 전체 작품 필터 페이지 넘김 + 보호 글꼴 해석 + 모바일 상세 필드 보충.
 // ---------------------------------------------------------------------------
 
 const LIBRARY_DEFAULT_PAGES = 3;
 const LIBRARY_MAX_PAGES = 10;
-/** 页面上必须真处于选中状态的筛选项；对不上就不能把这页写成「人气新书」 */
+/** 실제 페이지에서 선택되어 있어야 할 필터. 맞지 않으면 인기 신작 페이지로 저장하지 않는다. */
 const LIBRARY_SITE = "男生";
 const LIBRARY_FILTERS = ["连载", "30万字以下", "三日内"];
 const LIBRARY_SORT = "人气排序";
-/** 逐本取移动端详情的间隔（毫秒） */
+/** 작품별 모바일 상세 요청 간격(밀리초). */
 const LIBRARY_DETAIL_GAP_MS = 400;
-/** 详情失败超过这个比例，问题摘要里要写明 */
+/** 상세 실패 비율이 이 값을 넘으면 문제 요약에 명시한다. */
 const LIBRARY_DETAIL_FAIL_RATIO = 0.5;
 
 const FONT_HOST = "qdfepccdn.qidian.com";
@@ -509,7 +497,7 @@ const FONT_HEADERS = {
   Referer: "https://www.qidian.com/",
 };
 
-/** 字形名 → 字符：只认 zero..nine 与 period，其余字形一律算解不出 */
+/** 글리프 이름 → 문자. zero..nine과 period만 인식하며 나머지는 해석 불가다. */
 const GLYPH_CHARS = {
   zero: "0",
   one: "1",
@@ -523,7 +511,7 @@ const GLYPH_CHARS = {
   nine: "9",
   period: ".",
 };
-/** post 2.0 里下标 < 258 的是 Mac 标准字形序；只列出用得到的几个 */
+/** post 2.0에서 인덱스 < 258은 Mac 표준 글리프 순서다. 필요한 것만 나열한다. */
 const MAC_STANDARD_GLYPHS = {
   17: "period",
   19: "zero",
@@ -537,12 +525,12 @@ const MAC_STANDARD_GLYPHS = {
   27: "eight",
   28: "nine",
 };
-/** 单张 cmap 最多展开的码点数，防畸形字体把区间写成整个 Unicode */
+/** 잘못된 글꼴이 Unicode 전체를 범위로 주지 못하도록 cmap당 펼칠 코드 포인트 수를 제한한다. */
 const CMAP_MAX_ENTRIES = 70000;
 
 /**
- * 反爬字数用的码点（西夏文区与私用区）。输出里绝不能出现这些字符：
- * 解不出来就写 [待补]，而不是把乱码写进报告。
+ * 보호된 글자 수의 코드 포인트(탕구트 문자·사용자 정의 영역). 출력에 이 문자를 남기지 않는다.
+ * 해석하지 못하면 깨진 문자를 보고서에 쓰지 않고 [待补]로 표시한다.
  */
 const CIPHER_CHARS_RE = /[\uE000-\uF8FF\u{17000}-\u{18D8F}\u{F0000}-\u{10FFFF}]/gu;
 
@@ -558,7 +546,7 @@ function libraryPageUrl(page) {
   return page === 1 ? base : base.replace(/\/$/, `-page${page}/`);
 }
 
-/** --pages 校验：只接受 1..LIBRARY_MAX_PAGES 的整数；未传时用默认值 */
+/** --pages 검증: 1..LIBRARY_MAX_PAGES 정수만 허용하고 미지정이면 기본값이다. */
 function parseLibraryPages(raw, given) {
   if (!given) return LIBRARY_DEFAULT_PAGES;
   const text = raw === null || raw === undefined ? "" : String(raw).trim();
@@ -569,10 +557,7 @@ function parseLibraryPages(raw, given) {
   return n;
 }
 
-/**
- * 书库相关参数的快速失败（在打开浏览器、联网之前）。
- * 返回书库要翻的页数；非书库榜单返回 null。
- */
+/** 브라우저 실행·네트워크 전에 라이브러리 인자를 빠르게 검증한다. 넘길 페이지 수를 반환하며 다른 순위는 null이다. */
 function validateLibraryArgs(rankType, mode, pagesRaw, pagesGiven) {
   const rt = RANK_TYPES.find((r) => r.id === rankType);
   if (!rt || !rt.library) {
@@ -587,7 +572,7 @@ function validateLibraryArgs(rankType, mode, pagesRaw, pagesGiven) {
   return parseLibraryPages(pagesRaw, pagesGiven);
 }
 
-// ---- 反爬字体（qd_anti_spider）：纯 Node 解析 TrueType 的 cmap + post ----
+// ---- 보호 글꼴(qd_anti_spider): 순수 Node로 TrueType cmap + post 파싱 ----
 
 function readCmapTable(cmap) {
   const numTables = cmap.readUInt16BE(2);
@@ -659,8 +644,8 @@ function readPostGlyphNames(post) {
 }
 
 /**
- * 解析反爬字体，返回 Map<码点, "0".."9"|".">。
- * 结构不对（magic、表越界、缺 cmap/post、post 不是 2.0）一律抛错；调用方据此写 [待补]。
+ * 보호 글꼴을 파싱해 Map<코드포인트, "0".."9"|".">를 반환한다.
+ * magic·표 범위·cmap/post 누락·post 2.0 불일치 등 구조 오류는 모두 예외로 처리해 호출자가 [待补]를 쓰게 한다.
  */
 function parseAntiSpiderFont(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 12) throw new Error("字体文件太短");
@@ -677,7 +662,7 @@ function parseAntiSpiderFont(buf) {
     const offset = buf.readUInt32BE(rec + 8);
     const length = buf.readUInt32BE(rec + 12);
     if (offset + length > buf.length) throw new Error(`字体表 ${tag.trim()} 越界`);
-    // subarray 视图：表内读取越出本表长度时 Buffer 自己抛 RangeError
+    // subarray 뷰는 표 길이를 벗어나 읽으면 Buffer 자체가 RangeError를 던진다.
     tables[tag] = buf.subarray(offset, offset + length);
   }
   if (!tables.cmap || !tables.post) throw new Error("字体缺 cmap 或 post 表");
@@ -694,8 +679,8 @@ function parseAntiSpiderFont(buf) {
 }
 
 /**
- * 用字体映射把密文码点解成字数，如 [0x187B9, ...] + "万字" → "26.14万字"。
- * 任一码点不在映射里、解出来不是数字、或单位不明，都返回 ""（由调用方写 [待补]）。
+ * 글꼴 매핑으로 암호화 코드 포인트를 글자 수로 바꾼다. 예: [0x187B9, ...] + 万字 → 26.14万字.
+ * 하나라도 매핑이 없거나 결과가 숫자가 아니거나 단위가 불명확하면 빈 문자열을 반환하고 호출자가 [待补]를 쓴다.
  */
 function decodeLibraryWords(codes, unit, fontMap) {
   if (!(fontMap instanceof Map) || !Array.isArray(codes) || !codes.length) return "";
@@ -719,7 +704,7 @@ function fontUrlAllowed(url) {
   }
 }
 
-/** 只从 qdfepccdn.qidian.com 下字体：15 秒超时、不跟跳转、限大小 */
+/** qdfepccdn.qidian.com에서만 글꼴을 받는다. 제한 15초, 리디렉션 없음, 크기 제한. */
 function fetchFontBuffer(url) {
   return new Promise((resolve, reject) => {
     if (!fontUrlAllowed(url)) {
@@ -752,7 +737,7 @@ function fetchFontBuffer(url) {
   });
 }
 
-/** 同一字体名本次运行内只下载、解析一次（失败也缓存，避免反复请求） */
+/** 같은 글꼴은 실행당 한 번만 다운로드·파싱한다. 실패도 캐시해 반복 요청을 피한다. */
 const libraryFontCache = new Map();
 
 function loadLibraryFont(name, url) {
@@ -770,13 +755,12 @@ function loadLibraryFont(name, url) {
   return libraryFontCache.get(name);
 }
 
-// ---- 列表页：浏览器端提取 + Node 端校验、规整 ----
+// ---- 목록 페이지: 브라우저 추출 + Node 검증·정리 ----
 
 /**
- * 在书库列表页里执行的提取函数，经 toString() 拼进 eval 载荷：
- * 必须自包含（不引用模块作用域）、不含反引号。
- * 字数只从本条 p.update 里带类名的密文 span 取码点；最新章节取链接的 title，
- * 不读 p.update 的整段文字（里面混着 @font-face 和密文）。
+ * 라이브러리 페이지 추출 함수를 toString()으로 eval에 넣는다. 모듈 범위를 참조하거나 백틱을 포함하면 안 된다.
+ * 글자 수는 해당 p.update의 클래스 있는 암호화 span에서만 코드 포인트를 얻고 최신 장은 링크 title에서 얻는다.
+ * @font-face와 암호문이 섞인 p.update 전체 텍스트는 읽지 않는다.
  */
 function qdLibraryPageSnapshot(qdLibraryPage) {
   function txt(el) {
@@ -857,14 +841,14 @@ function qdLibraryPageSnapshot(qdLibraryPage) {
   };
 }
 
-/** 构造书库第 page 页的 eval 载荷 */
+/** 라이브러리 page 페이지용 eval 내용을 만든다. */
 function buildLibraryPageJS(page) {
   return `JSON.stringify((${qdLibraryPageSnapshot.toString()})(${Number(page)}))`;
 }
 
 /**
- * 核对页面实际选中的筛选、排序与页码（只认可见的那套筛选面板）。
- * 返回不符项列表；空数组表示这页确实是「男生·连载·30万字以下·三日内·人气排序·第 page 页」。
+ * 실제 선택된 필터·정렬·페이지 번호를 대조한다. 보이는 필터 패널만 인정한다.
+ * 불일치 목록을 반환하며 빈 배열은 남성·연재·30만 자 미만·3일 내·인기순·page 페이지가 맞다는 뜻이다.
  */
 function checkLibraryPage(snapshot, page) {
   if (!snapshot || typeof snapshot !== "object" || !Array.isArray(snapshot.items)) {
@@ -883,7 +867,7 @@ function checkLibraryPage(snapshot, page) {
   return problems;
 }
 
-/** 浏览器端条目 → book；缺书名/作者/题材的条目返回 null（宁可不收，也不让元信息错位） */
+/** 브라우저 항목 → book. 제목·작가·장르가 없으면 잘못 맞추지 않고 수집을 포기해 null을 반환한다. */
 function normalizeLibraryItem(item) {
   if (!item || typeof item !== "object") return null;
   const bookId = /^\d+$/.test(String(item.bookId || "")) ? String(item.bookId) : "";
@@ -915,14 +899,14 @@ function normalizeLibraryItem(item) {
   };
 }
 
-/** 移动端 bookInfo 的字数（整数）→ 「26.14万字」/「8000字」 */
+/** 모바일 bookInfo의 정수 글자 수 → ‘26.14万字’/‘8000字’. */
 function formatWordsCount(count) {
   const n = Number(count);
   if (!Number.isFinite(n) || n <= 0) return "";
   return n >= 10000 ? `${(n / 10000).toFixed(2)}万字` : `${Math.round(n)}字`;
 }
 
-/** 把 m.qidian.com/book/{id}/ 的 bookInfo 补到 book 上：总推荐、签约、收费、更新时间、兜底字数 */
+/** m.qidian.com/book/{id}/의 bookInfo로 총 추천·계약·유료·갱신 시각·대체 글자 수를 book에 보충한다. */
 function applyMobileBookInfo(book, info) {
   if (!info || typeof info !== "object") return false;
   if (Number.isFinite(Number(info.recomAll)) && Number(info.recomAll) >= 0 && info.recomAll !== "") {
@@ -951,8 +935,8 @@ async function fetchMobileBookInfo(bookId) {
 }
 
 /**
- * 翻页采集书库。返回 { content, partialReasons }；一本都没采到时抛错（不写空文件）。
- * 某页失败就停在那里：保留前面各页（partial），后面的页不再翻，免得名次错位。
+ * 페이지를 넘겨 라이브러리를 수집해 { content, partialReasons }를 반환한다. 한 권도 없으면 예외이며 빈 파일은 쓰지 않는다.
+ * 페이지 실패 시 그 지점에서 멈추고 앞 페이지를 partial로 보존한다. 순위가 어긋나지 않게 뒤 페이지는 넘기지 않는다.
  */
 async function scrapeLibrary(port, pages) {
   const rt = RANK_TYPES.find((r) => r.library);
@@ -1011,7 +995,7 @@ async function scrapeLibrary(port, pages) {
     throw new Error(pageFailures[0] || "书库列表页一本都没抓到（可能被验证页拦住，或页面改版）");
   }
 
-  // 字数：先解反爬字体
+  // 글자 수는 보호 글꼴을 먼저 해석한다.
   let decoded = 0;
   const fontErrors = new Set();
   for (const book of books) {
@@ -1027,7 +1011,7 @@ async function scrapeLibrary(port, pages) {
   console.log(`  字数解码：${decoded} / ${books.length}`);
   for (const message of fontErrors) console.log(`  ⚠ 字体解码失败：${message}`);
 
-  // 总推荐/签约/收费（字数解不出时兜底）：逐本取移动端作品页
+  // 총 추천·계약·유료 정보와 글자 수 해석 실패 시 대체값은 작품별 모바일 페이지에서 얻는다.
   let detailOk = 0;
   for (let i = 0; i < books.length; i++) {
     if (i > 0) sleep(LIBRARY_DETAIL_GAP_MS);
@@ -1073,7 +1057,7 @@ async function scrapeLibrary(port, pages) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 주 처리 흐름
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -1082,7 +1066,7 @@ const OUTDIR = getArg(args, "--outdir") || ".";
 const RANKTYPE = getArg(args, "--type") || "hotsales";
 const SCRAPE_MODE = getArg(args, "--mode") || "auto"; // auto | mobile | cdp
 const FETCH_DETAIL = (getArg(args, "--detail") || "no") === "yes";
-// --pages 只对 --type library 有效；记下「传没传」，好让别的榜单传了也能报错而不是静默忽略
+// --pages는 --type library 전용이다. 지정 여부를 기억해 다른 순위에서 주면 무시하지 않고 오류를 낸다.
 const PAGES_RAW = getArg(args, "--pages");
 const PAGES_GIVEN = args.some((arg) => arg === "--pages" || String(arg).startsWith("--pages="));
 
@@ -1113,7 +1097,7 @@ function scrapeRankCDP(port, rankTypeId) {
   }
   console.log(`  ✓ 提取 ${books.length} 本`);
 
-  // 可选：逐条获取详情页补充数据
+  // 선택 사항: 항목별 상세 페이지에서 데이터를 보충한다.
   if (FETCH_DETAIL) {
     console.log("  正在获取详情页补充数据...");
     for (let i = 0; i < Math.min(books.length, 20); i++) {
@@ -1132,7 +1116,7 @@ function scrapeRankCDP(port, rankTypeId) {
       }
       console.log(`    [${i + 1}/${books.length}] ${b.title}`);
     }
-    // 返回榜单页
+    // 순위 페이지로 돌아간다.
     ab(port, "open", url);
     sleep(2000);
   }
@@ -1164,7 +1148,7 @@ async function scrapeRank(rankTypeId) {
 }
 
 async function main() {
-  // 参数错误是配置问题，不是单个榜单的瞬时失败：先于 per-榜单隔离快速失败
+  // 인자 오류는 개별 순위의 일시 실패가 아닌 설정 문제이므로 순위별 격리 전에 빠르게 실패한다.
   if (RANKTYPE !== "all" && !RANK_TYPES.some((rank) => rank.id === RANKTYPE)) {
     throw new Error(`未知 --type: ${RANKTYPE}`);
   }
@@ -1173,7 +1157,7 @@ async function main() {
   }
   const libraryPages = validateLibraryArgs(RANKTYPE, SCRAPE_MODE, PAGES_RAW, PAGES_GIVEN);
 
-  // 书库只走 CDP，不进 --type all：all 默认不需要 Chrome
+  // 라이브러리는 CDP 전용이며 Chrome이 필요 없는 기본 --type all에서 제외한다.
   const rankTypes =
     RANKTYPE === "all" ? RANK_TYPES.filter((r) => !r.library).map((r) => r.id) : [RANKTYPE];
   let written = 0;
@@ -1182,8 +1166,8 @@ async function main() {
   const partialReasons = [];
 
   for (const rt of rankTypes) {
-    // per-榜单隔离：移动端 SSR 失败后的 CDP 回退会直接抛（ab() 不吞错），
-    // 一个榜单的瞬时失败不该掐掉 --type all 后面的榜单（与番茄/刺猬猫一致）
+    // 순위별 격리: 모바일 SSR 실패 후 CDP 대체는 예외를 그대로 던진다(ab()가 삼키지 않음).
+    // 한 순위의 일시 실패가 --type all의 나머지를 끊으면 안 된다(판체·츠웨이마오와 동일).
     try {
       const rtInfo = RANK_TYPES.find((r) => r.id === rt);
       let content;

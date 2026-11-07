@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression gate for the single-state long-analysis runtime."""
+"""단일 상태 장편 분석 런타임의 회귀 검증 관문."""
 
 from __future__ import annotations
 
@@ -47,25 +47,25 @@ def rows(path: Path) -> list[dict[str, str]]:
 def test_index_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="long-index-refactor-") as temporary:
         root = Path(temporary)
-        source = root / "原文.txt"
+        source = root / "원문.txt"
         output = root / "chapter_index.csv"
         source.write_text(
             "序章 雨夜\\User\n一行\u2028仍是同一物理行\n\n"
             "第0章 起点\n零章正文\n\n第五章 节选开始\n这是第五章正文\n\n番外 回家\n这是番外正文",
             encoding="utf-8",
         )
-        first = run(INDEX, "--source", source, "--output", output, "--locator-path", "原文/原文.txt")
+        first = run(INDEX, "--source", source, "--output", output, "--locator-path", "원문/원문.txt")
         require(first.returncode == 0, first.stdout or first.stderr)
         indexed = rows(output)
         require(len(indexed) == 4, "序章、第0章、任意编号正文和番外必须各自成章")
         require(indexed[0]["start_line"] == "1" and indexed[1]["start_line"] == "4", "行号必须只按 LF")
         require(all(item.get("chapter_sha256") for item in indexed), "索引必须包含逐章 hash")
         before = output.read_bytes()
-        second = run(INDEX, "--source", source, "--output", output, "--locator-path", "原文/原文.txt")
+        second = run(INDEX, "--source", source, "--output", output, "--locator-path", "원문/원문.txt")
         require(second.returncode == 0 and output.read_bytes() == before, "同源二次索引必须幂等")
         old_hashes = [item["chapter_sha256"] for item in indexed]
         source.write_text(source.read_text(encoding="utf-8") + "\n\n后记 再见\n后记正文", encoding="utf-8")
-        refused = run(INDEX, "--source", source, "--output", output, "--locator-path", "原文/原文.txt")
+        refused = run(INDEX, "--source", source, "--output", output, "--locator-path", "원문/원문.txt")
         require(refused.returncode != 0, "原文改变时必须拒绝静默覆盖")
         rebuilt = run(
             INDEX,
@@ -74,24 +74,24 @@ def test_index_contract() -> None:
             "--output",
             output,
             "--locator-path",
-            "原文/原文.txt",
+            "원문/원문.txt",
             "--rebuild",
         )
         require(rebuilt.returncode == 0, rebuilt.stdout or rebuilt.stderr)
         require([item["chapter_sha256"] for item in rows(output)[:4]] == old_hashes, "末尾追加不能使旧章 hash 失效")
 
-        moved = root / "改名后的原文.txt"
+        moved = root / "改名后的원문.txt"
         moved.write_bytes(source.read_bytes())
-        moved_refused = run(INDEX, "--source", moved, "--output", output, "--locator-path", "原文/改名后的原文.txt")
+        moved_refused = run(INDEX, "--source", moved, "--output", output, "--locator-path", "원문/改名后的원문.txt")
         require(moved_refused.returncode != 0, "来源路径变化必须显式重建定位")
         moved_rebuilt = json.loads(run(INDEX, "--source", moved, "--output", output,
-                                       "--locator-path", "原文/改名后的原文.txt", "--rebuild").stdout)
+                                       "--locator-path", "원문/改名后的원문.txt", "--rebuild").stdout)
         require(moved_rebuilt["pending_chapters"] == [], "只移动来源路径不能把全书判为语义变化")
 
         large = root / "大数章.txt"
         large_index = root / "large.csv"
         large.write_text("第一百零一章 起\n正文。\n第一百零二章 续\n正文。\n", encoding="utf-8")
-        large_result = run(INDEX, "--source", large, "--output", large_index, "--locator-path", "原文/大数章.txt")
+        large_result = run(INDEX, "--source", large, "--output", large_index, "--locator-path", "원문/大数章.txt")
         require(large_result.returncode == 0, large_result.stdout or large_result.stderr)
         require([item["source_chapter"] for item in rows(large_index)] == ["101", "102"], "第一百零一章必须正确解析")
 
@@ -110,7 +110,7 @@ def test_index_existing_supported_forms() -> None:
             source = root / f"{name}.txt"
             output = root / f"{name}.csv"
             source.write_text(text, encoding="utf-8")
-            result = run(INDEX, "--source", source, "--output", output, "--locator-path", f"原文/{name}.txt")
+            result = run(INDEX, "--source", source, "--output", output, "--locator-path", f"원문/{name}.txt")
             require(result.returncode == 0, result.stdout or result.stderr)
             indexed[name] = rows(output)
         require(len(indexed["toc"]) == 3, "重复的前置目录必须剔除")
@@ -121,13 +121,13 @@ def test_index_existing_supported_forms() -> None:
         gb = root / "gb18030.txt"
         gb_index = root / "gb.csv"
         gb.write_bytes("第一章 起\r\n正文。\r\n第二章 合\r\n正文。".encode("gb18030"))
-        gb_result = run(INDEX, "--source", gb, "--output", gb_index, "--locator-path", "原文/gb18030.txt")
+        gb_result = run(INDEX, "--source", gb, "--output", gb_index, "--locator-path", "원문/gb18030.txt")
         require(gb_result.returncode == 0 and len(rows(gb_index)) == 2, "GB18030 原文必须继续支持")
 
         long_source = root / "long.txt"
         long_index = root / "long.csv"
         long_source.write_text("第一章 长章\n" + "甲" * 26000 + "\n第二章 短章\n乙。\n", encoding="utf-8")
-        require(run(INDEX, "--source", long_source, "--output", long_index, "--locator-path", "原文/long.txt").returncode == 0, "长章索引失败")
+        require(run(INDEX, "--source", long_source, "--output", long_index, "--locator-path", "원문/long.txt").returncode == 0, "长章索引失败")
         project = root / "long-project"
         project.mkdir()
         shutil.copy2(long_index, project / "chapter_index.csv")
@@ -136,13 +136,13 @@ def test_index_existing_supported_forms() -> None:
 
 
 def write_source_and_index(root: Path, count: int, body_chars: dict[int, int] | None = None) -> Path:
-    """Tiny chapters by default; ``body_chars`` pads chosen chapters to a real length."""
+    """기본 장은 짧게 만들고 ``body_chars``로 선택한 장을 실제 분량까지 채운다."""
     root.mkdir(parents=True, exist_ok=True)
-    source = root / "原文" / "原文.txt"
+    source = root / "원문" / "원문.txt"
     source.parent.mkdir(parents=True, exist_ok=True)
     body = {chapter: "字" * (body_chars or {}).get(chapter, 0) or f"正文{chapter}。" for chapter in range(1, count + 1)}
     source.write_text("\n".join(f"第{chapter}章 标题{chapter}\n{body[chapter]}" for chapter in range(1, count + 1)), encoding="utf-8")
-    result = run(INDEX, "--source", source, "--output", root / "chapter_index.csv", "--locator-path", "原文/原文.txt")
+    result = run(INDEX, "--source", source, "--output", root / "chapter_index.csv", "--locator-path", "원문/원문.txt")
     require(result.returncode == 0, result.stdout or result.stderr)
     return source
 
@@ -202,13 +202,13 @@ def reuse_output(start: int, end: int) -> str:
 
 def protected_snapshot(root: Path) -> dict[str, bytes]:
     result = {}
-    for name in ("章节", "剧情", "角色", "设定"):
+    for name in ("장별분석", "플롯", "인물", "설정"):
         directory = root / name
         if directory.is_dir():
             for path in directory.rglob("*"):
                 if path.is_file():
                     result[path.relative_to(root).as_posix()] = path.read_bytes()
-    for name in ("文风.md", "拆文报告.md"):
+    for name in ("문체.md", "작품분석보고서.md"):
         path = root / name
         if path.is_file():
             result[name] = path.read_bytes()
@@ -222,11 +222,11 @@ def test_inspection_legacy_and_partial() -> None:
         complete.mkdir()
         (complete / "_progress.md").write_text("# 进度\n- schema_version: 2\n- 总章数：4\n- 最终状态：completed\n", encoding="utf-8")
         for chapter in range(1, 5):
-            path = complete / "章节" / f"第{chapter}章_摘要.md"
+            path = complete / "장별분석" / f"제{chapter}장_요약.md"
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("摘要", encoding="utf-8")
-        for path in (complete / "拆文报告.md", complete / "剧情" / "故事线.md",
-                     complete / "剧情" / "情绪模块.md", complete / "剧情" / "节奏.md", complete / "文风.md"):
+            path.write_text("요약", encoding="utf-8")
+        for path in (complete / "작품분석보고서.md", complete / "플롯" / "이야기선.md",
+                     complete / "플롯" / "감정모듈.md", complete / "플롯" / "리듬.md", complete / "문체.md"):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("有效", encoding="utf-8")
         before = (complete / "_progress.md").read_bytes()
@@ -252,7 +252,7 @@ def test_inspection_legacy_and_partial() -> None:
                 "schema 1 完整旧项目增强不能重复调用模型")
 
         (complete / "_progress.md").write_text("# 进度\n- schema_version: 2\n- 总章数：4\n- 最终状态：completed_with_errors\n", encoding="utf-8")
-        (complete / "章节" / "第2章_摘要.md").unlink()
+        (complete / "장별분석" / "제2장_요약.md").unlink()
         checked = run(INSPECT, "--root", complete)
         payload = json.loads(checked.stdout)
         require(payload["missing_semantic_chapters"] == [2], "缺失语义章必须精确报告")
@@ -262,7 +262,7 @@ def test_inspection_legacy_and_partial() -> None:
         golden.mkdir()
         (golden / "_progress.md").write_text("# 进度\n- schema_version: 2\n- 总章数：6\n- 最终状态：paused_after_stage1\n", encoding="utf-8")
         for chapter in range(1, 4):
-            path = golden / "章节" / f"第{chapter}章_深度拆解.md"
+            path = golden / "장별분석" / f"제{chapter}장_심층분석.md"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("黄金章事实", encoding="utf-8")
         payload = json.loads(run(INSPECT, "--root", golden).stdout)
@@ -288,7 +288,7 @@ def test_plan_commit_repair_and_state_preservation() -> None:
                         "--batch-id", "RAW-1-2", "--range-sha256", plan["batches"][0]["range_sha256"])
         require(committed.returncode == 0, committed.stdout or committed.stderr)
         require(progress.read_bytes().startswith(prefix), "受管状态外的 BOM、换行和 schema 必须逐字节保留")
-        summary = (root / "章节" / "第1章_摘要.md").read_text(encoding="utf-8")
+        summary = (root / "장별분석" / "제1장_요약.md").read_text(encoding="utf-8")
         require("主题标签其他 | 基调：其他" in summary, "未知主题和情绪必须投影到其他")
         require("P1 **节拍1**：类型行动 | " in summary and "P10 **节拍10**" in summary and "地点旧城" in summary,
                 "多情节点必须逐条投影，类型映射到枚举并保留地点等字段")
@@ -300,28 +300,28 @@ def test_plan_commit_repair_and_state_preservation() -> None:
                        "--batch-id", "RAW-1-2", "--range-sha256", plan["batches"][0]["range_sha256"])
         require(repeated.returncode == 0 and progress.read_bytes() == after_commit, "相同批次重复 commit 必须幂等")
 
-        source = root / "原文" / "原文.txt"
+        source = root / "원문" / "원문.txt"
         source.write_text(source.read_text(encoding="utf-8").replace("正文2。", "正文2已变化。"), encoding="utf-8")
-        refused = run(INDEX, "--source", source, "--output", root / "chapter_index.csv", "--locator-path", "原文/原文.txt")
+        refused = run(INDEX, "--source", source, "--output", root / "chapter_index.csv", "--locator-path", "원문/원문.txt")
         require(refused.returncode != 0, "局部原文变化必须先拒绝")
-        rebuilt = run(INDEX, "--source", source, "--output", root / "chapter_index.csv", "--locator-path", "原文/原文.txt", "--rebuild")
+        rebuilt = run(INDEX, "--source", source, "--output", root / "chapter_index.csv", "--locator-path", "원문/원문.txt", "--rebuild")
         require(json.loads(rebuilt.stdout)["pending_chapters"] == [2], "局部变化只能标记受影响章")
         stale_repair = run(MANAGE, "repair-progress", "--root", root, "--batch-id", "RAW-1-2")
         require(stale_repair.returncode != 0 and json.loads(stale_repair.stdout)["errors"][0]["error"] == "range_hash_mismatch", "旧输入缓存不能修复新原文进度")
         changed_plan = json.loads(run(MANAGE, "plan", "--root", root).stdout)
         require([batch["batch_id"] for batch in changed_plan["batches"]] == ["RAW-1-2"], "原文变化使整批缓存失效并重读该批")
-        summary_before = (root / "章节" / "第2章_摘要.md").read_bytes()
+        summary_before = (root / "장별분석" / "제2장_요약.md").read_bytes()
         recommitted = json.loads(run(MANAGE, "commit", "--root", root, "--input", model, "--batch-id", "RAW-1-2",
                                      "--range-sha256", changed_plan["batches"][0]["range_sha256"]).stdout)
         require(recommitted["kept_existing_summary_chapters"] == [1, 2]
-                and (root / "章节" / "第2章_摘要.md").read_bytes() == summary_before,
+                and (root / "장별분석" / "제2장_요약.md").read_bytes() == summary_before,
                 "已有摘要一律不覆盖，并在提交结果中列出")
-        (root / "章节" / "第2章_摘要.md").unlink()
+        (root / "장별분석" / "제2장_요약.md").unlink()
         refresh_plan = json.loads(run(MANAGE, "plan", "--root", root).stdout)
         require(refresh_plan["batches"] == [] and refresh_plan["recoverable_caches"][0]["missing_summary_chapters"] == [2],
                 "删掉摘要后应从本批新缓存补回，不再重读原文")
         require(run(MANAGE, "repair-progress", "--root", root).returncode == 0
-                and (root / "章节" / "第2章_摘要.md").read_bytes() != summary_before,
+                and (root / "장별분석" / "제2장_요약.md").read_bytes() != summary_before,
                 "补回的摘要必须来自变化后的原文")
 
         interrupted = Path(temporary) / "中断"
@@ -337,8 +337,8 @@ def test_plan_commit_repair_and_state_preservation() -> None:
         require(failed.returncode != 0 and (interrupted / "_analysis_cache" / "批次-RAW-1-2.md").is_file(), "中断点必须留下完整缓存")
         require((interrupted / "_progress.md").read_bytes() == before_failure, "缓存阶段失败不能提前标成功")
         repaired = run(MANAGE, "repair-progress", "--root", interrupted)
-        require(repaired.returncode == 0 and all((interrupted / "章节" / f"第{n}章_摘要.md").is_file() for n in (1, 2)), repaired.stdout)
-        edited = interrupted / "章节" / "第1章_摘要.md"
+        require(repaired.returncode == 0 and all((interrupted / "장별분석" / f"제{n}장_요약.md").is_file() for n in (1, 2)), repaired.stdout)
+        edited = interrupted / "장별분석" / "제1장_요약.md"
         edited.write_text("用户修改", encoding="utf-8")
         repaired_again = run(MANAGE, "repair-progress", "--root", interrupted)
         require(repaired_again.returncode == 0 and edited.read_text(encoding="utf-8") == "用户修改", "恢复只能补缺，不能覆盖用户摘要")
@@ -376,8 +376,8 @@ def test_plan_commit_repair_and_state_preservation() -> None:
             "--batch-id", "RAW-1-3", "--range-sha256", partial_plan["batches"][0]["range_sha256"],
             extra_env={"STORY_ANALYZE_FAIL_AFTER_SUMMARIES": "1"},
         )
-        require(failed_partial.returncode != 0 and (partial / "章节" / "第1章_摘要.md").is_file()
-                and not (partial / "章节" / "第2章_摘要.md").exists(), "必须能注入部分摘要落盘故障")
+        require(failed_partial.returncode != 0 and (partial / "장별분석" / "제1장_요약.md").is_file()
+                and not (partial / "장별분석" / "제2장_요약.md").exists(), "必须能注入部分摘要落盘故障")
         recovery_plan = json.loads(run(MANAGE, "plan", "--root", partial).stdout)
         require(recovery_plan["batches"] == [] and recovery_plan["recoverable_caches"][0]["missing_summary_chapters"] == [2, 3], "完整缓存存在时计划必须先恢复，不能重复调模型")
         require(run(MANAGE, "repair-progress", "--root", partial).returncode == 0, "部分摘要恢复失败")
@@ -401,6 +401,10 @@ def test_panlong_acceptance_samples() -> None:
     require(source_demo.is_dir(), "盘龙验收样本缺失")
     with tempfile.TemporaryDirectory(prefix="long-panlong-acceptance-") as temporary:
         area = Path(temporary)
+        migrated = area / "한국어샘플"
+        conversion = run(ROOT / "skills/story-setup/scripts/migrate-project-paths.py", "--source", source_demo, "--destination", migrated, "--apply")
+        require(conversion.returncode == 0, conversion.stdout or conversion.stderr)
+        source_demo = migrated
 
         complete = area / "完整旧项目"
         shutil.copytree(source_demo, complete)
@@ -411,13 +415,13 @@ def test_panlong_acceptance_samples() -> None:
         require(not (complete / "chapter_index.csv").exists(), "直接使用不能新建索引")
         prepared = run(MANAGE, "mark-stage", "--root", complete, "--stage", "stage5", "--prepare")
         require(prepared.returncode == 0, prepared.stdout or prepared.stderr)
-        require((complete / "_analysis_cache" / "legacy" / "拆文报告.md").read_bytes() == before["拆文报告.md"], "新报告生成前必须逐字节备份旧报告")
-        (complete / "拆文报告.md").write_text("明确重建后的另一版报告", encoding="utf-8")
+        require((complete / "_analysis_cache" / "legacy" / "작품분석보고서.md").read_bytes() == before["작품분석보고서.md"], "新报告生成前必须逐字节备份旧报告")
+        (complete / "작품분석보고서.md").write_text("明确重建后的另一版报告", encoding="utf-8")
         second_prepared = json.loads(run(MANAGE, "mark-stage", "--root", complete, "--stage", "stage5", "--prepare").stdout)
         second_backup = complete / second_prepared["legacy_report_backup"]
-        require(second_backup.name != "拆文报告.md" and second_backup.read_text(encoding="utf-8") == "明确重建后的另一版报告",
+        require(second_backup.name != "작품분석보고서.md" and second_backup.read_text(encoding="utf-8") == "明确重建后的另一版报告",
                 "不同版本报告必须另存历史备份")
-        (complete / "拆文报告.md").write_bytes(before["拆文报告.md"])
+        (complete / "작품분석보고서.md").write_bytes(before["작품분석보고서.md"])
         enhanced = json.loads(run(MANAGE, "plan", "--root", complete, "--intent", "enhance").stdout)
         require(enhanced["read_counts"]["raw_chapters"] == 0, "旧项目增强原文读取必须为0")
         reuse_file = area / "reuse.md"
@@ -436,33 +440,33 @@ def test_panlong_acceptance_samples() -> None:
 
         style_missing = area / "只缺文风"
         shutil.copytree(source_demo, style_missing)
-        (style_missing / "文风.md").unlink()
+        (style_missing / "문체.md").unlink()
         style_report = json.loads(run(INSPECT, "--root", style_missing).stdout)
         require(style_report["stage_repairs"] == ["stage6_style"], "只缺文风必须定点路由 Stage 6")
 
         aggregate_missing = area / "只缺聚合产物"
         shutil.copytree(source_demo, aggregate_missing)
-        (aggregate_missing / "剧情" / "情绪模块.md").unlink()
-        (aggregate_missing / "剧情" / "节奏.md").unlink()
+        (aggregate_missing / "플롯" / "감정모듈.md").unlink()
+        (aggregate_missing / "플롯" / "리듬.md").unlink()
         aggregate_report = json.loads(run(INSPECT, "--root", aggregate_missing).stdout)
         require(aggregate_report["stage_repairs"] == ["stage3_emotion", "stage3_rhythm"], "情绪/节奏缺失必须单独路由 Stage 3+")
         require(json.loads(run(MANAGE, "plan", "--root", aggregate_missing).stdout)["batches"] == [], "聚合产物修复不能生成 Stage 2 原文任务")
 
-        if not (source_demo / "原文" / "原文.txt").is_file():
-            # 原文按 .gitignore 版权策略不入库；以下黄金三章、混存、追加三段要重建索引，缺原文时明确跳过。
+        if not (source_demo / "원문" / "원문.txt").is_file():
+            # 원문은 .gitignore의 저작권 방침에 따라 저장소에서 제외한다. 아래 도입 세 장/혼합 저장/세 구간 추가 사례는 색인을 다시 만들어야 하므로 원문이 없으면 명시적으로 건너뛴다.
             print("SKIP: test_panlong_acceptance_samples raw-text sections (panlong raw text absent by copyright policy)")
             return
 
         golden = area / "黄金三章暂停"
         shutil.copytree(source_demo, golden)
-        for path in (golden / "章节").glob("*_摘要.md"):
+        for path in (golden / "장별분석").glob("*_요약.md"):
             path.unlink()
         progress_text = (golden / "_progress.md").read_text(encoding="utf-8-sig")
         progress_text = re.sub(r"(?m)^- 最终状态：.*$", "- 最终状态：paused_after_stage1", progress_text)
         (golden / "_progress.md").write_text(progress_text, encoding="utf-8")
         golden_report = json.loads(run(INSPECT, "--root", golden).stdout)
         require(golden_report["missing_semantic_chapters"] == list(range(4, 24)), "黄金三章暂停项目必须只缺4-23")
-        build = run(INDEX, "--source", golden / "原文" / "原文.txt", "--output", golden / "chapter_index.csv", "--locator-path", "原文/原文.txt")
+        build = run(INDEX, "--source", golden / "원문" / "원문.txt", "--output", golden / "chapter_index.csv", "--locator-path", "원문/원문.txt")
         require(build.returncode == 0, build.stdout or build.stderr)
         golden_plan = json.loads(run(MANAGE, "plan", "--root", golden).stdout)
         require(golden_plan["read_counts"]["raw_chapters"] == 20, "黄金三章不能重读，原文只读4-23")
@@ -471,13 +475,13 @@ def test_panlong_acceptance_samples() -> None:
         mixed = area / "缺7和15"
         shutil.copytree(source_demo, mixed)
         for chapter in (7, 15):
-            (mixed / "章节" / f"第{chapter}章_摘要.md").unlink()
+            (mixed / "장별분석" / f"제{chapter}장_요약.md").unlink()
         progress_text = (mixed / "_progress.md").read_text(encoding="utf-8-sig")
         progress_text = re.sub(r"(?m)^- 最终状态：.*$", "- 最终状态：completed_with_errors", progress_text)
         (mixed / "_progress.md").write_text(progress_text, encoding="utf-8")
         missing_report = json.loads(run(INSPECT, "--root", mixed).stdout)
         require(missing_report["missing_semantic_chapters"] == [7, 15], "缺章必须精确为7、15")
-        built = run(INDEX, "--source", mixed / "原文" / "原文.txt", "--output", mixed / "chapter_index.csv", "--locator-path", "原文/原文.txt")
+        built = run(INDEX, "--source", mixed / "원문" / "원문.txt", "--output", mixed / "chapter_index.csv", "--locator-path", "원문/원문.txt")
         require(built.returncode == 0, built.stdout or built.stderr)
         missing_plan = json.loads(run(MANAGE, "plan", "--root", mixed).stdout)
         require(missing_plan["read_counts"]["raw_chapters"] == 2, "已完成章原文读取必须为0")
@@ -498,11 +502,11 @@ def test_panlong_acceptance_samples() -> None:
         require(json.loads(run(MANAGE, "plan", "--root", mixed).stdout)["batches"] == [], "新投影不能被当旧成果再提取")
 
         old_hashes = [row["chapter_sha256"] for row in rows(mixed / "chapter_index.csv")]
-        with (mixed / "原文" / "原文.txt").open("a", encoding="utf-8") as handle:
+        with (mixed / "원문" / "원문.txt").open("a", encoding="utf-8") as handle:
             handle.write("\n\n第24章 新章\n新增正文。\n")
-        refused = run(INDEX, "--source", mixed / "原文" / "原文.txt", "--output", mixed / "chapter_index.csv", "--locator-path", "原文/原文.txt")
+        refused = run(INDEX, "--source", mixed / "원문" / "원문.txt", "--output", mixed / "chapter_index.csv", "--locator-path", "원문/원문.txt")
         require(refused.returncode != 0, "追加原文必须先拒绝静默覆盖")
-        rebuilt = run(INDEX, "--source", mixed / "原文" / "原文.txt", "--output", mixed / "chapter_index.csv", "--locator-path", "原文/原文.txt", "--rebuild")
+        rebuilt = run(INDEX, "--source", mixed / "원문" / "원문.txt", "--output", mixed / "chapter_index.csv", "--locator-path", "원문/원문.txt", "--rebuild")
         rebuilt_payload = json.loads(rebuilt.stdout)
         require(rebuilt.returncode == 0 and rebuilt_payload["pending_chapters"] == [24], rebuilt.stdout)
         require([row["chapter_sha256"] for row in rows(mixed / "chapter_index.csv")[:23]] == old_hashes, "追加新章不能使前23章回退")
@@ -592,7 +596,7 @@ def test_audit_recovery_regressions() -> None:
         sparse_commit = run(MANAGE, "commit", "--root", sparse, "--input", sparse_model, "--batch-id", "RAW-1-1",
                             "--range-sha256", sparse_plan["batches"][0]["range_sha256"])
         require(sparse_commit.returncode != 0 and json.loads(sparse_commit.stdout)["error"] == "plot_point_count"
-                and not (sparse / "章节" / "第1章_摘要.md").exists(),
+                and not (sparse / "장별분석" / "제1장_요약.md").exists(),
                 "正常长度的原文章少于10个情节点必须整批拒收且不落盘")
 
 
@@ -607,32 +611,32 @@ def test_audit_stage_and_mapping_regressions() -> None:
         require(run(MANAGE, "commit", "--root", root, "--input", model,
                     "--batch-id", "RAW-1-2", "--range-sha256", planned["batches"][0]["range_sha256"]).returncode == 0,
                 "阶段样本提交失败")
-        for name in ("剧情/情绪模块.md", "剧情/节奏.md", "文风.md"):
+        for name in ("플롯/감정모듈.md", "플롯/리듬.md", "문체.md"):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("有效产物", encoding="utf-8")
         stage_plan = json.loads(run(MANAGE, "plan", "--root", root).stdout)
         require({"stage4", "stage5"}.issubset(stage_plan["required_stages"]),
-                "角色/设定和报告缺失必须进入阶段恢复计划")
+                "인물/设定和报告缺失必须进入阶段恢复计划")
         premature = run(MANAGE, "mark-stage", "--root", root, "--stage", "stage4")
         require(premature.returncode != 0 and json.loads(premature.stdout)["error"] == "stage_output_missing",
                 "Stage 4 没有角色与设定产物时不能标 completed")
 
         for chapter in (1, 2):
-            path = root / "章节" / f"第{chapter}章_深度拆解.md"
+            path = root / "장별분석" / f"제{chapter}장_심층분석.md"
             path.write_text("有效深度拆解", encoding="utf-8")
-        (root / "快速预览.md").write_text("有效快速预览", encoding="utf-8")
-        (root / "角色").mkdir()
-        (root / "角色" / "角色关系.md").write_text("| 关系ID | 主体 → 客体 |\n|---|---|\n", encoding="utf-8")
-        (root / "设定" / "世界观").mkdir(parents=True)
-        (root / "设定" / "世界观" / "背景.md").write_text("有效世界设定", encoding="utf-8")
+        (root / "빠른미리보기.md").write_text("有效快速预览", encoding="utf-8")
+        (root / "인물").mkdir()
+        (root / "인물" / "인물관계.md").write_text("| 关系ID | 主体 → 客体 |\n|---|---|\n", encoding="utf-8")
+        (root / "설정" / "세계관").mkdir(parents=True)
+        (root / "설정" / "세계관" / "背景.md").write_text("有效世界设定", encoding="utf-8")
         relation_only = run(MANAGE, "mark-stage", "--root", root, "--stage", "stage4")
-        require(relation_only.returncode != 0 and "角色/*.md" in json.loads(relation_only.stdout).get("detail", ""),
+        require(relation_only.returncode != 0 and "인물/*.md" in json.loads(relation_only.stdout).get("detail", ""),
                 "只有角色关系表、没有角色档案时 Stage 4 不能标 completed：" + relation_only.stdout)
         require("stage4" in json.loads(run(MANAGE, "plan", "--root", root).stdout)["required_stages"],
                 "只有角色关系表时检查器仍要报 Stage 4 待补")
-        (root / "角色" / "人物.md").write_text("有效人物档案", encoding="utf-8")
-        (root / "拆文报告.md").write_text("有效拆文报告", encoding="utf-8")
+        (root / "인물" / "人物.md").write_text("有效人物档案", encoding="utf-8")
+        (root / "작품분석보고서.md").write_text("有效拆文报告", encoding="utf-8")
         for stage in ("stage3", "stage4", "stage5", "stage6"):
             marked = run(MANAGE, "mark-stage", "--root", root, "--stage", stage)
             require(marked.returncode == 0, marked.stdout or marked.stderr)
@@ -669,27 +673,27 @@ def test_audit_stage_and_mapping_regressions() -> None:
                 "旧项目续拆完成后只改写原有的最终状态行，不另写第二行：" + resumed_text)
 
         prologue = area / "序章旧项目"
-        (prologue / "原文").mkdir(parents=True)
-        (prologue / "原文" / "原文.txt").write_text(
+        (prologue / "원문").mkdir(parents=True)
+        (prologue / "원문" / "원문.txt").write_text(
             "序章 引子\n序章事实。\n第1章 起\n正文1。\n第2章 合\n正文2。\n", encoding="utf-8")
         for chapter in (1, 2):
-            path = prologue / "章节" / f"第{chapter}章_摘要.md"
+            path = prologue / "장별분석" / f"제{chapter}장_요약.md"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(f"旧第{chapter}章事实", encoding="utf-8")
-        blocked = run(INDEX, "--source", prologue / "原文" / "原文.txt",
-                      "--output", prologue / "chapter_index.csv", "--locator-path", "原文/原文.txt")
+        blocked = run(INDEX, "--source", prologue / "원문" / "원문.txt",
+                      "--output", prologue / "chapter_index.csv", "--locator-path", "원문/원문.txt")
         require(blocked.returncode != 0 and "chapter_mapping_ambiguous" in json.loads(blocked.stdout)["error"]
                 and not (prologue / "chapter_index.csv").exists(),
                 "序章导致旧摘要身份漂移时必须在写索引前明确停止")
 
         fresh_prologue = area / "序章新书"
-        (fresh_prologue / "原文").mkdir(parents=True)
-        (fresh_prologue / "原文" / "原文.txt").write_text(
+        (fresh_prologue / "원문").mkdir(parents=True)
+        (fresh_prologue / "원문" / "원문.txt").write_text(
             "序章 引子\n序章事实。\n第1章 起\n正文1。\n第2章 承\n正文2。\n第3章 合\n正文3。\n", encoding="utf-8")
-        require(run(INDEX, "--source", fresh_prologue / "原文" / "原文.txt", "--output", fresh_prologue / "chapter_index.csv",
-                    "--locator-path", "原文/原文.txt").returncode == 0, "序章新书索引失败")
+        require(run(INDEX, "--source", fresh_prologue / "원문" / "원문.txt", "--output", fresh_prologue / "chapter_index.csv",
+                    "--locator-path", "원문/원문.txt").returncode == 0, "序章新书索引失败")
         for chapter in (1, 2, 3):
-            path = fresh_prologue / "章节" / f"第{chapter}章_深度拆解.md"
+            path = fresh_prologue / "장별분석" / f"제{chapter}장_심층분석.md"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("本次 Stage 1 按索引写的黄金章", encoding="utf-8")
         fresh_plan = run(MANAGE, "plan", "--root", fresh_prologue)
@@ -702,16 +706,16 @@ PROLOGUE_BOOK = (
     "测试书\n\n楔子 雨夜\n楔子正文。\n\n第一章 起程\n正文一。\n\n第二章 遇敌\n正文二。\n\n"
     "第三章 破局\n正文三。\n\n第四章 回城\n正文四。\n\n第五章 夜谈\n正文五。\n\n第六章 远行\n正文六。\n"
 )
-# v0.7.10 did not recognize 楔子: its 第1章 is the body's 第一章 (line 6).
+# v0.7.10은 楔子(서장)를 인식하지 못했으므로 당시의 第1章은 본문의 第一章(6행)이다.
 OLD_BOUNDARIES = [(1, "第一章 起程", 6), (2, "第二章 遇敌", 9), (3, "第三章 破局", 12),
                   (4, "第四章 回城", 15), (5, "第五章 夜谈", 18), (6, "第六章 远行", 21)]
 
 
 def legacy_progress(boundary_rows: list[tuple[int, str, int]]) -> str:
-    """A v0.7.10-shaped _progress.md: schema 2, paused after Stage 1, 「章节边界」 table."""
+    """v0.7.10 형식의 _progress.md: schema 2, Stage 1 후 일시 정지, ‘章节边界’ 표."""
     table = "".join(f"| {number} | {title} | {line} | 3 |\n" for number, title, line in boundary_rows)
     return (
-        "# 深度拆解进度：测试书\n- 小说：测试书 | 总章数：6 | 输出目录：拆文库/测试书 | 开始：2026-09-01\n"
+        "# 深度拆解进度：测试书\n- 小说：测试书 | 总章数：6 | 输出目录：작품분석실/测试书 | 开始：2026-09-01\n"
         "- 最终状态：paused_after_stage1\n- schema_version: 2\n## 管道进度\n| 阶段 | 状态 | 进度 | 备注 |\n"
         "|------|------|------|------|\n| Stage 1 黄金三章 | 完成 | 3/3 章 | — |\n"
         "## 章节边界（Stage 0 章节边界子步骤产物，唯一权威）\n| 章号 | 标题 | 起始行 | 字数 |\n"
@@ -720,20 +724,20 @@ def legacy_progress(boundary_rows: list[tuple[int, str, int]]) -> str:
 
 
 def make_legacy_stage1_library(root: Path, boundary_rows: list[tuple[int, str, int]]) -> None:
-    source = root / "原文" / "原文.txt"
+    source = root / "원문" / "원문.txt"
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text(PROLOGUE_BOOK, encoding="utf-8")
     (root / "_progress.md").write_text(legacy_progress(boundary_rows), encoding="utf-8")
     for chapter in (1, 2, 3):
-        path = root / "章节" / f"第{chapter}章_深度拆解.md"
+        path = root / "장별분석" / f"제{chapter}장_심층분석.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"字数约3字 | 核心事件：旧版第{chapter}章事件", encoding="utf-8")
-    (root / "快速预览.md").write_text("# 快速预览：测试书\n", encoding="utf-8")
+    (root / "빠른미리보기.md").write_text("# 快速预览：测试书\n", encoding="utf-8")
 
 
 def build_index(root: Path, *extra: str) -> subprocess.CompletedProcess[str]:
-    return run(INDEX, "--source", root / "原文" / "原文.txt", "--output", root / "chapter_index.csv",
-               "--locator-path", "原文/原文.txt", *extra)
+    return run(INDEX, "--source", root / "원문" / "원문.txt", "--output", root / "chapter_index.csv",
+               "--locator-path", "원문/원문.txt", *extra)
 
 
 def author_text_is_plain(message: str) -> bool:
@@ -753,14 +757,14 @@ def test_legacy_prologue_alignment() -> None:
                 and not (root / "chapter_index.csv").exists(),
                 "旧版黄金三章与带楔子的新章号错位时必须在写索引前停下：" + blocked.stdout)
         message = payload.get("author_message", "")
-        require("楔子" in message and "按旧章号继续" in message and "新目录" in message,
+        require("楔子" in message and "기존 장 번호로 계속" in message and "새 폴더" in message,
                 "停下时必须给作者可选的出路：" + message)
         require(author_text_is_plain(message), "给作者的话不能夹带字段名、批次号或脚本名：" + message)
 
-        # An index built before this guard existed must not let plan misalign either.
+        # 이 검사 규칙이 생기기 전에 만든 색인도 plan의 정렬이 어긋나게 해서는 안 된다.
         prebuilt = area / "prebuilt"
-        (prebuilt / "原文").mkdir(parents=True)
-        (prebuilt / "原文" / "原文.txt").write_text(PROLOGUE_BOOK, encoding="utf-8")
+        (prebuilt / "원문").mkdir(parents=True)
+        (prebuilt / "원문" / "원문.txt").write_text(PROLOGUE_BOOK, encoding="utf-8")
         require(build_index(prebuilt).returncode == 0, "无旧成果的楔子新书必须能建索引")
         shutil.copy2(prebuilt / "chapter_index.csv", root / "chapter_index.csv")
         inspected = json.loads(run(INSPECT, "--root", root, "--compact").stdout)
@@ -789,18 +793,18 @@ def test_legacy_prologue_alignment() -> None:
                 "RAW-4-6 读到的必须是「第四章 回城」")
         require(protected_snapshot(root) == protected, "对齐过程不得改动旧拆文文件")
 
-        # Old runs whose table already counted 楔子 as 第1章 stay aligned without folding.
+        # 이미 楔子를 第1章으로 센 기존 실행은 접어서 합치지 않아도 정렬을 유지한다.
         counted = area / "旧版已把楔子算作第1章"
         make_legacy_stage1_library(counted, [(1, "楔子 雨夜", 3)] + [
             (number + 1, title, line) for number, title, line in OLD_BOUNDARIES[:5]])
         require(build_index(counted).returncode == 0, "旧章节表与新索引一致时不能误拦")
 
-        # Option ②: the author moves the old files aside and restarts from Stage 1.
+        # 선택지 ②: 작가가 기존 파일을 별도로 옮기고 Stage 1부터 다시 시작한다.
         restart = area / "楔子单独成章重拆"
         make_legacy_stage1_library(restart, OLD_BOUNDARIES)
         backup = restart / "_analysis_cache" / "legacy" / "旧章号"
         backup.mkdir(parents=True)
-        for name in ("_progress.md", "快速预览.md", "章节"):
+        for name in ("_progress.md", "빠른미리보기.md", "장별분석"):
             shutil.move(str(restart / name), str(backup / name))
         require(build_index(restart).returncode == 0
                 and rows(restart / "chapter_index.csv")[0]["source_chapter"] == "楔子",
@@ -812,18 +816,18 @@ def test_legacy_summaries_prologue_way_out() -> None:
         area = Path(temporary)
         for name, progress in (("有章节表", legacy_progress(OLD_BOUNDARIES)), ("无章节表", None)):
             root = area / name
-            source = root / "原文" / "原文.txt"
+            source = root / "원문" / "원문.txt"
             source.parent.mkdir(parents=True)
             source.write_text(PROLOGUE_BOOK, encoding="utf-8")
             if progress:
                 (root / "_progress.md").write_text(progress, encoding="utf-8")
             for chapter in range(1, 7):
-                path = root / "章节" / f"第{chapter}章_摘要.md"
+                path = root / "장별분석" / f"제{chapter}장_요약.md"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(f"**概要**：旧版第{chapter}章", encoding="utf-8")
             blocked = build_index(root)
             payload = json.loads(blocked.stdout)
-            require(blocked.returncode == 2 and "按旧章号继续" in payload.get("author_message", "")
+            require(blocked.returncode == 2 and "기존 장 번호로 계속" in payload.get("author_message", "")
                     and author_text_is_plain(payload["author_message"]),
                     f"{name}：楔子开头的旧摘要库必须给出可执行出路：" + blocked.stdout)
             folded = build_index(root, "--fold-prologue")
@@ -834,7 +838,7 @@ def test_legacy_summaries_prologue_way_out() -> None:
 
 
 def test_legacy_table_title_variants() -> None:
-    """Old tables whose titles differ only in notes, brackets or width still line up."""
+    """제목의 주석·괄호·전각/반각만 다른 이전 표도 정렬이 맞아야 한다."""
     variants = {
         "尾注": ("第一章 起程（求收藏）\n一\n第二章 遇敌(二合一)\n二\n第三章 破局\n三\n", "第一章 起程"),
         "方括号": ("第一章 【起程】\n一\n第二章 遇敌\n二\n第三章 破局\n三\n", "起程"),
@@ -843,17 +847,17 @@ def test_legacy_table_title_variants() -> None:
     }
     with tempfile.TemporaryDirectory(prefix="long-legacy-titles-") as temporary:
         for name, (text, first_title) in variants.items():
-            # Exact start lines, then the same table shifted by one line (titles decide).
+            # 정확한 시작 줄을 검사한 뒤 같은 표를 한 줄 이동한다(제목으로 판단).
             for shift in (0, 1):
                 root = Path(temporary) / f"{name}-{shift}"
                 make_legacy_stage1_library(root, [(1, first_title, 1 + shift), (2, "第二章 遇敌", 3 + shift),
                                                   (3, "第三章 破局", 5 + shift)])
-                (root / "原文" / "原文.txt").write_text(text, encoding="utf-8")
+                (root / "원문" / "원문.txt").write_text(text, encoding="utf-8")
                 result = build_index(root)
                 require(result.returncode == 0, f"{name}（行差 {shift}）：标题只差尾注/括号/全半角时不能拦：" + result.stdout)
         title_less = Path(temporary) / "只有章号"
         make_legacy_stage1_library(title_less, [(1, "第一章", 1), (2, "第二章", 3), (3, "第三章", 6)])
-        (title_less / "原文" / "原文.txt").write_text("第一章\n一\n\n第二章\n二\n\n第三章\n三\n", encoding="utf-8")
+        (title_less / "원문" / "원문.txt").write_text("第一章\n一\n\n第二章\n二\n\n第三章\n三\n", encoding="utf-8")
         require(build_index(title_less).returncode == 0, "只有章号的旧表按章号对齐，不能按行误判错位")
 
 
@@ -862,7 +866,7 @@ def test_fold_prologue_survives_rebuild() -> None:
         root = Path(temporary) / "并入楔子后追加章节"
         make_legacy_stage1_library(root, OLD_BOUNDARIES)
         require(build_index(root, "--fold-prologue").returncode == 0, "并入楔子建索引失败")
-        source = root / "原文" / "原文.txt"
+        source = root / "원문" / "원문.txt"
         source.write_text(PROLOGUE_BOOK + "\n第七章 归来\n正文七。\n", encoding="utf-8")
         rebuilt = build_index(root, "--rebuild")
         payload = json.loads(rebuilt.stdout)
@@ -871,15 +875,15 @@ def test_fold_prologue_survives_rebuild() -> None:
                 and payload["folded_into_first_chapter"] == ["楔子"]
                 and indexed[0]["source_chapter"] == "1" and indexed[6]["title"] == "归来",
                 "重建必须沿用上次并入楔子的章号口径：" + rebuilt.stdout)
-        # The source now lost chapters: the rebuild stops with a plain explanation.
+        # 원문에서 장이 사라지면 재구축은 평이한 설명과 함께 중단한다.
         source.write_text(PROLOGUE_BOOK.split("第五章")[0], encoding="utf-8")
         shrunk = build_index(root, "--rebuild")
         message = json.loads(shrunk.stdout).get("author_message", "")
-        require(shrunk.returncode == 2 and "换一个新目录" in message and author_text_is_plain(message),
+        require(shrunk.returncode == 2 and "새 폴더" in message and author_text_is_plain(message),
                 "重建对不上时必须给作者能看懂的出路：" + shrunk.stdout)
         unfolded = Path(temporary) / "楔子单独成章后重建"
-        (unfolded / "原文").mkdir(parents=True)
-        (unfolded / "原文" / "原文.txt").write_text(PROLOGUE_BOOK, encoding="utf-8")
+        (unfolded / "원문").mkdir(parents=True)
+        (unfolded / "원문" / "원문.txt").write_text(PROLOGUE_BOOK, encoding="utf-8")
         require(build_index(unfolded).returncode == 0, "无旧成果的楔子新书必须能建索引")
         mismatch = build_index(unfolded, "--rebuild", "--fold-prologue")
         mismatch_payload = json.loads(mismatch.stdout)
@@ -901,7 +905,7 @@ def test_cli_output_is_utf8_on_legacy_consoles() -> None:
             require(inspected.returncode == 2 and "不存在" in json.loads(inspected.stdout)["error"],
                     f"{encoding} 控制台下检查器必须输出 UTF-8")
             helped = run(INSPECT, "--help", extra_env=env)
-            require(helped.returncode == 0 and "拆文库" in helped.stdout,
+            require(helped.returncode == 0 and "작품분석실" in helped.stdout,
                     f"{encoding} 控制台下检查器的帮助必须能输出：" + helped.stderr[-300:])
             planned = run(MANAGE, "plan", "--root", root / "不存在", extra_env=env)
             require(planned.returncode == 2 and "不存在" in json.loads(planned.stdout)["detail"],
@@ -914,8 +918,8 @@ CHART = RUNTIME / "render_relation_chart.py"
 def test_relation_chart_never_falls_back_to_pinyin() -> None:
     with tempfile.TemporaryDirectory(prefix="long-chart-") as temporary:
         root = Path(temporary) / "测试书"
-        (root / "角色").mkdir(parents=True)
-        (root / "角色" / "角色关系.md").write_text(
+        (root / "인물").mkdir(parents=True)
+        (root / "인물" / "인물관계.md").write_text(
             "# 角色关系\n\n| 关系ID | 主体 → 客体 | 关系动作/类型 | 表面关系 | 真实关系 | 触发事件 | 双方得失 | 变化后状态 | 证据等级 | 证据 |\n"
             "|---|---|---|---|---|---|---|---|---|---|\n"
             "| REL-001 | 林远 → 苏晴 | 保护 | 同门 | 暗中倾慕 | 山门遇险 | 林远受伤 | 信任 | A | 第3章 |\n"
@@ -927,19 +931,19 @@ def test_relation_chart_never_falls_back_to_pinyin() -> None:
             payload = json.loads(result.stdout)
             require(result.returncode == 0 and payload["ok"] and payload["png"] == [],
                     "关系图脚本失败：" + result.stdout + result.stderr)
-            chart = (root / "人物关系图" / "人物关系图.md").read_text(encoding="utf-8")
+            chart = (root / "인물관계도" / "인물관계도.md").read_text(encoding="utf-8")
             require("```mermaid" in chart and '["林远"]' in chart and '["苏晴"]' in chart
                     and "信任（山门遇险） → 反目（宗门大比）" in chart,
                     "Markdown 关系图必须保留中文人名和关系演变：" + chart)
-            require(not list((root / "人物关系图").glob("*.png")), "没有中文字体时不能生成 PNG")
-        require("人物关系图/人物关系图.md" in (payload.get("author_message") or ""),
+            require(not list((root / "인물관계도").glob("*.png")), "没有中文字体时不能生成 PNG")
+        require("인물관계도/인물관계도.md" in (payload.get("author_message") or ""),
                 "画不了中文图片时必须用大白话告诉作者去看 Markdown 版：" + json.dumps(payload, ensure_ascii=False))
         missing = run(CHART, "--root", Path(temporary))
         require(missing.returncode == 2 and json.loads(missing.stdout)["author_message"],
                 "缺关系表时必须给作者能看懂的原因")
 
 
-def load_chart_module():  # noqa: ANN201 - module object
+def load_chart_module():  # noqa: ANN201 - 모듈 객체
     import importlib.util
     spec = importlib.util.spec_from_file_location("render_relation_chart_under_test", CHART)
     module = importlib.util.module_from_spec(spec)
@@ -981,8 +985,8 @@ def test_relation_chart_font_choice() -> None:
 
     with tempfile.TemporaryDirectory(prefix="long-chart-font-") as temporary:
         root = Path(temporary) / "测试书"
-        (root / "角色").mkdir(parents=True)
-        (root / "角色" / "角色关系.md").write_text(
+        (root / "인물").mkdir(parents=True)
+        (root / "인물" / "인물관계.md").write_text(
             "| 主体 → 客体 | 变化后状态 |\n|---|---|\n| \U00020000祖 → 林远 | 师徒 |\n", encoding="utf-8")
         chart.matplotlib_available = lambda: True
         payload = chart.render(root, True)
@@ -996,15 +1000,15 @@ def test_relation_chart_font_choice() -> None:
 
         chart.draw_png = broken_draw
         payload = chart.render(root, True)
-        require(payload["ok"] and (root / "人物关系图" / "人物关系图.md").is_file() and payload["author_message"],
+        require(payload["ok"] and (root / "인물관계도" / "인물관계도.md").is_file() and payload["author_message"],
                 "画图片出错时 Markdown 关系图必须已经写好：" + json.dumps(payload, ensure_ascii=False))
 
 
 def test_relation_chart_mermaid_edge_cases() -> None:
     with tempfile.TemporaryDirectory(prefix="long-chart-mermaid-") as temporary:
         root = Path(temporary) / "测试书"
-        (root / "角色").mkdir(parents=True)
-        (root / "角色" / "角色关系.md").write_text(
+        (root / "인물").mkdir(parents=True)
+        (root / "인물" / "인물관계.md").write_text(
             "| 关系ID | 主体 → 客体 | 关系动作/类型 | 变化后状态 |\n|---|---|---|---|\n"
             "| R1 | ** → 林远 | ** | %%{init: {}}%% |\n"
             "| R2 | 林远 ↔ 苏晴 | 同盟 | 同盟 |\n"
@@ -1013,7 +1017,7 @@ def test_relation_chart_mermaid_edge_cases() -> None:
             encoding="utf-8")
         result = run(CHART, "--root", root)
         payload = json.loads(result.stdout)
-        chart = (root / "人物关系图" / "人物关系图.md").read_text(encoding="utf-8")
+        chart = (root / "인물관계도" / "인물관계도.md").read_text(encoding="utf-8")
         block = chart.split("```mermaid", 1)[1].split("```", 1)[0]
         require(result.returncode == 0 and '[""]' not in block and '|""|' not in block and "%%" not in block,
                 "Mermaid 标签清洗后为空或含 %% 时必须换成占位词：" + block)
@@ -1040,7 +1044,7 @@ def test_digest_reads_observations_and_fields_without_whole_caches() -> None:
                             "--range-sha256", batch["range_sha256"], *[
                                 item for source in batch["source_files"] for item in ("--source-file", source)])
             require(committed.returncode == 0, committed.stdout + committed.stderr)
-        # A stray cache that no committed batch owns must not leak into the digest.
+        # 완료된 어느 배치에도 속하지 않는 잔여 캐시는 요약에 유입되면 안 된다.
         stray = root / "_analysis_cache" / "legacy" / "批次-RAW-1-3.old.md"
         stray.parent.mkdir(parents=True, exist_ok=True)
         stray.write_text("观察标记-陈旧", encoding="utf-8")
@@ -1090,11 +1094,12 @@ def test_plan_next_prints_only_upcoming_batches() -> None:
 
 
 def test_plan_carries_every_dispatch_field() -> None:
-    """Everything the extractor needs per batch comes from plan, including the handoff cache."""
+    """추출기가 배치마다 필요한 모든 자료는 인계 캐시를 포함해 plan에서 얻는다."""
     template = (ROOT / "skills" / "story-setup" / "references" / "templates" / "agents" / "chapter-extractor.md")
     require("plan_mode" not in template.read_text(encoding="utf-8"), "extractor 不能要求 plan 不输出的 plan_mode")
     ops = (ROOT / "skills" / "story-long-analyze" / "references" / "pipeline-ops.md").read_text(encoding="utf-8")
-    dispatch = ops.split("## 4. 执行与提交一个批次", 1)[1].split("子代理把完整输出写进", 1)[0]
+    dispatch = re.split(r"## 4\. (?:执行与提交一个批次|묶음 하나 실행·반영)", ops, maxsplit=1)[1]
+    dispatch = re.split(r"子代理把完整输出写进|하위 에이전트는 전체 출력을 파일에", dispatch, maxsplit=1)[0]
     with tempfile.TemporaryDirectory(prefix="long-plan-dispatch-") as temporary:
         root = Path(temporary) / "书"
         write_source_and_index(root, 10)
@@ -1126,7 +1131,7 @@ def test_plan_carries_every_dispatch_field() -> None:
 
 
 def test_plot_point_floor_scales_with_chapter_length() -> None:
-    """A ~540-char prologue cannot be held to the 10-point floor of a normal chapter."""
+    """약 540자 서장에는 일반 장의 최소 10개 지점 기준을 적용할 수 없다."""
     with tempfile.TemporaryDirectory(prefix="long-plot-floor-") as temporary:
         root = Path(temporary) / "书"
         write_source_and_index(root, 2, body_chars={1: 540, 2: 2400})
@@ -1146,7 +1151,7 @@ def test_plot_point_floor_scales_with_chapter_length() -> None:
         for points, label in (({1: 2, 2: 12}, "楔子低于下限"), ({1: 3, 2: 9}, "正常章少于10")):
             refused = commit(points)
             require(refused.returncode != 0 and json.loads(refused.stdout)["error"] == "plot_point_count"
-                    and not (root / "章节").exists(), f"{label}必须整批拒收")
+                    and not (root / "장별분석").exists(), f"{label}必须整批拒收")
         accepted = commit({1: 3, 2: 12})
         require(accepted.returncode == 0, "楔子 3 个情节点应当通过：" + accepted.stdout)
 
@@ -1166,9 +1171,10 @@ def test_plan_chapter_window() -> None:
 
 
 def test_extractor_self_check_patterns_match_commit_format() -> None:
-    """The Grep self-check in the extractor template must count exactly what commit accepts."""
+    """추출기 템플릿의 Grep 자체 검사는 commit이 허용하는 대상과 정확히 같은 항목을 세어야 한다."""
     template = (ROOT / "skills" / "story-setup" / "references" / "templates" / "agents" / "chapter-extractor.md")
-    section = template.read_text(encoding="utf-8").split("10. **写完先用 Grep", 1)[1].split("任一项对不上", 1)[0]
+    section = re.split(r"10\. \*\*(?:写完先用 Grep|작성 후 Grep으로)", template.read_text(encoding="utf-8"), maxsplit=1)[1]
+    section = re.split(r"任一项对不上|하나라도 다르면", section, maxsplit=1)[0]
     patterns = re.findall(r"`(\^[^`]+)`", section)
     require(len(patterns) == 4, f"自查模式应为 P 行、标题行、标签行、字段行四条：{patterns}")
     point, header, tag, field = (re.compile(p, re.MULTILINE) for p in patterns)
@@ -1192,10 +1198,10 @@ def test_extractor_write_guard() -> None:
         return
     with tempfile.TemporaryDirectory(prefix="extractor-guard-") as temporary:
         project = Path(temporary) / "项目"
-        book = project / "拆文库" / "书"
+        book = project / "작품분석실" / "书"
         (book / "_analysis_cache").mkdir(parents=True)
         (book / "chapter_index.csv").write_text("chapter\n", encoding="utf-8")
-        bare = project / "拆文库" / "空目录"
+        bare = project / "작품분석실" / "空目录"
         (bare / "_analysis_cache").mkdir(parents=True)
 
         def guard(file_path: str | None, raw: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -1209,12 +1215,12 @@ def test_extractor_write_guard() -> None:
         for path in allowed:
             result = guard(str(path))
             require(result.returncode == 0, f"合法输入文件必须放行：{path} {result.stderr}")
-        require(guard("拆文库/书/_analysis_cache/输入-RAW-7-9.md").returncode == 0, "相对路径按项目根解析后放行")
+        require(guard("작품분석실/书/_analysis_cache/输入-RAW-7-9.md").returncode == 0, "相对路径按项目根解析后放行")
         blocked = {
             "文件名不对": book / "_analysis_cache" / "输入.md",
             "写缓存本体": book / "_analysis_cache" / "批次-RAW-4-6.md",
             "章号倒置": book / "_analysis_cache" / "输入-RAW-6-4.md",
-            "写摘要": book / "章节" / "第4章_摘要.md",
+            "写摘要": book / "장별분석" / "제4장_요약.md",
             "非拆文目录": bare / "_analysis_cache" / "输入-RAW-1-3.md",
             "项目外": Path(temporary) / "外面" / "_analysis_cache" / "输入-RAW-1-3.md",
         }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior tests for the Antigravity named-group hook merger."""
+"""Antigravity 이름 지정 그룹 훅 병합기의 동작 테스트."""
 
 from __future__ import annotations
 
@@ -35,9 +35,10 @@ def main() -> None:
         target.parent.mkdir(parents=True)
         target.write_text(json.dumps(existing), encoding="utf-8")
         target.chmod(0o640)
+        original_mode = target.stat().st_mode & 0o777
         MODULE.atomic_write(target, merged)
         assert json.loads(target.read_text(encoding="utf-8")) == merged
-        assert target.stat().st_mode & 0o777 == 0o640
+        assert target.stat().st_mode & 0o777 == original_mode
 
     try:
         MODULE.merge({}, {"other": {}})

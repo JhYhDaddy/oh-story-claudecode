@@ -1,54 +1,54 @@
-# Agent Note: OpenCode 适配只支持 2.x，部署前按版本拦截
+# Agent Note: OpenCode 어댑터는 2.x만 지원하고 배포 전에 버전 검사로 차단
 
 Status: implemented
 
-Related: [2026-09-24-opencode-version-gate-fail-closed](../bug-fix/2026-09-24-opencode-version-gate-fail-closed.md)（「版本无法确定时继续部署」一条已翻转为停止部署）；[2026-10-29-opencode-2-2-call-gated-tools](../testing/2026-10-29-opencode-2-2-call-gated-tools.md)（2.2 起 `skill` 与 Code Mode 工具改用调用验证）
+Related: [2026-09-24-opencode-version-gate-fail-closed](../bug-fix/2026-09-24-opencode-version-gate-fail-closed.md)(‘버전을 확정할 수 없어도 배포 계속’은 이후 배포 중단으로 뒤집힘), [2026-10-29-opencode-2-2-call-gated-tools](../testing/2026-10-29-opencode-2-2-call-gated-tools.md)(2.2부터 `skill`·Code Mode 도구는 실제 호출로 검증)
 
 ## Problem
 
-OpenCode 2.0（2026-09-11 起，npm 包 `@opencode/cli`，与停在 1.18.x 的 `opencode-ai` 分开发布）重写了服务端。我们的 OpenCode 适配按 1.x 写，在 2.0.15 上实测：
+OpenCode 2.0(2026-09-11부터, npm 패키지 `@opencode/cli`로 1.18.x에 머문 `opencode-ai`와 별도 배포)은 서버를 다시 구현했다. 우리 OpenCode 어댑터는 1.x 기준이며 2.0.15에서 다음을 확인했다.
 
-- 写正文守卫插件 default export 是 1.x 的 hook-map 函数，2.x loader 只收 `{ id, setup }` / `{ id, effect }`，报 `PluginModule.LoadError` 后只记一行 WARN，服务照常运行——大纲守卫与写后兜底整场静默失效（#440/#441）。
-- `opencode.json` 的 `plugin` 数组填的是单文件路径，2.x 只接受目录，该项被丢弃（`configured plugin path must be a directory`）。
-- 工具改名改参：`bash`→`shell`、`apply_patch`→`patch`、`write`/`edit` 的 `filePath`→`path`。
-- 2.x 默认由一个后台服务进程服务多个项目，插件里的 `process.cwd()` 不再是用户项目；沿用 1.x 的项目根定位会把有细纲的合法正文写入误拦，写后兜底也扫错位置。
-- `opencode debug skill`、`debug agent --tool` 被删，CI 的 e2e 与运行时权限测试在 2.x 上跑不起来；`opencode models --verbose` 没了，story-setup 的 Agent 模型分级依赖它取成本。
+- 본문 쓰기 검사 플러그인의 default export는 1.x hook-map 함수지만 2.x loader는 `{ id, setup }` / `{ id, effect }`만 받는다. `PluginModule.LoadError` 후 WARN 한 줄만 기록하고 서비스는 계속 실행되어 개요 검사와 집필 후 보완 검사가 세션 내내 조용히 작동하지 않는다(#440/#441).
+- `opencode.json`의 `plugin` 배열은 단일 파일 경로였으나 2.x는 디렉터리만 허용하여 항목을 버린다(`configured plugin path must be a directory`).
+- 도구명·인자가 바뀌었다. `bash`→`shell`, `apply_patch`→`patch`, `write`/`edit`의 `filePath`→`path`.
+- 2.x는 기본적으로 백그라운드 서비스 프로세스 하나가 여러 프로젝트를 담당하여 플러그인의 `process.cwd()`가 더 이상 사용자 프로젝트가 아니다. 1.x의 프로젝트 루트 탐색을 그대로 쓰면 상세 개요가 있는 정상 본문 쓰기를 잘못 차단하고 집필 후 검사도 다른 위치를 스캔한다.
+- `opencode debug skill`과 `debug agent --tool`이 삭제되어 CI의 e2e·런타임 권한 테스트가 2.x에서 실행되지 않는다. `opencode models --verbose`도 사라졌는데 story-setup의 에이전트 모델 등급 분류는 이 명령으로 비용을 조회했다.
 
-CI 一直绿，是因为 `cli-compat` 装的是 `opencode-ai@latest`，永远是 1.x；e2e 也只检查配置里有没有插件项，从不检查插件是否真的加载、钩子是否真的生效。
+CI가 계속 통과한 이유는 `cli-compat`가 늘 1.x인 `opencode-ai@latest`를 설치했기 때문이다. e2e도 설정에 플러그인 항목이 있는지만 확인하고 실제 로드·훅 작동 여부는 검사하지 않았다.
 
 ## Decision
 
-- 只支持 OpenCode 2.x，仓库不保留 1.x 分支代码。
-- `skills/story-setup/references/opencode/plugin.ts` 默认导出 `{ id: "oh-story.story-hooks", setup(ctx) }`：`ctx.tool.hook("execute.before")` 对 `write`/`edit`（`path`）、`patch`（`patchText`）、`shell`（`command` + `workdir`）抽取正文目标，命中拦截时抛错，运行时把错误作为工具结果回给模型；`ctx.tool.hook("execute.after")` 在 `status: completed` 时把兜底发现追加进 `result.content`；`ctx.session.hook("compaction")` 往摘要请求的 `system` 追加写作上下文位置。项目根取 `ctx.location.directory` 的 git toplevel，相对路径以会话目录（或 shell 的 `workdir`）为起点。共享核 `story_hook_core.js` 未改。
-- 插件靠 2.x 自动发现 `.opencode/plugins/*.ts` 加载，`opencode.json.patch` 删除；story-setup「OpenCode 部署前置」从已有 `opencode.json(c)` 的 `plugin`/`plugins` 数组删掉指向 story-hooks.ts 的旧项。`lib/` 子目录只要不放 `index.*` / `server.*` / `tui.*` / `rpc.*` 就不会被当成插件包。
-- `scripts/sync-opencode.py` 生成原生 `permissions:` 规则列表（`action`/`resource`/`effect`，Bash→`shell`，列表顺序即优先级）。
-- story-setup 部署 OpenCode 前执行 `opencode --version`：主版本 < 2 停止 OpenCode 部署并给出 2.x 安装命令；命令不可用时继续但安装报告首行提示版本未确认。模型分级改用 `opencode api model.list`（JSON 含 `cost[]`/`limit.context`），回退 `opencode models`。验证项增加 `plugin.list` 中 `oh-story.story-hooks` 为 `active`。
-- CI `cli-compat.yml` 安装 `@opencode/cli@latest`。`scripts/test-opencode-cli-e2e.sh` 先在项目外拉起后台服务，再断言 13 个 skill（`GET /api/skill` 的 `path`）、13 个 command、7 个原生权限 agent、`plugin.list` 中插件为 `active`；然后用 `scripts/opencode-mock-llm.mjs` 驱动真实 `opencode run`：无细纲的 write/shell/patch 被拦且模型收到拦截原因，有细纲的 write 落盘且模型收到兜底发现，`session.compact` 的摘要请求带 `Writing context: book/追踪/上下文.md`。
-- `scripts/test-agent-permissions.py --opencode` 预热后台服务后对每个 agent 跑 `opencode run --agent`，以 mock 收到的工具清单为运行时判定（2.x 把整条 deny 的工具从清单里摘掉），并验证允许的 write/shell 真实执行、被拒的 write 得到 `No tool named "write"`。`check-opencode-adapter.sh` 的静态裁决矩阵改为独立复刻 2.x `whollyDisabled()`。
-- `scripts/test-opencode-plugin.mjs` 以 `setup(ctx)` 注册钩子，且在项目外的 cwd 里调用 `setup` 与钩子，锁住 `ctx.location` 定位。
-- 2.x 后台服务默认监听固定端口，开发机上已有 OpenCode 服务时隔离 HOME 里的服务起不来、请求一直重试。e2e 与运行时权限测试先用 `opencode service set port` 给隔离 HOME 钉一个空闲端口。
+- OpenCode 2.x만 지원하며 저장소에 1.x 분기 코드를 남기지 않는다.
+- `skills/story-setup/references/opencode/plugin.ts`의 기본 내보내기는 `{ id: "oh-story.story-hooks", setup(ctx) }`다. `ctx.tool.hook("execute.before")`는 `write`/`edit`의 `path`, `patch`의 `patchText`, `shell`의 `command` + `workdir`에서 본문 대상을 추출하고 차단되면 예외를 던진다. 런타임이 이를 도구 결과로 모델에 돌려준다. `ctx.tool.hook("execute.after")`는 `status: completed`일 때 보완 검사 결과를 `result.content`에 덧붙인다. `ctx.session.hook("compaction")`은 요약 요청의 `system`에 집필 컨텍스트 위치를 추가한다. 프로젝트 루트는 `ctx.location.directory`의 git toplevel이며 상대 경로는 세션 디렉터리 또는 shell의 `workdir`를 기준으로 한다. 공유 코어 `story_hook_core.js`는 변경하지 않았다.
+- 플러그인은 2.x의 `.opencode/plugins/*.ts` 자동 검색으로 로드하며 `opencode.json.patch`는 삭제한다. story-setup의 ‘OpenCode 배포 전제’에서는 기존 `opencode.json(c)`의 `plugin`/`plugins` 배열에서 story-hooks.ts를 가리키는 옛 항목을 제거한다. `lib/` 하위 디렉터리는 `index.*` / `server.*` / `tui.*` / `rpc.*`를 넣지 않으면 플러그인 패키지로 취급되지 않는다.
+- `scripts/sync-opencode.py`는 기본 `permissions:` 규칙 목록을 생성한다(`action`/`resource`/`effect`, Bash→`shell`, 목록 순서가 우선순위).
+- story-setup은 OpenCode 배포 전 `opencode --version`을 실행한다. 주 버전이 2 미만이면 배포를 중단하고 2.x 설치 명령을 안내한다. 명령을 사용할 수 없으면 계속하되 설치 보고서 첫 줄에 버전 미확인을 알린다. 모델 등급 분류는 `opencode api model.list`(`cost[]`/`limit.context`가 있는 JSON)를 사용하고 실패하면 `opencode models`로 대체한다. `plugin.list`에서 `oh-story.story-hooks`가 `active`인지 검증하는 항목을 추가한다.
+- CI `cli-compat.yml`은 `@opencode/cli@latest`를 설치한다. `scripts/test-opencode-cli-e2e.sh`는 먼저 프로젝트 밖에서 백그라운드 서비스를 시작하고 스킬 13개(`GET /api/skill`의 `path`), command 13개, 기본 권한 에이전트 7개, `plugin.list`의 플러그인 `active` 상태를 단언한다. 이어 `scripts/opencode-mock-llm.mjs`로 실제 `opencode run`을 구동한다. 상세 개요 없는 write/shell/patch가 차단되고 모델이 이유를 받는지, 개요가 있는 write는 저장되고 모델이 보완 검사 결과를 받는지, `session.compact` 요약 요청에 `Writing context: book/追踪/上下文.md`가 포함되는지 확인한다.
+- `scripts/test-agent-permissions.py --opencode`는 백그라운드 서비스를 예열한 뒤 에이전트마다 `opencode run --agent`를 실행하고 모의 모델이 받은 도구 목록을 런타임 판정으로 삼는다(2.x는 도구 전체를 deny하면 목록에서 제거). 허용한 write/shell이 실제 실행되고 거부한 write가 `No tool named "write"`를 받는지도 검증한다. `check-opencode-adapter.sh`의 정적 판정 행렬은 2.x `whollyDisabled()`를 독립적으로 재현하도록 바꾼다.
+- `scripts/test-opencode-plugin.mjs`는 `setup(ctx)`로 훅을 등록하고 프로젝트 밖 cwd에서 `setup`과 훅을 호출하여 `ctx.location` 기준 탐색을 고정한다.
+- 2.x 백그라운드 서비스는 기본 고정 포트를 사용한다. 개발 장비에 OpenCode 서비스가 이미 있으면 격리 HOME의 서비스가 시작되지 않고 요청이 계속 재시도된다. e2e·런타임 권한 테스트는 먼저 `opencode service set port`로 격리 HOME에 빈 포트를 지정한다.
 
-来源：#443（修复 #440、#441）
+출처: #443(#440·#441 수정)
 
 ## Alternatives considered
 
-- **一个文件同时导出 1.x `server()` 与 2.x `setup()`**——最强理由：官方迁移文档给了这种双导出写法，1.x 用户（当前默认安装渠道仍是 1.x）不受影响。否：维护者明确不留旧代码；且 1.x 只从 1.18.29 起认对象形式，双导出也覆盖不全 1.x；两套钩子、两套工具名、两套参数名要长期并行测试。
-- **agent 继续用 1.x `permission:` 写法，靠 2.x 的 legacy 迁移**——最强理由：一份文件两代都能读，改动最小。否：只支持 2.x 后这层兼容就是旧格式残留，且依赖上游 legacy 路径长期保留；原生 `permissions:` 与官方文档一致，生成器里映射一次即可。
-- **保留 `opencode.json` 里的插件注册**——最强理由：显式声明比自动发现可见。否：2.x 对单文件路径直接丢弃并告警，要注册只能改成目录形式的插件包，比自动发现多一层结构却没有收益。
-- **版本不符时照常部署、只在报告里提示**——最强理由：不打断多端部署。否：1.x 上插件加载失败是静默的，报告里一行提示很容易被忽略，写正文守卫缺席会直接影响产出；只有 `opencode` 命令不可用、无法判断时才降级为提示。
-- **e2e 用 `--standalone` 私有服务器**——最强理由：每次调用独立、无需管理后台服务生命周期。否：冷启动时 location 的 agent/插件异步加载，`--standalone` 查询返回空列表、`run --agent` 报 Agent not found；且 standalone 服务的 cwd 恰好是项目，测不出 `process.cwd()` 回归。
+- **한 파일에서 1.x `server()`와 2.x `setup()` 동시 내보내기**: 공식 이전 문서가 이중 내보내기를 안내하므로 현재 기본 설치 경로가 여전히 1.x인 사용자에게 영향이 없다는 장점이 있다. 그러나 유지 관리자가 구코드를 남기지 않겠다고 명시했다. 1.x도 1.18.29부터 객체 형식을 인식하므로 이중 내보내기로 모든 1.x를 지원할 수 없고, 두 훅·도구명·인자 체계를 장기간 병렬 테스트해야 해 채택하지 않는다.
+- **에이전트는 1.x `permission:`을 유지하고 2.x legacy 이전에 의존**: 파일 하나를 두 세대가 읽어 변경이 최소다. 그러나 2.x만 지원하면 이는 옛 형식의 잔재이며 상위 프로젝트가 legacy 경로를 계속 유지해야 한다. 기본 `permissions:`는 공식 문서와 같고 생성기에서 한 번 매핑하면 되므로 그 방식을 사용한다.
+- **`opencode.json`의 플러그인 등록 유지**: 명시적 선언이 자동 검색보다 눈에 잘 보인다는 장점이 있다. 그러나 2.x는 단일 파일 경로를 버리고 경고한다. 등록하려면 디렉터리형 플러그인 패키지로 바꿔야 하는데 자동 검색보다 구조만 늘고 이점이 없어 채택하지 않는다.
+- **버전이 달라도 정상 배포하고 보고서에만 안내**: 다중 호스트 배포를 멈추지 않는다는 장점이 있다. 그러나 1.x의 플러그인 로드 실패는 조용히 발생하고 한 줄 안내는 쉽게 지나치며 본문 검사 부재가 산출물에 직접 영향을 준다. `opencode` 명령을 사용할 수 없어 판정 자체가 불가능할 때만 안내로 대체한다.
+- **e2e에 `--standalone` 전용 서버 사용**: 호출마다 독립적이며 백그라운드 서비스 수명 주기를 관리할 필요가 없다. 그러나 콜드 스타트에서는 location의 에이전트·플러그인이 비동기 로드되어 `--standalone` 조회가 빈 목록을 반환하고 `run --agent`는 Agent not found를 보고한다. standalone 서비스의 cwd도 마침 프로젝트이므로 `process.cwd()` 회귀를 검출할 수 없다.
 
 ## Consequences
 
-- **收益**：2.x 用户恢复大纲守卫、写后兜底与压缩前上下文注入；CI 首次在真实 OpenCode 运行时上验证钩子与权限，「插件静默没加载」「服务 cwd 不是项目」两类回归都有负对照确认会变红。
-- **代价**：仍在 1.x 的用户（`curl opencode.ai/install` 与 `npm i -g opencode-ai` 目前都装 1.x）必须升级到 2.x 才能用本适配，story-setup 会拦下并提示；已部署项目需重跑 story-setup 以替换插件与 agent，`agents_version` 按发版节奏在下一次发版时抬版，在那之前 session-start 不会提示。cli-compat 的 OpenCode job 多出 mock 模型与十余次 `opencode run`。
-- **已知上限**：mock 模型只验证钩子与权限的运行时行为，不验证真实模型会不会选对工具；钩子抛错被回传给模型、`opencode run` 以 `$PWD` 定会话目录、location 资源异步就绪，这些是 2.0.15 的实测行为而非文档保证，由 e2e 断言兜住。
+- **이점**: 2.x 사용자는 개요 검사·집필 후 보완 검사·압축 전 컨텍스트 주입을 다시 사용할 수 있다. CI가 처음으로 실제 OpenCode 런타임의 훅·권한을 검증하며 ‘플러그인이 조용히 로드되지 않음’과 ‘서비스 cwd가 프로젝트가 아님’ 두 회귀 모두 실패 대조군으로 검출됨을 확인했다.
+- **비용**: 여전히 1.x인 사용자(`curl opencode.ai/install`, `npm i -g opencode-ai` 모두 당시 1.x 설치)는 2.x로 업그레이드해야 이 어댑터를 쓸 수 있으며 story-setup이 차단·안내한다. 기존 배포 프로젝트는 플러그인·에이전트 교체를 위해 story-setup을 다시 실행해야 한다. `agents_version`은 출시 주기에 따라 다음 출시에서 올리므로 그 전에는 session-start가 안내하지 않는다. cli-compat OpenCode 작업에는 모의 모델과 `opencode run` 십여 회가 추가된다.
+- **알려진 한계**: 모의 모델은 훅·권한의 런타임 동작만 검증하고 실제 모델이 올바른 도구를 고르는지는 검증하지 않는다. 훅 예외의 모델 반환, `opencode run`이 `$PWD`로 세션 디렉터리를 정하는 동작, location 리소스의 비동기 준비는 문서 보장이 아니라 2.0.15 실측 동작이며 e2e 단언으로 보호한다.
 
-## Verification
+## 검증
 
-- `bash scripts/test-opencode-cli-e2e.sh`（OpenCode 2.0.15）通过；把插件换回 main 上的 1.x 版本，报 `story-hooks plugin missing from plugin.list`；把 `ctx.location.directory` 换成 `process.cwd()`，报 `outlined write was blocked or not written`。
-- `python3 scripts/test-agent-permissions.py --opencode <opencode 2.0.15>` 通过，7 个 agent 的工具清单与能力声明一致。
-- `node scripts/test-opencode-plugin.mjs` 通过；`process.cwd()` 变体在该测试中失败。
-- `bash scripts/check-opencode-adapter.sh` 通过。
-- 默认服务端口被另一个 OpenCode 服务占用时，钉端口前 e2e 卡死，钉端口后 e2e 与权限测试均通过。
-- 真实模型（MiMo `xiaomi/mimo-v2.6-pro`，OpenCode 2.0.15，`opencode run --auto`）逐场景实测，均符合预期：全新项目按 story-setup 部署（不写 `opencode.json`，插件 `active`）；1.x 时代的旧部署重跑 story-setup 后插件由 `failed` 变 `active`，`opencode.json` 只删掉 story-hooks 注册、保留用户字段，agent 自配的 `model:` 保留；无细纲写正文被拦后模型补细纲、补追踪再落盘，写后兜底点出的 AI 句式被模型修掉；shell heredoc 写正文被拦；从 `book/` 子目录起会话、相对路径写正文按项目根判定；narrative-writer 子代理里钩子同样生效；短篇缺小节大纲被拦；`/story` 命令正常路由；真实 compaction 摘要把 `book/追踪/上下文.md` 列为续写入口。
+- OpenCode 2.0.15의 `bash scripts/test-opencode-cli-e2e.sh`가 통과했다. 플러그인을 main의 1.x판으로 되돌리면 `story-hooks plugin missing from plugin.list`, `ctx.location.directory`를 `process.cwd()`로 바꾸면 `outlined write was blocked or not written`이 발생했다.
+- `python3 scripts/test-agent-permissions.py --opencode <opencode 2.0.15>`가 통과하고 에이전트 7개의 도구 목록이 능력 선언과 일치했다.
+- `node scripts/test-opencode-plugin.mjs`가 통과했으며 `process.cwd()` 변형은 실패했다.
+- `bash scripts/check-opencode-adapter.sh`가 통과했다.
+- 다른 OpenCode 서비스가 기본 포트를 사용 중이면 포트 지정 전에는 e2e가 멈췄고 지정 후에는 e2e·권한 테스트가 모두 통과했다.
+- 실제 모델(MiMo `xiaomi/mimo-v2.6-pro`, OpenCode 2.0.15, `opencode run --auto`)로 상황별 시험을 수행해 모두 기대와 일치했다. 새 프로젝트의 story-setup 배포는 `opencode.json`을 쓰지 않고 플러그인이 `active`였다. 1.x 시절 배포를 다시 실행하면 플러그인이 `failed`에서 `active`로 바뀌고 `opencode.json`에서는 story-hooks 등록만 삭제하며 사용자 필드와 에이전트 사용자 지정 `model:`은 유지했다. 개요 없는 본문 쓰기가 차단되면 모델이 상세 개요·추적을 보완한 뒤 저장하고 집필 후 검사가 지적한 AI 문장을 수정했다. shell heredoc 본문 쓰기가 차단되었고 `book/` 하위 디렉터리에서 세션을 시작해도 상대 경로 쓰기를 프로젝트 루트 기준으로 판정했다. narrative-writer 하위 에이전트에서도 훅이 작동했으며 단편의 소절 개요 누락도 차단했다. `/story` 명령은 정상 라우팅되었고 실제 compaction 요약은 `book/追踪/上下文.md`를 이어쓰기 진입점으로 제시했다.

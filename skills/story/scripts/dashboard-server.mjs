@@ -22,9 +22,9 @@ import { createHash, randomUUID } from "node:crypto";
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const ASSET_DIR = fileURLToPath(new URL("../assets/", import.meta.url));
 const EDITABLE_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".toml"]);
-const LONG_PROJECT_DIRECTORY_MARKERS = new Set(["正文", "大纲", "设定", "追踪"]);
-const SHORT_PROJECT_BODY_FILE = "正文.md";
-const SHORT_PROJECT_COMPANION_FILES = new Set(["小节大纲.md", "设定.md"]);
+const LONG_PROJECT_DIRECTORY_MARKERS = new Set(["본문", "개요", "설정", "추적"]);
+const SHORT_PROJECT_BODY_FILE = "본문.md";
+const SHORT_PROJECT_COMPANION_FILES = new Set(["구간개요.md", "설정.md"]);
 const IGNORED_DIRECTORIES = new Set([
   ".git",
   ".omc",
@@ -109,7 +109,7 @@ function recordScanError(scanErrors, root, absolutePath, error) {
   scanErrors.push({
     path: errorPath,
     code: typeof error?.code === "string" ? error.code : "READ_ERROR",
-    message: `目录无法读取，请检查访问权限或挂载状态：${errorPath}`,
+    message: `폴더를 읽을 수 없습니다. 접근 권한이나 드라이브 연결 상태를 확인하세요: ${errorPath}`,
   });
 }
 
@@ -128,7 +128,7 @@ async function existingRealRoot(root) {
   const absolute = resolve(root);
   const info = await stat(absolute).catch(() => null);
   if (!info?.isDirectory()) {
-    throw new DashboardError(400, "invalid_workspace", `工作区不存在或不是目录：${absolute}`);
+    throw new DashboardError(400, "invalid_workspace", `작업 공간이 없거나 폴더가 아닙니다: ${absolute}`);
   }
   return realpath(absolute);
 }
@@ -136,41 +136,41 @@ async function existingRealRoot(root) {
 export async function resolveWorkspacePath(root, requestedPath, options = {}) {
   const { editableOnly = false } = options;
   if (typeof requestedPath !== "string" || requestedPath.length === 0) {
-    throw new DashboardError(400, "invalid_path", "文件路径不能为空");
+    throw new DashboardError(400, "invalid_path", "파일 경로는 비워 둘 수 없습니다");
   }
   if (
     requestedPath.includes("\0") ||
     isAbsolute(requestedPath) ||
     /^[A-Za-z]:[\\/]/.test(requestedPath)
   ) {
-    throw new DashboardError(403, "path_outside_workspace", "只允许访问工作区内的相对路径");
+    throw new DashboardError(403, "path_outside_workspace", "작업 공간 내부의 상대 경로만 접근할 수 있습니다");
   }
 
   const realRoot = await existingRealRoot(root);
   const candidate = resolve(realRoot, requestedPath);
   if (!isPathInside(candidate, realRoot)) {
-    throw new DashboardError(403, "path_outside_workspace", "路径超出工作区");
+    throw new DashboardError(403, "path_outside_workspace", "작업 공간을 벗어난 경로입니다");
   }
 
   const info = await lstat(candidate).catch((error) => {
     if (error?.code === "ENOENT") {
-      throw new DashboardError(404, "file_not_found", "文件不存在");
+      throw new DashboardError(404, "file_not_found", "파일이 없습니다");
     }
     throw error;
   });
   if (info.isSymbolicLink()) {
-    throw new DashboardError(403, "symlink_not_editable", "Dashboard 不读写符号链接文件");
+    throw new DashboardError(403, "symlink_not_editable", "대시보드는 심볼릭 링크 파일을 읽거나 쓰지 않습니다");
   }
   if (!info.isFile()) {
-    throw new DashboardError(400, "not_a_file", "目标不是普通文件");
+    throw new DashboardError(400, "not_a_file", "대상이 일반 파일이 아닙니다");
   }
 
   const resolvedFile = await realpath(candidate);
   if (!isPathInside(resolvedFile, realRoot)) {
-    throw new DashboardError(403, "path_outside_workspace", "符号链接指向工作区外部");
+    throw new DashboardError(403, "path_outside_workspace", "심볼릭 링크가 작업 공간 외부를 가리킵니다");
   }
   if (editableOnly && !isEditableFile(candidate)) {
-    throw new DashboardError(415, "unsupported_file_type", "该文件类型不支持在线编辑");
+    throw new DashboardError(415, "unsupported_file_type", "이 파일 형식은 브라우저에서 편집할 수 없습니다");
   }
 
   return { absolutePath: candidate, realRoot, info };
@@ -186,49 +186,49 @@ function directoryNode(absolutePath, relativePath) {
   };
 }
 
-function assertRelativeWorkspacePath(requestedPath, label = "路径") {
+function assertRelativeWorkspacePath(requestedPath, label = "경로") {
   if (typeof requestedPath !== "string" || requestedPath.length === 0) {
-    throw new DashboardError(400, "invalid_path", `${label}不能为空`);
+    throw new DashboardError(400, "invalid_path", `${label} 항목은 비워 둘 수 없습니다`);
   }
   if (
     requestedPath.includes("\0") ||
     isAbsolute(requestedPath) ||
     /^[A-Za-z]:[\\/]/.test(requestedPath)
   ) {
-    throw new DashboardError(403, "path_outside_workspace", "只允许访问工作区内的相对路径");
+    throw new DashboardError(403, "path_outside_workspace", "작업 공간 내부의 상대 경로만 접근할 수 있습니다");
   }
 }
 
 export async function resolveWorkspaceDirectory(root, requestedPath) {
-  assertRelativeWorkspacePath(requestedPath, "目录路径");
+  assertRelativeWorkspacePath(requestedPath, "폴더 경로");
   const realRoot = await existingRealRoot(root);
   const candidate = resolve(realRoot, requestedPath);
   if (!isPathInside(candidate, realRoot)) {
-    throw new DashboardError(403, "path_outside_workspace", "路径超出工作区");
+    throw new DashboardError(403, "path_outside_workspace", "작업 공간을 벗어난 경로입니다");
   }
   if (
     requestedPath !== "." &&
     requestedPath.split(/[\\/]+/).some((segment) => shouldIgnoreDirectory(segment))
   ) {
-    throw new DashboardError(403, "directory_hidden", "该目录不会显示在 Dashboard 中");
+    throw new DashboardError(403, "directory_hidden", "이 폴더는 대시보드에 표시되지 않습니다");
   }
 
   const info = await lstat(candidate).catch((error) => {
     if (error?.code === "ENOENT") {
-      throw new DashboardError(404, "directory_not_found", "目录不存在");
+      throw new DashboardError(404, "directory_not_found", "폴더가 없습니다");
     }
     throw error;
   });
   if (info.isSymbolicLink()) {
-    throw new DashboardError(403, "symlink_not_readable", "Dashboard 不读取符号链接目录");
+    throw new DashboardError(403, "symlink_not_readable", "대시보드는 심볼릭 링크 폴더를 읽지 않습니다");
   }
   if (!info.isDirectory()) {
-    throw new DashboardError(400, "not_a_directory", "目标不是目录");
+    throw new DashboardError(400, "not_a_directory", "대상이 폴더가 아닙니다");
   }
 
   const resolvedDirectory = await realpath(candidate);
   if (!isPathInside(resolvedDirectory, realRoot)) {
-    throw new DashboardError(403, "path_outside_workspace", "符号链接指向工作区外部");
+    throw new DashboardError(403, "path_outside_workspace", "심볼릭 링크가 작업 공간 외부를 가리킵니다");
   }
   return { absolutePath: candidate, realRoot };
 }
@@ -236,11 +236,11 @@ export async function resolveWorkspaceDirectory(root, requestedPath) {
 function parseDirectoryCursor(value) {
   if (value === null || value === "") return 0;
   if (!/^\d+$/.test(value)) {
-    throw new DashboardError(400, "invalid_cursor", "目录游标无效");
+    throw new DashboardError(400, "invalid_cursor", "폴더 목록의 이어 읽기 위치가 유효하지 않습니다");
   }
   const cursor = Number(value);
   if (!Number.isSafeInteger(cursor)) {
-    throw new DashboardError(400, "invalid_cursor", "目录游标无效");
+    throw new DashboardError(400, "invalid_cursor", "폴더 목록의 이어 읽기 위치가 유효하지 않습니다");
   }
   return cursor;
 }
@@ -267,7 +267,7 @@ export async function listWorkspaceDirectory(root, requestedPath, cursorValue = 
     throw new DashboardError(
       403,
       "directory_unreadable",
-      `目录无法读取，请检查访问权限或挂载状态：${toPosixPath(requestedPath)}`,
+      `폴더를 읽을 수 없습니다. 접근 권한이나 드라이브 연결 상태를 확인하세요: ${toPosixPath(requestedPath)}`,
     );
   });
   const visibleEntries = visibleDirectoryEntries(entries);
@@ -302,33 +302,33 @@ export async function listWorkspaceDirectory(root, requestedPath, cursorValue = 
 
 async function listLibraryRoots(root, scanErrors) {
   const roots = [];
-  const standardRoot = resolve(root, "拆文库");
+  const standardRoot = resolve(root, "작품분석실");
   const standardInfo = await lstat(standardRoot).catch(() => null);
   if (standardInfo?.isDirectory() && !standardInfo.isSymbolicLink()) {
-    // 单个拆文库读不动时保留其他项目，但把残缺扫描显式带回前端；空数组只能表达“确实为空”，
-    // 不能再同时承担权限错误/外挂盘掉线，否则作者会把不可见文稿误当成不存在。
+    // 분석 라이브러리 하나를 읽지 못해도 다른 프로젝트는 유지하되 불완전한 스캔임을 프런트엔드에 명시한다. 빈 배열은 실제 비어 있음을 뜻하며
+    // 권한 오류나 외장 드라이브 연결 해제까지 나타내면 안 된다. 작가가 보이지 않는 원고를 없는 원고로 오인할 수 있다.
     const entries = await readdir(standardRoot, { withFileTypes: true }).catch((error) => {
       recordScanError(scanErrors, root, standardRoot, error);
       return [];
     });
     for (const entry of entries) {
       if (entry.isDirectory() && !entry.isSymbolicLink()) {
-        roots.push({ absolutePath: resolve(standardRoot, entry.name), relativePath: `拆文库${sep}${entry.name}` });
+        roots.push({ absolutePath: resolve(standardRoot, entry.name), relativePath: `작품분석실${sep}${entry.name}` });
       }
     }
   }
 
-  // 工作区根目录读不动就没有任何可展示的树，直接给出可执行的报错，而不是静默返回空树。
+  // 작업 공간 루트를 읽지 못하면 표시할 트리가 없으므로 빈 트리를 조용히 반환하지 않고 대응 가능한 오류를 제공한다.
   const rootEntries = await readdir(root, { withFileTypes: true }).catch(() => {
     throw new DashboardError(
       403,
       "workspace_unreadable",
-      `工作区目录无法读取，请检查访问权限：${root}`,
+      `작업 공간 폴더를 읽을 수 없습니다. 접근 권한을 확인하세요: ${root}`,
     );
   });
   for (const entry of rootEntries) {
     if (
-      entry.name.startsWith("拆文库-") &&
+      entry.name.startsWith("작품분석실-") &&
       entry.isDirectory() &&
       !entry.isSymbolicLink()
     ) {
@@ -446,10 +446,10 @@ export async function scanWorkspace(root) {
 export async function searchWorkspace(root, queryValue, scopeValue) {
   const query = typeof queryValue === "string" ? queryValue.trim() : "";
   if (!query || query.length > 100) {
-    throw new DashboardError(400, "invalid_query", "搜索词长度必须在 1–100 个字符之间");
+    throw new DashboardError(400, "invalid_query", "검색어는 1~100자여야 합니다");
   }
   if (!["libraries", "projects"].includes(scopeValue)) {
-    throw new DashboardError(400, "invalid_scope", "搜索范围必须是拆文库或写作项目");
+    throw new DashboardError(400, "invalid_scope", "검색 범위는 작품 분석 자료 또는 집필 프로젝트여야 합니다");
   }
 
   const realRoot = await existingRealRoot(root);
@@ -557,7 +557,7 @@ async function readJsonBody(request) {
   for await (const chunk of request) {
     size += chunk.length;
     if (size > MAX_REQUEST_BYTES) {
-      throw new DashboardError(413, "request_too_large", "保存内容超过 2 MiB 限制");
+      throw new DashboardError(413, "request_too_large", "저장할 내용이 2 MiB 한도를 초과했습니다");
     }
     chunks.push(chunk);
   }
@@ -565,7 +565,7 @@ async function readJsonBody(request) {
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
-    throw new DashboardError(400, "invalid_json", "请求正文不是有效 JSON");
+    throw new DashboardError(400, "invalid_json", "요청 본문이 올바른 JSON 형식이 아닙니다");
   }
 }
 
@@ -584,9 +584,9 @@ function responseHeaders(contentType) {
 
 function sendJson(response, status, payload) {
   response.writeHead(status, responseHeaders("application/json; charset=utf-8"));
-  // Keep JSON safe even if a response is ever embedded in an HTML context.
-  // The endpoint already sends application/json with nosniff and a strict CSP;
-  // escaping HTML-significant characters adds defense in depth for user input.
+  // 응답을 HTML 문맥에 삽입하더라도 JSON이 안전하도록 한다.
+  // 엔드포인트는 이미 application/json, nosniff, 엄격한 CSP를 사용한다.
+  // HTML에서 의미를 갖는 문자를 이스케이프해 사용자 입력을 추가로 방어한다.
   const body = JSON.stringify(payload).replace(/[<>&\u2028\u2029]/g, (character) => {
     switch (character) {
       case "<":
@@ -609,7 +609,7 @@ async function readWorkspaceFile(root, requestedPath) {
     editableOnly: true,
   });
   if (info.size > MAX_FILE_BYTES) {
-    throw new DashboardError(413, "file_too_large", "文件超过 2 MiB，无法在 Dashboard 中打开");
+    throw new DashboardError(413, "file_too_large", "파일이 2 MiB를 초과해 대시보드에서 열 수 없습니다");
   }
   const content = await readFile(absolutePath, "utf8");
   return {
@@ -625,8 +625,8 @@ async function readWorkspaceFile(root, requestedPath) {
 async function replaceFileAtomically(target, content, mode) {
   const temporary = resolve(dirname(target), `.${basename(target)}.story-dashboard-${randomUUID()}.tmp`);
   await writeFile(temporary, content, { encoding: "utf8", mode });
-  // open(2) 的 mode 会被进程 umask 削掉，光靠 writeFile 保不住原文件权限，
-  // 所以改名前显式补一次；个别文件系统不支持权限位，失败就按原样落盘。
+  // open(2)의 mode는 프로세스 umask에 의해 줄어들어 writeFile만으로 원래 권한을 보존할 수 없다.
+  // 따라서 이름 변경 전에 명시적으로 복원한다. 권한 비트를 지원하지 않는 일부 파일시스템에서는 실패해도 그대로 저장한다.
   await chmod(temporary, mode & 0o7777).catch(() => {});
   try {
     await rename(temporary, target);
@@ -642,16 +642,16 @@ async function replaceFileAtomically(target, content, mode) {
 
 async function saveWorkspaceFile(root, payload) {
   if (!payload || typeof payload !== "object") {
-    throw new DashboardError(400, "invalid_payload", "缺少保存参数");
+    throw new DashboardError(400, "invalid_payload", "저장에 필요한 인수가 없습니다");
   }
   if (typeof payload.content !== "string") {
-    throw new DashboardError(400, "invalid_content", "文件内容必须是文本");
+    throw new DashboardError(400, "invalid_content", "파일 내용은 텍스트여야 합니다");
   }
   if (Buffer.byteLength(payload.content) > MAX_FILE_BYTES) {
-    throw new DashboardError(413, "file_too_large", "文件超过 2 MiB，无法保存");
+    throw new DashboardError(413, "file_too_large", "파일이 2 MiB를 초과해 저장할 수 없습니다");
   }
   if (!/^[a-f0-9]{64}$/.test(payload.expectedVersion || "")) {
-    throw new DashboardError(400, "missing_file_version", "保存请求缺少文件版本，请重新载入后再试");
+    throw new DashboardError(400, "missing_file_version", "저장 요청에 파일 버전이 없습니다. 다시 불러온 뒤 시도하세요");
   }
 
   const initial = await resolveWorkspacePath(root, payload.path, {
@@ -663,7 +663,7 @@ async function saveWorkspaceFile(root, payload) {
       current = await resolveWorkspacePath(root, payload.path, { editableOnly: true });
     } catch (error) {
       if (error instanceof DashboardError && error.code === "file_not_found") {
-        throw new DashboardError(409, "file_changed", "文件已被其他程序删除。请刷新目录后再保存。");
+        throw new DashboardError(409, "file_changed", "다른 프로그램이 파일을 삭제했습니다. 목록을 새로고침한 뒤 저장하세요.");
       }
       throw error;
     }
@@ -672,7 +672,7 @@ async function saveWorkspaceFile(root, payload) {
       throw new DashboardError(
         409,
         "file_changed",
-        "文件已被其他程序修改。请重新载入后再保存，避免覆盖新内容。",
+        "다른 프로그램이 파일을 변경했습니다. 최신 내용을 덮어쓰지 않도록 다시 불러온 뒤 저장하세요.",
       );
     }
 
@@ -690,10 +690,10 @@ async function saveWorkspaceFile(root, payload) {
 
 async function deleteWorkspaceFile(root, payload) {
   if (!payload || typeof payload !== "object") {
-    throw new DashboardError(400, "invalid_payload", "缺少删除参数");
+    throw new DashboardError(400, "invalid_payload", "삭제에 필요한 인수가 없습니다");
   }
   if (!/^[a-f0-9]{64}$/.test(payload.expectedVersion || "")) {
-    throw new DashboardError(400, "missing_file_version", "删除请求缺少文件版本，请重新载入后再试");
+    throw new DashboardError(400, "missing_file_version", "삭제 요청에 파일 버전이 없습니다. 다시 불러온 뒤 시도하세요");
   }
 
   const initial = await resolveWorkspacePath(root, payload.path, {
@@ -705,7 +705,7 @@ async function deleteWorkspaceFile(root, payload) {
       current = await resolveWorkspacePath(root, payload.path, { editableOnly: true });
     } catch (error) {
       if (error instanceof DashboardError && error.code === "file_not_found") {
-        throw new DashboardError(409, "file_changed", "文件已被其他程序删除。请刷新目录后再操作。");
+        throw new DashboardError(409, "file_changed", "다른 프로그램이 파일을 삭제했습니다. 목록을 새로고침한 뒤 다시 시도하세요.");
       }
       throw error;
     }
@@ -714,7 +714,7 @@ async function deleteWorkspaceFile(root, payload) {
       throw new DashboardError(
         409,
         "file_changed",
-        "文件已被其他程序修改。请重新载入后再删除，避免误删新版本。",
+        "다른 프로그램이 파일을 변경했습니다. 최신 버전을 잘못 삭제하지 않도록 다시 불러온 뒤 삭제하세요.",
       );
     }
 
@@ -729,7 +729,7 @@ async function deleteWorkspaceFile(root, payload) {
 async function serveStaticFile(requestPath, response) {
   const assetName = requestPath === "/" ? "index.html" : requestPath.slice(1);
   if (!["index.html", "tokens.css", "styles.css", "app.js"].includes(assetName)) {
-    sendJson(response, 404, { error: { code: "not_found", message: "页面不存在" } });
+    sendJson(response, 404, { error: { code: "not_found", message: "페이지가 없습니다" } });
     return;
   }
   const assetPath = resolve(ASSET_DIR, assetName);
@@ -759,12 +759,12 @@ function assertLocalRequest(request, allowNetwork) {
   if (allowNetwork) return;
   const hostname = normalizedHostname(request.headers.host);
   if (!LOOPBACK_HOSTS.has(hostname)) {
-    throw new DashboardError(403, "invalid_host", "Dashboard 只接受本机回环地址请求");
+    throw new DashboardError(403, "invalid_host", "대시보드는 이 컴퓨터의 루프백 주소 요청만 받습니다");
   }
   if (["PUT", "DELETE"].includes(request.method) && request.headers.origin) {
     const originHostname = normalizedOriginHostname(request.headers.origin);
     if (!LOOPBACK_HOSTS.has(originHostname)) {
-      throw new DashboardError(403, "invalid_origin", "拒绝来自非本机页面的写入请求");
+      throw new DashboardError(403, "invalid_origin", "이 컴퓨터 외부의 페이지에서 보낸 쓰기 요청을 거부했습니다");
     }
   }
 }
@@ -824,7 +824,7 @@ export function createDashboardServer({ root, allowNetwork = false }) {
         return;
       }
       sendJson(response, 405, {
-        error: { code: "method_not_allowed", message: "请求方法不支持" },
+        error: { code: "method_not_allowed", message: "지원하지 않는 요청 방식입니다" },
       });
     } catch (error) {
       const known = error instanceof DashboardError;
@@ -834,7 +834,7 @@ export function createDashboardServer({ root, allowNetwork = false }) {
       sendJson(response, known ? error.status : 500, {
         error: {
           code: known ? error.code : "internal_error",
-          message: known ? error.message : "Dashboard 处理请求时发生错误",
+          message: known ? error.message : "대시보드에서 요청을 처리하던 중 오류가 발생했습니다",
         },
       });
     }
@@ -865,21 +865,21 @@ function parseCliArguments(argv) {
     } else if (value === "--help" || value === "-h") {
       options.help = true;
     } else {
-      throw new DashboardError(400, "unknown_argument", `未知参数：${value}`);
+      throw new DashboardError(400, "unknown_argument", `알 수 없는 인수: ${value}`);
     }
   }
 
   if (!options.root) {
-    throw new DashboardError(400, "missing_root", "--root 需要目录参数");
+    throw new DashboardError(400, "missing_root", "--root에 폴더 인수가 필요합니다");
   }
   if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
-    throw new DashboardError(400, "invalid_port", "端口必须是 0–65535 的整数");
+    throw new DashboardError(400, "invalid_port", "포트는 0~65535 사이의 정수여야 합니다");
   }
   if (!LOOPBACK_HOSTS.has(options.host) && !options.allowNetwork) {
     throw new DashboardError(
       400,
       "network_binding_requires_opt_in",
-      "非本机地址需要显式增加 --allow-network；通常不应把写作文件暴露到局域网",
+      "이 컴퓨터 외의 주소를 사용하려면 --allow-network를 명시해야 합니다. 일반적으로 집필 파일을 로컬 네트워크에 공개하지 않는 것이 좋습니다",
     );
   }
   return options;
@@ -945,11 +945,11 @@ Usage:
   node dashboard-server.mjs [--root <dir>] [--host 127.0.0.1] [--port 43110] [--open]
 
 Options:
-  --root <dir>       写作工作区，默认当前目录
-  --host <host>      监听地址，默认 127.0.0.1
-  --port <port>      首选端口，默认 43110；0 表示随机端口
-  --open             启动后用系统默认浏览器打开
-  --allow-network    显式允许绑定非回环地址（不推荐）
+  --root <dir>       집필 작업 공간. 기본값: 현재 폴더
+  --host <host>      수신 주소. 기본값: 127.0.0.1
+  --port <port>      우선 사용할 포트. 기본값: 43110. 0은 자동 할당
+  --open             시작 후 시스템 기본 브라우저로 열기
+  --allow-network    루프백 외 주소 사용을 명시적으로 허용(권장하지 않음)
 `);
 }
 
@@ -966,9 +966,9 @@ async function main() {
   const displayHost = options.host === "::1" ? "[::1]" : options.host;
   const url = `http://${displayHost}:${port}`;
 
-  console.log("Story Dashboard 已启动");
-  console.log(`工作区：${workspace}`);
-  console.log(`本机地址：${url}`);
+  console.log("Story 대시보드를 시작했습니다");
+  console.log(`작업 공간: ${workspace}`);
+  console.log(`로컬 주소: ${url}`);
   if (options.open) {
     openBrowser(url);
   }
@@ -984,7 +984,7 @@ const isMain = pathsReferToSameFile(process.argv[1], MODULE_PATH);
 if (isMain) {
   main().catch((error) => {
     const message = error instanceof DashboardError ? error.message : error?.stack || String(error);
-    console.error(`Story Dashboard 启动失败：${message}`);
+    console.error(`Story 대시보드 시작 실패: ${message}`);
     process.exitCode = 1;
   });
 }

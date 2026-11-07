@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 /**
- * Deterministic delivery verifier for story-short-write.
+ * story-short-write의 결정론적 납품 검증기.
  *
- * Usage:
+ * 사용법:
  *   node scripts/check-delivery-contract.js --json \
  *     --min-chars N --max-chars N --sections N [--min-section-chars N] [--check-contract] [project-dir]
- * --check-contract validates only parameters before writing; it is not delivery approval.
- * Exit: 0 = pass, 1 = blocking delivery failures, 2 = invalid invocation.
+ * --check-contract는 작성 전 매개변수만 검증하며 납품 승인이 아니다.
+ * 종료 코드: 0 = 통과, 1 = 납품 차단 실패, 2 = 잘못된 호출.
  *
- * The verifier only checks user-visible size and shape. It does not score prose,
- * causality, emotion, or any other semantic quality dimension.
+ * 사용자가 보는 분량과 구조만 검사한다. 문체, 인과관계, 감정 등 의미적 품질은 평가하지 않는다.
  */
 
 'use strict'
@@ -46,7 +45,7 @@ function makeCheck(id, ok, evidence, expected, repair) {
     id,
     ok,
     severity: 'blocking',
-    file: '正文.md',
+    file: '본문.md',
     evidence,
     expected,
     references: ['references/short-format.md'],
@@ -56,16 +55,16 @@ function makeCheck(id, ok, evidence, expected, repair) {
 
 function verify(projectDir, contract) {
   const project = path.resolve(projectDir)
-  const bodyFile = path.join(project, '正文.md')
+  const bodyFile = path.join(project, '본문.md')
   const bodyRead = readBody(bodyFile)
   const checks = []
 
   checks.push(makeCheck(
     'delivery.body-readable',
     bodyRead.ok,
-    bodyRead.ok ? '正文.md 存在且非空' : (bodyRead.error || '正文.md 为空'),
-    '项目目录下存在非空的 正文.md',
-    '只补建或恢复 正文.md；不要改动设定与大纲。'
+    bodyRead.ok ? '본문.md 存在且非空' : (bodyRead.error || '본문.md 为空'),
+    '项目目录下存在非空的 본문.md',
+    '只补建或恢复 본문.md；不要改动设定与大纲。'
   ))
   if (!bodyRead.ok) return report(project, contract, checks)
 
@@ -207,7 +206,7 @@ function parseArgs(argv) {
   if (positional.length > 1) return null
   if (!values['--min-chars'] || !values['--max-chars'] || !values['--sections']) return null
   if (values['--min-chars'] > values['--max-chars']) return null
-  // The shortest allowed markers are 1., 2., ...; they count even without a body floor.
+  // 허용되는 가장 짧은 마커는 1., 2., ...이며 본문 최소 분량이 없어도 글자 수에 포함한다.
   const sections = values['--sections']
   let minimum = sections * ((values['--min-section-chars'] ?? 0) + 1)
   for (let start = 1; start <= sections; start *= 10) minimum += sections - start + 1

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# test-opencode-cli-e2e.sh — real OpenCode 2.x CLI e2e for project-local story setup assets.
+# test-opencode-cli-e2e.sh — 프로젝트 로컬 story 설정 자산의 실제 OpenCode 2.x CLI 종단 간 검사.
 #
-# 不只查「文件在不在」：插件是否真的被运行时加载（plugin.list 状态 active）、钩子是否真的生效，
-# 都在真实 OpenCode 运行时上验证。钩子用 opencode-mock-llm.mjs 驱动——mock 模型发出脚本化的
-# 工具调用，断言落盘结果与模型实际收到的工具返回内容。所有查询走后台服务，服务先在项目外的目录
-# 拉起（服务进程 cwd != 项目），覆盖插件必须以 ctx.location 而非 process.cwd() 定位项目的回归。
+# 파일 존재뿐 아니라 플러그인의 실제 런타임 로드(plugin.list 상태 active)와 훅의 실제 효과를
+# OpenCode 런타임에서 검증한다. opencode-mock-llm.mjs가 정해진 도구 호출을 내는 모의 모델로 훅을 구동하고
+# 저장 결과와 모델이 실제 받은 도구 응답을 단언한다. 모든 쿼리는 백그라운드 서비스로 보내며 서비스를 프로젝트 밖에서
+# 시작한다(서비스 cwd != 프로젝트). 플러그인이 process.cwd() 대신 ctx.location으로 프로젝트를 찾는 회귀를 검사한다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -51,16 +51,16 @@ echo "================"
 echo "Repo: $REPO_ROOT"
 echo "OpenCode: $(command -v opencode) ($VERSION)"
 
-# 后台服务默认监听固定端口；开发机上已有 OpenCode 服务占着它时，隔离 HOME 里的服务起不来、
-# 请求会一直重试。先给隔离 HOME 钉一个空闲端口，再在项目外的目录拉起服务，之后所有请求都复用它。
+# 백그라운드 서비스는 기본 고정 포트를 사용한다. 개발 기기의 기존 OpenCode가 점유하면 격리 HOME 서비스가 시작되지 않아
+# 요청이 계속 재시도된다. 먼저 격리 HOME에 빈 포트를 고정하고 프로젝트 밖에서 시작한 뒤 모든 요청이 재사용한다.
 SERVICE_PORT="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 run_opencode service set port "$SERVICE_PORT" >/dev/null
 (cd "$CLI_HOME" && run_opencode api GET /api/info >/dev/null)
 
-# GET 一个 location 作用域的列表接口，等到 data 非空（location 插件异步就绪，首个请求可能为空）。
-# OpenCode 2.x 异步加载技能、插件和命令：第一次非空的返回可能只有内置项，仓库里的还没进来
-# （CI 上同一版本时过时不过）。所以要一直等到 $3 列出的 id/name（逗号分隔）全部出现；
-# 30 秒还没齐就把最后一次结果交给后面的核对，由它报出具体缺了哪些。
+# location 범위 목록 API를 GET해 data가 비지 않을 때까지 기다린다(location 플러그인 비동기 준비로 첫 응답은 빌 수 있음).
+# OpenCode 2.x는 스킬/플러그인/명령을 비동기 로드한다. 첫 비어 있지 않은 응답도 내장 항목뿐일 수 있다.
+# 같은 버전 CI에서도 간헐적으로 실패하므로 $3의 쉼표 구분 id/name이 모두 나타날 때까지 기다린다.
+# 30초 뒤에도 다 없으면 마지막 결과를 후속 검증에 넘겨 구체적인 누락을 보고하게 한다.
 api_list() {
   local directory="$1" out="$2" require="$3"; shift 3
   local attempt
@@ -128,7 +128,7 @@ for name in expected:
 print(f"    OK {len(expected)} story skills discovered")
 PY
 
-# 与 story-setup 部署清单一致：不写 opencode.json，插件靠 .opencode/plugins/ 自动发现。
+# story-setup 배포 목록과 동일하게 opencode.json을 쓰지 않고 .opencode/plugins/ 자동 탐색을 사용한다.
 mkdir -p \
   "$PROJECT/.opencode/agents" \
   "$PROJECT/.opencode/commands" \
@@ -234,14 +234,14 @@ cat >"$CLI_HOME/.config/opencode/opencode.json" <<JSON
   }
 }
 JSON
-# 全局配置变更让已运行的服务重新加载，避免沿用上面启动时的空 provider 列表。
+# 전역 설정 변경으로 실행 중 서비스를 다시 로드해 시작 시의 빈 provider 목록이 남지 않도록 한다.
 run_opencode reload >/dev/null 2>&1 || true
 
-mkdir -p "$PROJECT/book/正文" "$PROJECT/book/大纲" "$PROJECT/book/追踪"
-printf '# 上下文\n当前位置\n' >"$PROJECT/book/追踪/上下文.md"
+mkdir -p "$PROJECT/book/본문" "$PROJECT/book/개요" "$PROJECT/book/추적"
+printf '# 上下文\n当前位置\n' >"$PROJECT/book/추적/문맥.md"
 printf 'book\n' >"$PROJECT/.active-book"
 
-# 让 mock 模型按剧本发出一轮工具调用，跑完一次 `opencode run`；日志只保留这一轮的请求。
+# 모의 모델이 정해진 도구 호출 한 차례로 `opencode run`을 마치게 한다. 로그는 이번 요청만 남긴다.
 run_case() {
   local label="$1" calls="$2" pid
   printf '%s\n' "$calls" >"$MOCK_SCRIPT"
@@ -256,7 +256,7 @@ run_case() {
   wait "$pid" || { cat "$TMP_ROOT/run.err" >&2; fail "$label: opencode run failed"; }
 }
 
-# 断言模型拿到的最后一条工具返回内容匹配给定正则。
+# 모델이 받은 마지막 도구 응답이 지정 정규식과 일치하는지 단언한다.
 assert_tool_result() {
   python3 - "$MOCK_LOG" "$1" "$2" <<'PY'
 import json
@@ -275,26 +275,26 @@ if not re.search(pattern, text):
 PY
 }
 
-run_case block-write '[{"name":"write","arguments":{"path":"book/正文/第001章_开局.md","content":"正文。"}}]'
-[ ! -e "$PROJECT/book/正文/第001章_开局.md" ] || fail "write without outline reached disk"
-assert_tool_result block-write '写正文被拦截：第 1 章缺少细纲'
+run_case block-write '[{"name":"write","arguments":{"path":"book/본문/제001장_开局.md","content":"正文。"}}]'
+[ ! -e "$PROJECT/book/본문/제001장_开局.md" ] || fail "write without outline reached disk"
+assert_tool_result block-write '본문 쓰기 차단: 第 1 章상세 개요가 없습니다'
 
-run_case block-shell '[{"name":"shell","arguments":{"command":"printf x > book/正文/第002章_绕过.md","description":"fixture"}}]'
-[ ! -e "$PROJECT/book/正文/第002章_绕过.md" ] || fail "shell redirect without outline reached disk"
-assert_tool_result block-shell '写正文被拦截[\s\S]*已从 Shell 命令识别到正文写入目标'
+run_case block-shell '[{"name":"shell","arguments":{"command":"printf x > book/본문/제002장_绕过.md","description":"fixture"}}]'
+[ ! -e "$PROJECT/book/본문/제002장_绕过.md" ] || fail "shell redirect without outline reached disk"
+assert_tool_result block-shell '본문 쓰기 차단[\s\S]*已从 Shell 命令识别到正文写入目标'
 
-run_case block-patch '[{"name":"patch","arguments":{"patchText":"*** Begin Patch\n*** Add File: book/正文/第003章_补丁.md\n+正文。\n*** End Patch\n"}}]'
-[ ! -e "$PROJECT/book/正文/第003章_补丁.md" ] || fail "patch without outline reached disk"
-assert_tool_result block-patch '写正文被拦截：第 3 章缺少细纲'
+run_case block-patch '[{"name":"patch","arguments":{"patchText":"*** Begin Patch\n*** Add File: book/본문/제003장_补丁.md\n+正文。\n*** End Patch\n"}}]'
+[ ! -e "$PROJECT/book/본문/제003장_补丁.md" ] || fail "patch without outline reached disk"
+assert_tool_result block-patch '본문 쓰기 차단: 第 3 章상세 개요가 없습니다'
 
-# 细纲须写了内容（不计 # 号和空白 ≥30 字）写正文守卫才放行。
-printf '%s\n' '# 细纲' '江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。' >"$PROJECT/book/大纲/细纲_第1章.md"
-printf '{"schema_version": 4, "state_revision": 0, "last_committed_chapter": 0}\n' >"$PROJECT/book/追踪/_tracking-state.json"
-printf '> 状态修订：0\n' >"$PROJECT/book/追踪/上下文.md"
-CALLS="$(python3 -c 'import json; print(json.dumps([{"name": "write", "arguments": {"path": "book/正文/第001章_开局.md", "content": "街灯一盏盏亮起。" * 30 + "\nTODO 此处待补"}}], ensure_ascii=False))')"
+# 상세 개요에 내용이 있어야(#과 공백 제외 30자 이상) 본문 쓰기를 허용한다.
+printf '%s\n' '# 细纲' '江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。' >"$PROJECT/book/개요/상세개요_제1장.md"
+printf '{"schema_version": 4, "state_revision": 0, "last_committed_chapter": 0}\n' >"$PROJECT/book/추적/_tracking-state.json"
+printf '> 状态修订：0\n' >"$PROJECT/book/추적/문맥.md"
+CALLS="$(python3 -c 'import json; print(json.dumps([{"name": "write", "arguments": {"path": "book/본문/제001장_开局.md", "content": "街灯一盏盏亮起。" * 30 + "\nTODO 此处待补"}}], ensure_ascii=False))')"
 run_case after-write "$CALLS"
-[ -s "$PROJECT/book/正文/第001章_开局.md" ] || fail "outlined write was blocked or not written"
-assert_tool_result after-write '正文兜底检测（book/正文/第001章_开局\.md）[\s\S]*占位符'
+[ -s "$PROJECT/book/본문/제001장_开局.md" ] || fail "outlined write was blocked or not written"
+assert_tool_result after-write '본문 보완 검사（book/본문/제001장_开局\.md）[\s\S]*占位符'
 echo "    OK write/shell/patch blocked without outline; outlined write passes with after-write findings"
 
 SESSION_ID="$(cd "$PROJECT" && run_opencode session list --format json | python3 -c '
@@ -310,7 +310,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ -n "$compacted" ] || fail "compaction request never reached the model"
-grep -q 'Writing context: book/追踪/上下文.md' "$MOCK_LOG" ||
+grep -q 'Writing context: book/추적/문맥.md' "$MOCK_LOG" ||
   fail "compaction hook did not resolve the project from ctx.location"
 echo "    OK compaction request carries the writing-context pointer"
 

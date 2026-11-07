@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-"""Sync Claude Code agent templates to OpenCode format.
+"""Claude Code 에이전트 템플릿을 OpenCode 형식으로 동기화한다.
 
-Scans templates/agents/*.md, converts frontmatter to OpenCode 2.x format
-(native `permissions:` rule list), and writes to opencode/agents/. Also syncs
-CLAUDE.md.tmpl -> AGENTS.md.tmpl.
+templates/agents/*.md를 검색하고 frontmatter를 OpenCode 2.x 형식(기본 `permissions:` 규칙 목록)으로
+변환해 opencode/agents/에 쓴다. CLAUDE.md.tmpl도 AGENTS.md.tmpl로 동기화한다.
 """
 
 from __future__ import annotations
@@ -18,16 +17,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# agent 正文里表达 shell 步骤的写法：「执行 / 运行 / 跑 `<命令>`」。只认「执行」会漏——
-# #283 给只读 agent 写的越权指令用的正是「运行 `tracking_commit.py check`」，两层守卫都没拦住。
-# 只读 agent 若出现这种指令，生成直接失败：OpenCode shell.ts 只检查 command 的直接父节点，
-# 即使“完整命令字面量”白名单也会被 `( command ) > 正文.md` 的 subshell 外层重定向绕过。
+# 에이전트 본문에서 셸 단계는 ‘执行 / 运行 / 跑 `<명령>`’으로 표현한다. ‘执行’만 인식하면 누락된다.
+# #283의 읽기 전용 에이전트 권한 초과 지침은 ‘运行 `tracking_commit.py check`’였으며 두 검사 계층 모두 차단하지 못했다.
+# 읽기 전용 에이전트에 이런 지침이 있으면 생성을 즉시 실패시킨다. OpenCode shell.ts는 command의 직접 부모만 검사하므로
+# ‘완전한 명령 리터럴’ 허용 목록도 `( command ) > 본문.md`처럼 서브셸 바깥에서 리디렉션하면 우회된다.
 BODY_COMMAND_RE = re.compile(r"(?:执行|运行|跑) `([^`]+)`")
-# 委派给别人跑的不算本 agent 的 shell 步骤（「由主会话提示重新运行 X」「提示调用方在主会话跑 X」）。
-# 只在同一行出现委派主语时豁免，避免把「自己跑」写成委派句式蒙混过关。
+# 다른 실행자에게 위임하는 지침은 이 에이전트의 셸 단계가 아니다(‘주 세션이 X 재실행을 안내’, ‘호출자가 주 세션에서 X 실행하도록 안내’ 등).
+# 같은 줄에 위임 주체가 있을 때만 예외 처리한다. 직접 실행 지침을 위임 문장처럼 써서 검사를 우회하지 못하게 한다.
 BODY_DELEGATION_RE = re.compile(r"(调用方|父流程|主会话|用户|由.{0,6}提示)")
 CAPABILITY_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
-# OpenCode 2.x 权限 action → 授予它的 Claude 工具。edit 一个 action 同时管 write/edit/patch。
+# OpenCode 2.x 권한 action → 해당 권한을 부여하는 Claude 도구. edit 하나가 write/edit/patch를 모두 관리한다.
 TOOL_PERMISSIONS = {
     "read": {"Read"},
     "glob": {"Glob"},
@@ -36,14 +35,14 @@ TOOL_PERMISSIONS = {
     "shell": {"Bash"},
 }
 SUPPORTED_TOOLS = set().union(*TOOL_PERMISSIONS.values())
-# Claude 模板用 frontmatter 内联 hook 调 story_hook_cli.js 的写入守卫限定写入路径；OpenCode 没有
-# 单 agent 的内联 hook，改用 2.x 原生的 edit 路径规则收窄到同一批文件。resource 是相对会话目录的
-# 路径（项目外为绝对路径），* 可跨目录匹配（core/src/file-access.ts resolve、util/wildcard.ts）。
-# 守卫名未登记而 agent 又能写时生成失败，不静默放开整个工作区。
-# `..` 绕不过这些规则：2.x 的 write/edit/patch（含 patch 的 move 目标）都先经 FileAccess.resolve，
-# 它用 path.resolve 做词法归一再取 path.relative 作 resource（core/src/file-access.ts resolvePath/
-# resolve，2.0.18 源码核对），规则匹配的是归一后的路径：`x/_analysis_cache/输入-RAW-1/../../正文/第1章.md`
-# 到匹配时已是 `x/正文/第1章.md`，落在 deny。
+# Claude 템플릿은 frontmatter 인라인 훅에서 story_hook_cli.js 쓰기 검사를 호출해 쓰기 경로를 제한한다. OpenCode에는
+# 에이전트별 인라인 훅이 없으므로 2.x 기본 edit 경로 규칙으로 같은 파일 집합에 한정한다. resource는 세션 디렉터리 기준
+# 상대 경로(프로젝트 밖은 절대 경로)이며 *는 디렉터리를 넘어 일치한다(core/src/file-access.ts resolve, util/wildcard.ts).
+# 검사기 이름이 등록되지 않았는데 에이전트가 쓸 수 있으면 생성을 실패시킨다. 작업 공간 전체를 조용히 허용하지 않는다.
+# `..`로는 우회할 수 없다. 2.x의 write/edit/patch(patch 이동 대상 포함)는 먼저 FileAccess.resolve를 거친다.
+# path.resolve로 어휘적 정규화를 한 뒤 path.relative를 resource로 사용한다(core/src/file-access.ts resolvePath/
+# resolve, 2.0.18 소스 확인). 규칙은 정규화된 경로에 적용되므로 `x/_analysis_cache/输入-RAW-1/../../본문/제1장.md`는
+# 일치 검사 시 이미 `x/본문/제1장.md`이며 deny에 해당한다.
 WRITE_GUARD_RE = re.compile(r"story_hook_cli\.js\s+([a-z][a-z0-9-]*-guard)\b")
 WRITE_GUARD_EDIT_RESOURCES = {
     "analysis-input-guard": tuple(
@@ -55,11 +54,12 @@ WRITE_GUARD_EDIT_RESOURCES = {
 
 
 def body_bash_commands(body: str) -> list[str]:
-    """从 agent 正文抽出它明确要求执行的命令（按出现顺序去重）。
+    """에이전트 본문에서 명시적으로 실행을 요구한 명령을 추출한다(출현 순서대로 중복 제거).
 
-    刻意不用「agent 名字硬编码集合」——那正是早前审计在 generate-codex-agents.py 里点名的
-    反模式：名单与正文各自漂移，新加了指令的 agent 拿不到权限、删了指令的 agent 白留着权限。
-    这里以正文为唯一事实来源；只读 agent 抽到任何命令都会在转换阶段中断。
+    에이전트 이름을 하드코딩한 집합은 의도적으로 사용하지 않는다. 이전 감사에서 generate-codex-agents.py의
+    문제로 지적한 방식이기 때문이다. 목록과 본문이 따로 변하면 명령이 추가된 에이전트는 권한을 얻지 못하고
+    명령이 삭제된 에이전트는 불필요한 권한을 유지한다. 본문만을 기준으로 삼으며 읽기 전용 에이전트에서
+    명령이 하나라도 추출되면 변환 단계에서 중단한다.
     """
     commands: list[str] = []
     for line in body.splitlines():
@@ -73,11 +73,11 @@ def body_bash_commands(body: str) -> list[str]:
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Extract YAML-like frontmatter and body from markdown content."""
-    # 结束分隔符必须是独占一行的 `---`（锚定 "\n---\n"），不能用 content.split("---", 2)：
-    # 后者会被 frontmatter 值里的三连字符（描述里的 `---`、注释里的 `---`）当成结束标记，
-    # 把剩余键连同 permissions/steps 一起截断进正文，且静默 exit 0。
-    # 与同源生成器 generate-codex-agents.py 的解析口径保持一致。
+    """Markdown 내용에서 YAML 형태의 frontmatter와 본문을 추출한다."""
+    # 종료 구분자는 한 줄을 단독으로 차지하는 `---`여야 한다(‘\n---\n’에 고정). content.split("---", 2)를 쓰면 안 된다.
+    # 그러면 frontmatter 값 안의 세 하이픈(설명이나 주석 속 `---`)을 종료 표식으로 오인해
+    # permissions/steps를 포함한 나머지 키를 본문으로 잘라 넣고도 조용히 exit 0으로 끝난다.
+    # 같은 원본을 쓰는 generate-codex-agents.py와 파싱 기준을 일치시킨다.
     if not content.startswith("---\n"):
         return {}, content
     end = content.find("\n---\n", len("---"))
@@ -127,10 +127,11 @@ WRITE_HOOK_MATCHER_RE = re.compile(r"^\s*-?\s*matcher:\s*[\"']?([^\"'\n]*)", re.
 
 
 def frontmatter_write_guard(content: str) -> str | None:
-    """Name of the write guard hooked in the agent's frontmatter, if any.
+    """에이전트 frontmatter에 연결된 쓰기 검사기 이름이 있으면 반환한다.
 
-    挂了 Write/Edit 的 PreToolUse hook 却认不出守卫名（命令写法变了）时报错：当成没挂守卫会
-    静默给 agent 放开整个工作区的 edit。CRLF 模板先归一；matcher 写 `*`、留空或整段不写都算覆盖写工具。
+    Write/Edit의 PreToolUse 훅이 있는데 검사기 이름을 인식하지 못하면(명령 형식 변경 등) 오류를 낸다.
+    검사기가 없는 것으로 처리하면 작업 공간 전체의 edit 권한을 조용히 허용하게 된다. CRLF 템플릿은
+    먼저 정규화한다. matcher가 `*`이거나 비어 있거나 전체가 생략되어도 쓰기 도구를 포함한 것으로 본다.
     """
     content = content.replace("\r\n", "\n")
     end = content.find("\n---\n", len("---"))
@@ -152,11 +153,12 @@ def frontmatter_write_guard(content: str) -> str | None:
 
 
 def convert_claude_to_opencode(fm: dict, body: str, write_guard: str | None = None) -> dict:
-    """Convert Claude Code agent frontmatter to OpenCode format.
+    """Claude Code 에이전트 frontmatter를 OpenCode 형식으로 변환한다.
 
-    `body` 不是可选的：bash 白名单按「正文是否真的要求执行该命令」逐个 agent 授权，
-    少传一个正文就等于凭空收紧/放宽权限，所以这里强制调用方交出正文。
-    `write_guard` 是 frontmatter 挂的写入守卫名：可写 agent 的 edit 收窄到该守卫放行的路径。
+    `body`는 필수다. bash 허용 목록은 본문이 해당 명령 실행을 실제로 요구하는지에 따라 에이전트별로
+    권한을 부여한다. 본문 하나라도 빠지면 근거 없이 권한을 줄이거나 넓히므로 호출자가 반드시 전달해야 한다.
+    `write_guard`는 frontmatter에 연결된 쓰기 검사기 이름이며 쓰기 가능한 에이전트의 edit를
+    해당 검사기가 허용한 경로로 제한한다.
     """
     result = {}
     name = fm.get("name", "")
@@ -176,11 +178,11 @@ def convert_claude_to_opencode(fm: dict, body: str, write_guard: str | None = No
     explicit_tools = "tools" in fm
     effective_tools = (set(tools) if explicit_tools else SUPPORTED_TOOLS) - denied_tools
 
-    # OpenCode defaults to allow. A declared list must also close unlisted tools,
-    # including subagent and MCP. Keep the wildcard first: OpenCode picks the last
-    # matching rule, so later rules override it.
+    # OpenCode 기본값은 허용이다. 목록을 선언하면 목록 밖의 도구도 닫아야 한다.
+    # 하위 에이전트와 MCP도 포함한다. OpenCode는 마지막 일치 규칙을 선택하므로 와일드카드를 맨 앞에 두고
+    # 뒤의 규칙이 이를 덮어쓰게 한다.
     perm = {"*": "deny"} if explicit_tools else {}
-    # edit combines write/edit/patch; either source tool grants mutation.
+    # edit는 write/edit/patch를 통합한다. 원본 도구 중 하나라도 있으면 변경 권한을 부여한다.
     for action, source_tools in TOOL_PERMISSIONS.items():
         if explicit_tools:
             perm[action] = "allow" if effective_tools & source_tools else "deny"
@@ -199,7 +201,7 @@ def convert_claude_to_opencode(fm: dict, body: str, write_guard: str | None = No
             raise ValueError(
                 f"{name or '<unnamed>'}: 写入守卫 {write_guard} 没有登记 OpenCode edit 路径规则"
             )
-        # 先整条 deny 再逐条放行：OpenCode 取最后一条命中规则，末条 resource 不是 * 工具仍可见。
+        # 먼저 전체를 deny한 뒤 개별 허용한다. OpenCode는 마지막 일치 규칙을 사용하며 마지막 resource가 *가 아니어도 도구는 표시된다.
         perm["edit"] = "deny"
         for resource in resources:
             perm[("edit", resource)] = "allow"
@@ -216,7 +218,7 @@ def convert_claude_to_opencode(fm: dict, body: str, write_guard: str | None = No
 
 
 def _parse_list(val: str, field: str) -> list[str]:
-    """Parse the supported inline capability-list subset or reject it."""
+    """지원하는 인라인 기능 목록 부분집합을 파싱하고 나머지는 거부한다."""
     if not val:
         raise ValueError(
             f"{field}: empty or block-style capability declarations are unsupported"
@@ -248,15 +250,15 @@ def _parse_list(val: str, field: str) -> list[str]:
 
 
 def format_frontmatter(fm: dict) -> str:
-    """Format frontmatter dict to YAML-like string."""
+    """frontmatter 딕셔너리를 YAML 형태의 문자열로 포맷한다."""
     lines = ["---"]
     for key, value in fm.items():
         if key == "permissions":
-            # 2.x 原生规则列表：每条 action/resource/effect 三键齐全。严禁排序：OpenCode 取
-            # 最后一条命中的规则，列表顺序即优先级，必须按 dict 插入顺序原样输出。
-            # 裸 `*` 在 YAML 里是别名标记，必须加引号。
+            # 2.x 기본 규칙 목록: 각 항목에 action/resource/effect 세 키가 모두 있어야 한다. 정렬 금지. OpenCode는
+            # 마지막 일치 규칙을 선택하므로 목록 순서가 우선순위이며 dict 삽입 순서 그대로 출력해야 한다.
+            # YAML에서 따옴표 없는 `*`는 별칭 표식이므로 반드시 따옴표로 감싼다.
             lines.append("permissions:")
-            # 键是 action（resource 为 *）或 (action, resource) 二元组。
+            # 키는 action(resource는 *) 또는 (action, resource) 쌍이다.
             for key, effect in value.items():
                 action, resource = key if isinstance(key, tuple) else (key, "*")
                 action_text = '"*"' if action == "*" else action
@@ -274,9 +276,9 @@ def format_frontmatter(fm: dict) -> str:
 
 
 def replace_claude_paths(body: str) -> str:
-    """Replace .claude/ path references with .opencode/ equivalents.
+    """.claude/ 경로 참조를 대응하는 .opencode/ 경로로 바꾼다.
 
-    路径规则段由 fix_path_rules_section() 幂等处理，无需手动修复。
+    경로 규칙 절은 fix_path_rules_section()이 멱등적으로 처리하므로 수동 수정이 필요 없다.
     """
     replacements = [
         (".claude/skills/", ".opencode/skills/"),
@@ -293,14 +295,13 @@ def replace_claude_paths(body: str) -> str:
 
 
 def fix_path_rules_section(body: str) -> str:
-    """Replace the reference file path rules section with correct opencode paths.
+    """참조 파일 경로 규칙 절을 올바른 opencode 경로로 바꾼다.
 
-    Detects the "参考文件路径规则" section and replaces it with the one
-    canonical path that story-setup deploys for OpenCode.
-    This is idempotent — running multiple times produces the same output.
+    ‘参考文件路径规则’ 절을 찾아 story-setup이 OpenCode용으로 배포하는 단일 기준 경로로 교체한다.
+    멱등적이므로 여러 번 실행해도 결과가 같다.
     """
-    # Some agents do not read reference files and intentionally have no such
-    # section. Only warn when the section marker exists but its shape drifted.
+    # 일부 에이전트는 참조 파일을 읽지 않아 의도적으로 이 절이 없다.
+    # 절 표식이 있는데 형식이 달라진 경우에만 경고한다.
     if "参考文件路径规则" not in body:
         return body
 
@@ -308,10 +309,10 @@ def fix_path_rules_section(body: str) -> str:
 
     replacement = (
         r"\1"
-        r"读取参考文件时，直接 Read 当前 OpenCode 部署的 canonical 路径，禁止先用 Glob/Grep 搜索：\n"
+        r"读取参考文件时 — 참조 파일을 읽을 때는 현재 OpenCode 배포의 기준 경로를 직접 Read하며, 먼저 Glob/Grep으로 검색해서는 안 됩니다:\n"
         r"1. `{项目根}/skills/story-setup/references/agent-references/{文件名}`\n"
         r"\n"
-        r"文件不存在时返回缺失事实，由主会话提示重新运行 `/story-setup`；不要探测其他 CLI 的目录。"
+        r"파일이 없으면 누락 사실을 반환하고 주 세션에서 `/story-setup` 재실행을 안내합니다. 다른 CLI 디렉터리를 탐색하지 않습니다."
     )
 
     new_body, count = re.subn(pattern, replacement, body, flags=re.DOTALL)
@@ -324,7 +325,7 @@ def fix_path_rules_section(body: str) -> str:
 
 
 def file_status(dst: Path, output: str) -> tuple[str, bool]:
-    """Compare one generated file without mutating the destination."""
+    """대상을 변경하지 않고 생성 파일 하나를 비교한다."""
     if not os.path.lexists(dst):
         return "missing", True
     if dst.is_symlink() or not dst.is_file():
@@ -336,7 +337,7 @@ def file_status(dst: Path, output: str) -> tuple[str, bool]:
 
 
 def render_agents() -> dict[str, str]:
-    """Validate and render every OpenCode agent before any destination write."""
+    """대상에 쓰기 전에 모든 OpenCode 에이전트를 검증하고 렌더링한다."""
     src_dir = ROOT / "skills/story-setup/references/templates/agents"
     sources = sorted(src_dir.glob("*.md"))
     if not sources:
@@ -355,13 +356,13 @@ def render_agents() -> dict[str, str]:
             )
         if not description:
             raise ValueError(f"{md_file}: missing agent description")
-        # 用**源模板正文**（未做 .claude→.opencode 路径替换）推导 bash 白名单：
-        # 授权依据是源定义里写没写这条命令，不是生成产物的措辞。
+        # .claude→.opencode 경로 치환 전인 **원본 템플릿 본문**에서 bash 허용 목록을 도출한다.
+        # 권한 부여 근거는 생성 산출물 표현이 아니라 원본 정의에 해당 명령이 있는지다.
         new_fm = convert_claude_to_opencode(fm, body, frontmatter_write_guard(content))
         new_body = replace_claude_paths(body)
-        new_body = fix_path_rules_section(new_body)  # 覆盖路径规则段的错误替换
+        new_body = fix_path_rules_section(new_body)  # 경로 규칙 절의 잘못된 치환을 덮어쓴다.
         output = format_frontmatter(new_fm) + new_body
-        output = output.rstrip("\n") + "\n"  # 规范行尾为单个换行，避免 EOF 空行
+        output = output.rstrip("\n") + "\n"  # 끝부분을 줄바꿈 하나로 정규화해 EOF 빈 줄을 방지한다.
         if md_file.name in rendered:
             raise ValueError(f"duplicate generated agent filename: {md_file.name}")
         rendered[md_file.name] = output
@@ -371,7 +372,7 @@ def render_agents() -> dict[str, str]:
 def agent_statuses(
     rendered: dict[str, str], dst_dir: Path, check: bool
 ) -> tuple[list[str], bool]:
-    """Return deterministic status lines for the generated agent surface."""
+    """생성된 에이전트 영역의 결정론적 상태 줄을 반환한다."""
     results: list[str] = []
     changed = False
     for filename, output in rendered.items():
@@ -400,20 +401,20 @@ def agent_statuses(
 
 
 def render_agents_md() -> str:
-    """Validate and render CLAUDE.md.tmpl for OpenCode."""
+    """OpenCode용 CLAUDE.md.tmpl을 검증하고 렌더링한다."""
     src = ROOT / "skills/story-setup/references/templates/CLAUDE.md.tmpl"
     if not src.is_file():
         raise RuntimeError(f"source template not found: {src}")
 
     content = src.read_text(encoding="utf-8")
     new_content = replace_claude_paths(content)
-    # auto memory 是 Claude Code 自带记忆的名字，OpenCode 版只保留泛称。
+    # auto memory는 Claude Code 내장 기억 기능의 명칭이므로 OpenCode 버전에서는 일반 표현만 남긴다.
     new_content = new_content.replace("自带的记忆（如 auto memory）", "自带的记忆")
-    return new_content.rstrip("\n") + "\n"  # 规范行尾为单个换行，避免 EOF 空行
+    return new_content.rstrip("\n") + "\n"  # 끝부분을 줄바꿈 하나로 정규화해 EOF 빈 줄을 방지한다.
 
 
 def publish_tree(rendered: dict[str, str], agents_md: str, dst_root: Path) -> None:
-    """Publish generated OpenCode files with rollback, preserving manual assets."""
+    """수동 자산을 보존하며 롤백을 지원해 생성 OpenCode 파일을 반영한다."""
     if dst_root.is_symlink():
         raise ValueError(f"destination directory must not be a symlink: {dst_root}")
     if dst_root.exists() and not dst_root.is_dir():
@@ -480,9 +481,9 @@ def publish_tree(rendered: dict[str, str], agents_md: str, dst_root: Path) -> No
                 if stale.name not in rendered:
                     stale.unlink()
         except BaseException:
-            # Best-effort rollback: a single un-removable file must not abort the
-            # restore and strand a partial commit. Backed-up files are overwritten
-            # in place; only outputs absent before the commit are removed.
+            # 가능한 범위에서 롤백한다. 삭제할 수 없는 파일 하나 때문에
+            # 복구가 중단되어 부분 반영 상태가 남으면 안 된다. 백업된 파일은
+            # 제자리에서 덮어쓰고 반영 전에 없던 출력 파일만 삭제한다.
             restore_names = {path.name for path in backup_agents.iterdir()}
             for current in list(existing_agents.glob("*.md")):
                 if current.is_dir() and not current.is_symlink():
@@ -501,9 +502,9 @@ def publish_tree(rendered: dict[str, str], agents_md: str, dst_root: Path) -> No
                             target.unlink()
                         target.symlink_to(os.readlink(original))
                     else:
-                        # target is provably a regular file (a commit only
-                        # os.replace's regular staged outputs), so copy2 safely
-                        # overwrites it in place.
+                        # 대상이 일반 파일임을 보장한다(반영은 준비된 일반 파일을
+                        # os.replace로 교체하기만 함). 따라서 copy2로
+                        # 제자리에서 안전하게 덮어쓸 수 있다.
                         shutil.copy2(original, target)
                 except OSError:
                     pass
@@ -537,8 +538,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # The agents and top-level instructions form one generated adapter. Render
-    # and validate both phases before inspecting or publishing either one.
+    # 에이전트와 최상위 지침이 하나의 생성 어댑터를 이룬다. 어느 쪽을 검사하거나 반영하기 전에
+    # 두 단계 모두 렌더링하고 검증한다.
     rendered = render_agents()
     agents_md = render_agents_md()
     dst_root = ROOT / "skills/story-setup/references/opencode"

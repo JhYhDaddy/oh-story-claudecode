@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
-"""卷纲取段器 —— 让「不整读卷纲」成立。
+"""권 개요 구간 추출기 — 권 개요 전문을 읽지 않고도 작업할 수 있게 한다.
 
-按声明作用域选取卷级、单元级和批次材料；未声明的旧段保守纳入并告警。
-
-段头约定（每个 ## / ### / #### 标题的**下一行非空行**）：
-
+선언된 범위로 권·단위·배치 자료를 선택한다. 범위 없는 이전 절은 보수적으로 포함하고 경고한다.
+각 ## / ### / #### 제목의 다음 비어 있지 않은 행에 범위를 적는다:
     > 作用域：卷级常任
     > 作用域：单元级 D1-03
     > 作用域：批次底稿 D1-03｜状态：在用
     > 作用域：批次底稿 D1-02｜状态：已退役
-
-退役行（行内覆盖）：以 `⊘` 起头的列表行 / 表格行，默认过滤。
-
-用法：
-    outline_view.py --toc   卷纲.md
-    outline_view.py --unit D1-03 卷纲.md
-    outline_view.py --contract 卷纲.md
-    outline_view.py --check 卷纲.md
-    任意子命令加 --history 连退役行一起输出
+퇴역 행: `⊘`로 시작하는 목록·표 행은 기본적으로 걸러 낸다.
+사용법:
+    outline_view.py --toc   권개요.md
+    outline_view.py --unit D1-03 권개요.md
+    outline_view.py --contract 권개요.md
+    outline_view.py --check 권개요.md
+어느 하위 명령이든 --history를 추가하면 퇴역 행도 출력한다.
 """
 import argparse
 import io
@@ -27,15 +23,15 @@ import sys
 HEADING = re.compile(r"^(#{2,4})\s+(.*\S)\s*$")
 SCOPE = re.compile(r"^>\s*作用域[：:]\s*(.+?)\s*$")
 RETIRED_LINE = re.compile(r"^\s*(?:[-*]\s*)?⊘|^\s*\|\s*⊘")
-# 单元块内不该出现的全卷字样——出现即说明这条常任规则放错了地方
+# 단위 블록 안에 있으면 안 되는 권 전체 표현. 있으면 상시 규칙을 잘못 배치한 것이다.
 LEAK = re.compile(r"全卷常任|全程生效|全卷生效|本单元起常任|自 ?[LD]\d+-\d+ ?起生效")
-# 指向卷级的指针行不算泄漏：单元块可以引用常任规则，不可以复述它
+# 권 단위 포인터 행은 유출이 아니다. 단위 블록은 상시 규칙을 참조할 수 있지만 반복 서술하면 안 된다.
 POINTER = re.compile(r"全卷常任裁定|已提为卷级|不复读|规则本身见|见「全卷")
 UNIT_IN_TITLE = re.compile(r"(?<![\w-])([LD]\d+-\d+|U\d+)(?![\w-])")
-# 批次底稿里出现跨章祈使＝这条约束在写作期还有效，而写作档不给底稿 → 必须下沉
+# 배치 기초 자료의 여러 장에 걸친 명령은 집필 시에도 유효한 제약이다. 집필 프로필에는 기초 자료가 없으므로 하위 자료로 내려야 한다.
 IMPERATIVE = re.compile(r"全程不许|一律不许|往后任何章|此后不再|往后每|从此不|终局前不")
 CH_RANGE = re.compile(r"章节范围[：:]\s*第\s*(\d+)\s*[-–—~至]\s*(\d+)\s*章")
-# 情绪弧线逐章行：首列写「12」或模板里的「第12章」都认
+# 감정 곡선의 장별 행: 첫 열의 ‘12’와 템플릿의 ‘第12章’을 모두 인식한다.
 ARC_ROW = re.compile(r"^\|\s*第?\s*(\d+)\s*章?\s*\|")
 
 
@@ -51,10 +47,10 @@ class Section:
     def __init__(self, level, title, start):
         self.level = level
         self.title = title
-        self.start = start          # 标题行号（0 基）
+        self.start = start          # 제목 행 번호(0부터 시작).
         self.end = None
-        self.scope = None           # 原始作用域串，None ＝ 未声明
-        self.kind = None            # 卷级常任 / 单元级 / 批次底稿
+        self.scope = None           # 원래 범위 문자열, None은 미선언.
+        self.kind = None            # 권 단위 상시 / 단위별 / 배치 기초 자료
         self.unit = None
         self.status = "在用"
         self.lines = []
@@ -134,7 +130,7 @@ def unit_chapter_range(sections, unit):
 
 
 def slice_arc(section, span):
-    """情绪弧线这类逐章表：只留本单元章区间的行，表头与说明照留。"""
+    """감정 곡선 같은 장별 표는 현재 단위 장 범위의 행만 남기며 헤더와 설명은 유지한다."""
     if span is None:
         return section.lines
     low, high = span
@@ -218,8 +214,8 @@ def main():
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--history", action="store_true")
     parser.add_argument("--strict", action="store_true", help="新建卷纲校验：缺作用域也视为错误")
-    # 排纲底稿现在放在卷纲外的 大纲/排纲底稿_{单元ID}.md，默认输出就是写作要的闭包。
-    # --stage outline 只为老卷纲保留：它们的供给自查等底稿还写在卷纲里（作用域：批次底稿）。
+    # 개요 기초 자료는 이제 권 개요 밖 개요/개요초안_{单元ID}.md에 둔다. 기본 출력은 집필에 필요한 폐포다.
+    # --stage outline은 공급 자체 점검 등이 아직 권 개요 안의 배치 기초 자료 범위에 있는 구형 형식만을 위해 남긴다.
     parser.add_argument("--stage", choices=["outline", "write"], default="write",
                         help="write（默认）＝卷级常任＋单元级；"
                              "outline＝另带老卷纲里仍在用的批次底稿段")
@@ -266,8 +262,8 @@ def main():
                 "找不到单元 %s —— 不静默降级。核对单元ID，或先补卷纲。\n" % unit)
             return 1
         if args.stage == "write":
-            # 写作档不给批次底稿：它是排纲期的工作底稿，其中有写作期约束力的条目
-            # 必须已经下沉到单元级段或细纲（见 artifact-protocols.md 段位契约「排纲底稿不进卷纲」）
+            # 집필 프로필에는 개요 편성 작업용인 배치 기초 자료를 주지 않는다. 그 안에서 집필에도 구속력 있는 항목은
+            # 이미 단위별 절이나 상세 개요로 옮겨져 있어야 한다(artifact-protocols.md의 ‘排纲底稿不进卷纲’ 계약 참조).
             live = [s for s in owned if s.kind == "单元级"]
         else:
             live = [s for s in owned

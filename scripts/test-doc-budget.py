@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior regressions for the hot-path document budget CLI."""
+"""자주 로드되는 경로의 문서 예산 CLI 동작 회귀 검사."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class DocBudgetCliTests(unittest.TestCase):
             for relative, content in files.items():
                 target = root / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(content, encoding="utf-8")
+                target.write_bytes(content.encode("utf-8"))
             manifest_path = root / "budget.json"
             manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
             return subprocess.run(
@@ -61,7 +61,7 @@ class DocBudgetCliTests(unittest.TestCase):
         self.assertNotIn("路径「planning」超过硬上限", over.stdout)
         self.assertIn("planning  [ok，上限豁免]", over.stdout)
 
-        # 预算值本身也不许调过上限：实际没超、budget 写大了同样拦。
+        # 예산 값 자체도 상한을 넘길 수 없다. 실제 사용량이 상한 이하라도 budget을 크게 쓰면 차단한다.
         loose = self.run_checker(files, {"files": [], "paths": [{"label": "w", "budget": 11, "files": ["base.md"]}],
                                          "path_ceiling": {"limit": 10, "exempt": [], "why": "fixture"}})
         self.assertEqual(loose.returncode, 1, loose.stdout)
@@ -80,7 +80,7 @@ class DocBudgetCliTests(unittest.TestCase):
             {"files": [], "paths": [{"label": "writer call", "agent": agent, "budget": 100, "files": ["r.md"]}]},
         )
         self.assertEqual(result.returncode, 0, result.stdout)
-        # 模板全文去空白 + 参考 2 字 + 预加载 SKILL 3 字
+        # 템플릿 전체에서 공백을 뺀 길이 + 참조 2자 + 미리 읽는 SKILL 3자.
         weight = len("---name:wskills:[pre]---正文") + 2 + 3
         self.assertRegex(result.stdout, re.compile(rf"\b{weight}\s*/\s*100\b.*writer call"))
 
@@ -159,15 +159,15 @@ class DocBudgetCliTests(unittest.TestCase):
     STACK_FILES = {"base.md": "基" * 5, "tech-a.md": "甲" * 4, "tech-b.md": "乙" * 3, "fallback.md": "兜" * 4}
 
     def test_stacking_checks_the_worst_combination_of_co_occurring_branches(self) -> None:
-        # 每条分支单独看都在 12 以内（9/8/9），但技法和兜底会在同一次调用里叠加：5+4+4=13。
+        # 각 분기는 따로 보면 12 이하(9/8/9)이지만 기법과 보완 검사는 한 번의 호출에 함께 적용되어 5+4+4=13이다.
         over = self.run_checker(self.STACK_FILES, self.stacking_manifest([["技法甲", "技法乙"], ["兜底"]]))
         self.assertEqual(over.returncode, 1, over.stdout)
         self.assertIn("路径「solo（最坏叠加：技法甲＋兜底）」超过硬上限 12 字（实际 13，预算 12）", over.stdout)
-        # 变异：同样的分支当成互斥（不登记叠加）就放过去了——这正是叠加语义要堵的洞。
+        # 변이: 같은 분기를 상호 배타적인 것으로 간주해 중첩을 등록하지 않으면 통과한다. 중첩 의미가 막아야 할 허점이다.
         exclusive = self.stacking_manifest([])
         del exclusive["paths"][0]["stacking"]
         self.assertEqual(self.run_checker(self.STACK_FILES, exclusive).returncode, 0)
-        # 变异：两个技法放进同一个槽是互斥的，不会三份一起算；拆成两个槽才会。
+        # 변이: 두 기법을 같은 슬롯에 두면 상호 배타적이라 세 자료를 함께 계산하지 않는다. 슬롯 두 개로 나눠야 함께 계산한다.
         same_slot = self.run_checker(self.STACK_FILES, self.stacking_manifest([["技法甲", "技法乙"]]))
         self.assertEqual(same_slot.returncode, 0, same_slot.stdout)
         self.assertRegex(same_slot.stdout, re.compile(r"\b9\s*/\s*12\s+3\s+solo（最坏叠加：技法甲）"))
@@ -191,6 +191,14 @@ class DocBudgetCliTests(unittest.TestCase):
         self.assertEqual(repeated.returncode, 1, repeated.stdout)
         self.assertIn("出现在两个槽里", repeated.stdout)
 
+    def test_section_anchor_accepts_crlf(self) -> None:
+        result = self.run_checker(
+            {"m.md": "# Header\r\n## Section\r\nBody\r\n## Other\r\nOutside\r\n"},
+            {"files": [], "paths": [{"label": "crlf", "budget": 13, "files": ["m.md#Section"]}]},
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertRegex(result.stdout, r"13\s*/\s*13")
+
     def test_section_anchor_counts_only_that_section(self) -> None:
         doc = "# 手册\n前言\n## 决策路由\n路由\n### 细分\n细\n```\n## 围栏里不算标题\n```\n## 第二节\n很长很长很长\n"
         result = self.run_checker(
@@ -202,7 +210,7 @@ class DocBudgetCliTests(unittest.TestCase):
         routed = len(re.sub(r"\s", "", "## 决策路由\n路由\n### 细分\n细\n```\n## 围栏里不算标题\n```"))
         second = len(re.sub(r"\s", "", "## 第二节\n很长很长很长"))
         self.assertRegex(result.stdout, re.compile(rf"\b{routed + second}\s*/\s*100\b.*按节读"))
-        # 整份与它的小节同在一次调用里时，小节不重复计。
+        # 문서 전체와 그 안의 절을 한 호출에서 함께 읽으면 절을 중복 계산하지 않는다.
         whole = self.run_checker(
             {"m.md": doc},
             {"files": [], "paths": [{"label": "整读", "budget": 100, "files": ["m.md", "m.md#第二节"]}]},

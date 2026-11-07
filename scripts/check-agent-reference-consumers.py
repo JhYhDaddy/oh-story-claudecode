@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate agent reference prefixes, reachability and profile ownership."""
+"""에이전트 참조 접두사, 도달 가능성, 프로필 소유 관계를 검증한다."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ PROFILE_HEADINGS = {
 def template_prefix_errors(
     text: str, references: set[str], url_spans: list[tuple[int, int]],
 ) -> list[tuple[int, str]]:
-    """Inspect reference tokens, not arbitrary project artifact filenames."""
+    """임의의 프로젝트 산출물 파일명이 아닌 참조 토큰을 검사한다."""
     names = sorted(references | {Path(name).name for name in references}, key=lambda name: (-len(name), name))
     patterns = [AGENT_REF_RE.pattern, r"genre-prose-cards/\{[^}\n]+\}\.md"]
     if names:
@@ -39,7 +39,7 @@ def template_prefix_errors(
     )
     ignored = [match.span() for match in canonical.finditer(text)]
     ignored.extend(url_spans)
-    # Link labels are display text; their destinations are scanned normally.
+    # 링크 레이블은 표시용 텍스트이며, 링크 대상은 정상적으로 검사한다.
     ignored.extend(
         match.span(1) for match in re.finditer(r"\[([^]\n]*)\]\(([^)\n]+)\)", text)
     )

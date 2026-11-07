@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
-"""build_outline_brief.py — 拼出导入长篇「逐批反推细纲」的任务包。
+"""build_outline_brief.py — 가져온 장편의 배치별 상세 개요 역산 작업 묶음을 만든다.
 
-用法:
-    python build_outline_brief.py --project <书目录> --chapters A-B [--analysis <拆文库/导入书名>]
+사용법:
+    python build_outline_brief.py --project <작품디렉터리> --chapters A-B [--analysis <작품분석실/가져온작품명>]
 
-导入按作者时间线分时刻（见 SKILL.md「时刻表与交接」）。细纲按批反推，负载按批计、不随全书章数增长。
-有 story-architect 时主会话只跑本脚本、把任务包路径交给它（它没有执行命令的权限），没有时主会话
-自己读包写本批。任务包写在书内 `.story/work/排纲/`，是这次任务的输入数据，不是 reference。
+가져오기는 작가의 시간선에 따라 단계별로 나눈다(SKILL.md의 시간표·인계 절). 상세 개요는 배치별 역산하며 읽기 부담이 전체 장 수에 비례해 늘지 않는다.
+story-architect가 있으면 주 세션은 이 스크립트만 실행해 묶음 경로를 전달한다. 해당 에이전트에는 명령 실행 권한이 없다. 없으면 주 세션이 묶음을 읽고 이번 배치를 작성한다.
+묶음은 작품 내부 `.story/work/개요작성/`에 저장하는 이번 작업의 입력 데이터이며 참조 문서가 아니다.
 
-包里只有本批需要的东西，执行者不再整读每章约 4K 字的摘要：
-- 反推规则与细纲模板：references/outline-reverse-rules.md 全文；
-- 本批每章：正文路径、按 visible_chars_v1 测好的历史长度（与写作时章节检查同一口径，
-  story-architect 不能自己跑测量），以及从拆文库摘要里抽出的、写细纲真正要用的字段
-  （关键事件、因果、局面结果、涉及、信息变化、状态变化、章尾钩子，情节点只取「标题｜类型｜基调」）；
-- 本批第一章另带上一章摘要里的章尾钩子（写章首钩子用）；
-- 卷纲里章节范围与本批重叠的剧情单元卡。单元卡用 outline_view.py 的解析识别（写正文时
-  `outline_view.py --unit` 也用它），任务包取得到的单元，写正文时也取得到。
-本书设定与作者已定的事不进包，执行者按规则定点读项目文件与 `.story/work/导入记录.md`。
+이번 배치에 필요한 것만 포함하므로 실행자는 장당 약 4K자의 요약 전문을 다시 읽지 않는다.
+- 역산 규칙과 상세 개요 템플릿: references/outline-reverse-rules.md 전문.
+- 각 장의 본문 경로, visible_chars_v1 기준 과거 길이(집필 시 장 검사와 같은 기준이며 story-architect는 직접 측정 불가),
+  분석 라이브러리 요약에서 추출한 필드(핵심 사건·인과·상황 결과·관련 대상·정보 변화·상태 변화·결말 훅; 플롯 포인트는 제목｜유형｜기조만).
+- 첫 장에는 도입 훅 작성용으로 앞 장 요약의 결말 훅을 추가한다.
+- 장 범위가 이번 배치와 겹치는 권 개요의 플롯 단위 카드. 집필의 `outline_view.py --unit`과 같은 파서를 쓰므로 묶음에서 얻는 단위는 집필 때도 얻을 수 있다.
+작품 설정과 작가 확정 사항은 넣지 않는다. 실행자가 규칙에 따라 프로젝트 파일과 `.story/work/가져오기기록.md`의 필요한 부분을 읽는다.
 
-批大小按总量定：请求 10–20 章（全书最后一批可以更少）；执行者要读的总量（任务包 + 没有摘要、
-只能读正文的章）超过约 25K 字时，从请求范围末尾往前少排几章（可少于 10 章，至少 1 章）。
-
-stdout 输出一行 JSON：任务包路径、本批实际章节范围与下一批起点、执行者要读的总量 chars（去空白）、
-本批每章长度、没找到摘要的章。
-Exit: 0 = 已写出；2 = 参数错误、正文或卷纲缺失、长度测不出。
+배치 크기는 총량으로 정한다. 요청은 10–20장(마지막 배치는 더 적어도 됨)이지만 묶음과 요약이 없어 읽어야 할 본문 총량이 약 25K자를 넘으면 뒤쪽 장부터 줄인다(10장 미만 가능, 최소 1장).
+stdout에는 묶음 경로, 실제 장 범위와 다음 시작점, 실행자가 읽는 공백 제외 chars, 각 장 길이, 요약 없는 장을 한 줄 JSON으로 출력한다.
+종료: 0 = 작성 완료, 2 = 인자 오류·본문/권 개요 누락·길이 측정 불가.
 """
 
 from __future__ import annotations
@@ -39,10 +34,10 @@ from outline_view import parse as parse_volume, unit_chapter_range  # noqa: E402
 from wordcount_core import METRIC, WordcountError, find_chapter_file, measure_wordcount  # noqa: E402
 
 RULES = Path(__file__).resolve().parent.parent / "references" / "outline-reverse-rules.md"
-WORK_DIR = (".story", "work", "排纲")
+WORK_DIR = (".story", "work", "개요작성")
 MIN_BATCH, MAX_BATCH = 10, 20
-LOAD_LIMIT = 25000  # 执行者一次要读的量（去空白字数）；再加上 agent 模板或 SKILL 入口仍在 35K 内
-# 摘要里写细纲要用的字段（与 story-long-analyze 摘要投影同名）；旧版摘要的同义标签放在别名里。
+LOAD_LIMIT = 25000  # 실행자가 한 번에 읽는 공백 제외 글자 수. agent 템플릿이나 SKILL 진입점을 더해도 35K 이내다.
+# 상세 개요 작성에 필요한 요약 필드(story-long-analyze 요약 투영과 동일한 이름). 이전 요약의 동의 레이블은 별칭에 둔다.
 SUMMARY_FIELDS = (
     ("关键事件", ()),
     ("因果", ()),
@@ -53,14 +48,16 @@ SUMMARY_FIELDS = (
     ("章尾钩子", ("卡点与伏笔",)),
 )
 FIELD_NAMES = "|".join(name for field in SUMMARY_FIELDS for name in (field[0], *field[1]))
-# `**标签**：`（当前投影与旧版加粗写法）或不加粗的 `- 关键事件：`（只认上面这些字段名）。
+SUMMARY_LABELS = {'关键事件': '핵심 사건', '因果': '인과', '局面结果': '상황 결과', '涉及': '관련 인물', '信息变化': '정보 변화', '状态变化': '상태 변화', '章尾钩子': '장 끝 훅'}
+
+# `**标签**：`(현재 투영과 이전 굵은 표기) 또는 굵게 하지 않은 `- 关键事件：`를 인식한다. 위 필드 이름만 허용한다.
 LABEL_RE = re.compile(r"^\s*(?:[-*+]\s*)?(?:\*\*([^*]+?)\*\*|(%s))\s*[：:（(]" % FIELD_NAMES)
 POINT_HEADER_RE = re.compile(r"^P(\d+)\s+\*\*(.+?)\*\*\s*[：:]\s*(.+)$")
 POINT_TAG_RE = re.compile(r"^主题标签\s*[：:]?\s*[^|｜]*?\s*[|｜]\s*基调\s*[：:]?\s*(.*?)\s*$")
 
 
 def emit(text: str, stream) -> None:
-    """统一按 UTF-8 写出：Windows 控制台默认 GBK/ASCII 时直接 print 中文会崩。"""
+    """UTF-8로 통일해 출력한다. Windows 콘솔 기본값이 GBK/ASCII이면 중국어 직접 print가 실패한다."""
     stream.buffer.write((text + "\n").encode("utf-8"))
     stream.flush()
 
@@ -72,31 +69,31 @@ def weight(text: str) -> int:
 def parse_range(value: str) -> tuple[int, int]:
     match = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d+))?\s*", value or "")
     if not match:
-        raise SystemExit("ERROR: --chapters 写成 A-B，如 1-20")
+        raise SystemExit("ERROR: --chapters는 1-20처럼 A-B 형식으로 지정하세요")
     first = int(match.group(1))
     last = int(match.group(2) or first)
     if first < 1 or last < first:
-        raise SystemExit("ERROR: --chapters 范围无效")
+        raise SystemExit("ERROR: --chapters 범위가 유효하지 않습니다")
     return first, last
 
 
 def last_body_chapter(project: Path) -> int:
-    numbers = [int(m.group(1)) for p in (project / "正文").glob("第*章*.md")
-               if "_原稿_" not in p.name and (m := re.match(r"^第0*(\d+)章", p.name))]
+    numbers = [int(m.group(1)) for p in (project / "본문").glob("제*장*.md")
+               if "_원본_" not in p.name and (m := re.match(r"^제0*(\d+)장", p.name))]
     return max(numbers, default=0)
 
 
 def check_batch_size(first: int, last: int, final: int) -> None:
     size = last - first + 1
     if size > MAX_BATCH:
-        raise SystemExit(f"ERROR: 一批细纲最多 {MAX_BATCH} 章，拆成两批")
-    # 只有全书最后一批可以不足 10 章（包太大时脚本自己少排几章不受此限）。
+        raise SystemExit(f"ERROR: 상세 개요는 묶음당 최대 {MAX_BATCH}장입니다. 두 묶음으로 나누세요")
+    # 작품의 마지막 배치만 10장 미만일 수 있다. 묶음이 너무 커 스크립트가 장 수를 줄이는 경우는 이 제한을 받지 않는다.
     if size < MIN_BATCH and last < final:
-        raise SystemExit(f"ERROR: 一批细纲至少 {MIN_BATCH} 章（全书最后一批除外），把范围扩到第{first}-{min(final, first + MIN_BATCH - 1)}章")
+        raise SystemExit(f"ERROR: 상세 개요는 묶음당 최소 {MIN_BATCH}장입니다(작품의 마지막 묶음 제외). 범위를 제{first}~{min(final, first + MIN_BATCH - 1)}장으로 넓히세요")
 
 
 def shown_path(path: Path, base: Path) -> str:
-    """项目根下的路径写相对路径（story-architect 从项目根解析），在外面的写绝对路径。"""
+    """프로젝트 루트 내부는 상대 경로(story-architect가 루트 기준으로 해석), 외부는 절대 경로로 쓴다."""
     try:
         return path.resolve().relative_to(base.resolve()).as_posix()
     except ValueError:
@@ -105,20 +102,20 @@ def shown_path(path: Path, base: Path) -> str:
 
 def measure(project: Path, chapter: int) -> tuple[Path, str, int]:
     try:
-        body = find_chapter_file(project / "正文", chapter, outline=False)
+        body = find_chapter_file(project / "본문", chapter, outline=False)
         text = body.read_bytes().decode("utf-8")
     except (WordcountError, OSError, UnicodeError) as exc:
-        raise SystemExit(f"ERROR: 第{chapter}章正文读不到（{exc}），先完成正文迁移")
+        raise SystemExit(f"ERROR: 제{chapter}장 본문을 읽을 수 없습니다({exc}). 본문 이전을 먼저 완료하세요")
     result = measure_wordcount(text, chapter=chapter)
     if result["status"] != "measured":
-        raise SystemExit(f"ERROR: 第{chapter}章长度测不出（{result['invalid_reason']}）")
+        raise SystemExit(f"ERROR: 제{chapter}장 분량을 측정할 수 없습니다({result['invalid_reason']})")
     return body, text, result["actual"]
 
 
-# ---------- 摘要字段抽取 ----------
+# ---------- 요약 필드 추출 ----------
 
 def label_blocks(text: str) -> dict[str, str]:
-    """把摘要按 `**标签**：` 切块；情节点之后的内容另行解析，不进字段块。"""
+    """요약을 `**标签**：` 기준으로 나눈다. 플롯 포인트 뒤 내용은 따로 파싱하며 필드 블록에 넣지 않는다."""
     blocks: dict[str, list[str]] = {}
     current = None
     for line in text.replace("\r\n", "\n").split("\n"):
@@ -138,7 +135,7 @@ def label_blocks(text: str) -> dict[str, str]:
 
 
 def flatten(value: str) -> str:
-    """列表/表格压成一行：表格只取第一列（人物名），跳过表头与分隔行。"""
+    """목록·표를 한 줄로 압축한다. 표는 첫 열(인물명)만 취하며 머리글·구분 행은 건너뛴다."""
     rows = [line.strip() for line in value.split("\n") if line.strip()]
     if rows and all(row.startswith("|") for row in rows):
         names = [row.strip("|").split("|")[0].strip() for row in rows[2:]]
@@ -172,15 +169,15 @@ def summary_lines(text: str) -> list[str]:
     out = []
     for name, aliases in SUMMARY_FIELDS:
         raw = next((blocks[key] for key in (name, *aliases) if blocks.get(key)), "")
-        out.append(f"- {name}：{flatten(raw) or '（摘要未写）'}")
+        out.append(f"- {SUMMARY_LABELS[name]}: {flatten(raw) or '(요약에 없음)'}")
     points = summary_points(text)
-    out.append("- 情节点（标题｜类型｜基调）：" + ("；".join(points) if points else "（摘要里没有可读的情节点）"))
+    out.append("- 사건 지점(제목｜유형｜기조): " + ("；".join(points) if points else "(요약에서 읽을 수 있는 사건 지점이 없음)"))
     return out
 
 
 def previous_hook(analysis: Path, chapter: int) -> str | None:
-    """上一章摘要里的章尾钩子：本批第一章写「章首钩子」用，上一章不在本包里。"""
-    summary = analysis / "章节" / f"第{chapter - 1}章_摘要.md"
+    """앞 장 요약의 결말 훅. 앞 장이 묶음에 없으므로 이번 첫 장의 도입 훅 작성에 사용한다."""
+    summary = analysis / "장별분석" / f"제{chapter - 1}장_요약.md"
     if chapter <= 1 or not summary.is_file():
         return None
     blocks = label_blocks(summary.read_text(encoding="utf-8-sig"))
@@ -189,29 +186,29 @@ def previous_hook(analysis: Path, chapter: int) -> str | None:
 
 
 def chapter_block(project: Path, analysis: Path, chapter: int, first: int) -> tuple[str, int, int, bool]:
-    """返回（本章块、历史长度、执行者还需另读的正文量、是否缺摘要）。"""
+    """(이번 장 블록, 과거 길이, 실행자가 별도 읽을 본문량, 요약 누락 여부)를 반환한다."""
     body, body_text, actual = measure(project, chapter)
-    head = [f"### 第{chapter}章", "",
-            f"- 正文：`{shown_path(body, project.parent)}`；字数目标 {actual}（{METRIC}）"]
+    head = [f"### 제{chapter}장", "",
+            f"- 본문: `{shown_path(body, project.parent)}`; 목표 분량 {actual}자({METRIC})"]
     hook = previous_hook(analysis, chapter) if chapter == first else None
     if hook:
-        head.append(f"- 上一章（第{chapter - 1}章）章尾钩子：{hook}")
-    summary = analysis / "章节" / f"第{chapter}章_摘要.md"
+        head.append(f"- 앞 장(제{chapter - 1}장)의 끝 훅: {hook}")
+    summary = analysis / "장별분석" / f"제{chapter}장_요약.md"
     if summary.is_file():
-        lines = [f"- 摘要要点（抽自 `{shown_path(summary, project.parent)}`）："] + [
+        lines = [f"- 요약 핵심(`{shown_path(summary, project.parent)}`에서 발췌): "] + [
             "  " + line for line in summary_lines(summary.read_text(encoding="utf-8").lstrip("﻿"))]
         return "\n".join(head + lines), actual, 0, False
-    note = "- 摘要：未找到，读该章正文反推，证据不足处写 [待补充]"
+    note = "- 요약: 찾지 못함. 해당 장 본문에서 역추론하고 근거가 부족한 부분은 [待补充](보완 필요)로 표시하세요"
     return "\n".join(head + [note]), actual, weight(body_text), True
 
 
-# ---------- 卷纲剧情单元 ----------
+# ---------- 권 개요 플롯 단위 ----------
 
 def unit_cards(project: Path, first: int, last: int) -> list[str]:
-    """从各卷纲取章节范围与本批重叠的剧情单元卡（连同卡下的子段）。"""
-    volumes = sorted((project / "大纲").glob("卷纲_第*卷.md"))
+    """각 권 개요에서 이번 배치와 장 범위가 겹치는 플롯 단위 카드를 하위 절과 함께 추출한다."""
+    volumes = sorted((project / "개요").glob("권개요_제*권.md"))
     if not volumes:
-        raise SystemExit("ERROR: 大纲/ 下没有卷纲，先在结构迁移时刻写定卷纲")
+        raise SystemExit("ERROR: 개요/에 권 개요가 없습니다. 구조 이전 단계에서 권 개요부터 확정하세요")
     out: list[str] = []
     for volume in volumes:
         lines, sections = parse_volume(volume.read_text(encoding="utf-8-sig"))
@@ -223,34 +220,34 @@ def unit_cards(project: Path, first: int, last: int) -> list[str]:
                 continue
             end = next((other.start for other in sections
                         if other.start > section.start and other.level <= section.level), len(lines))
-            out += [f"来源：`{project.name}/大纲/{volume.name}`", "", *lines[section.start:end], ""]
+            out += [f"출처: `{project.name}/개요/{volume.name}`", "", *lines[section.start:end], ""]
     if not out:
-        raise SystemExit(f"ERROR: 卷纲里找不到章节范围覆盖第{first}-{last}章的剧情单元卡（卡标题下一行写"
-                         "「> 作用域：单元级 {单元ID}」，卡里写「- 章节范围：第A-B章」），先补卷纲，"
-                         "再用 outline_view.py --check --strict 核对")
+        raise SystemExit(f"ERROR: 권 개요에서 제{first}~{last}장 범위의 플롯 단위 카드를 찾을 수 없습니다(카드 제목 다음 행에 "
+                         "‘> 作用域：单元级 {单元ID}’, 카드 안에 ‘- 章节范围：第A-B章’를 작성). 권 개요를 보완한 뒤 "
+                         "outline_view.py --check --strict로 확인하세요")
     return out
 
 
-# ---------- 拼包 ----------
+# ---------- 묶음 구성 ----------
 
 def render(project: Path, first: int, last: int, blocks: list[str]) -> str:
-    head = (f"# 任务包：反推第{first}-{last}章细纲（导入）\n\n"
-            f"只交付 `{project.name}/大纲/细纲_第{first:03d}章.md` 到 `细纲_第{last:03d}章.md`，每章一个文件（已有的同名文件按本包重写覆盖）；"
-            f"不改正文、卷纲和 `设定/`，不建 `追踪/`。证据用下方每章的摘要要点，不整读拆文库摘要；某个字段要点里没有、"
-            f"又必须写实际内容时，只回看该章正文的相关段落。作者已定的事在 `{project.name}/.story/work/导入记录.md`；"
-            "不要另读本包以外的写作技法文件。交付后只回：写了哪些文件、每章一句核心事件、"
-            "证据不足标了 [待补充] 的要点（没有写「无」）。\n\n"
-            "包里提到的检查由主会话在你交付后跑，你不执行命令；需要的测量结果已放进包里。")
-    parts = [head, f"\n## 本批章节\n\n路径相对项目根（`{project.parent}`）。\n\n" + "\n\n".join(blocks),
-             "\n## 卷纲剧情单元（覆盖本批）\n\n" + "\n".join(unit_cards(project, first, last)).rstrip(),
-             "\n---\n\n<!-- 资料：outline-reverse-rules.md -->\n\n" + RULES.read_text(encoding="utf-8").lstrip("﻿").strip()]
+    head = (f"# 작업 묶음: 제{first}~{last}장 상세 개요 역추론(가져오기)\n\n"
+            f"`{project.name}/개요/상세개요_제{first:03d}장.md`부터 `상세개요_제{last:03d}장.md`까지 장마다 파일 하나씩 전달하세요(동명 파일은 이 묶음에 따라 덮어씀). "
+            f"본문·권 개요·`설정/`을 수정하거나 `추적/`을 만들지 마세요. 근거는 아래 장별 요약 핵심에서 가져오고 분석 자료의 요약 전체는 읽지 마세요. 필요한 필드가 요약 핵심에 없고 "
+            f"실제 내용을 반드시 써야 할 때만 해당 장 본문의 관련 문단을 확인하세요. 작가 확정 사항은 `{project.name}/.story/work/가져오기기록.md`에 있습니다. "
+            "묶음 밖의 집필 기법 파일은 읽지 마세요. 전달 후에는 작성한 파일 목록, 장마다 한 문장으로 정리한 핵심 사건, "
+            "근거가 부족해 [待补充](보완 필요)로 표시한 항목만 보고하세요(없으면 ‘없음’).\n\n"
+            "묶음에 나오는 검사는 전달 후 주 세션이 실행하므로 직접 명령을 실행하지 마세요. 필요한 측정 결과는 묶음에 포함되어 있습니다.")
+    parts = [head, f"\n## 이번 묶음의 장\n\n경로 기준은 프로젝트 루트(`{project.parent}`)입니다.\n\n" + "\n\n".join(blocks),
+             "\n## 이번 묶음에 해당하는 권 개요 플롯 단위\n\n" + "\n".join(unit_cards(project, first, last)).rstrip(),
+             "\n---\n\n<!-- 자료: outline-reverse-rules.md -->\n\n" + RULES.read_text(encoding="utf-8").lstrip("﻿").strip()]
     return "\n".join(parts) + "\n"
 
 
 def build(project: Path, analysis: Path, first: int, last: int) -> dict:
     if not RULES.is_file():
-        raise SystemExit(f"ERROR: 缺少 reference：{RULES}")
-    fixed = weight(render(project, first, last, []))  # 包头、剧情单元卡与规则：章数减少只会更少
+        raise SystemExit(f"ERROR: 참조 파일이 없습니다: {RULES}")
+    fixed = weight(render(project, first, last, []))  # 묶음 머리·플롯 단위 카드·규칙은 장 수가 줄면 분량도 줄어든다.
     blocks: list[str] = []
     lengths: dict[int, int] = {}
     missing: list[int] = []
@@ -259,7 +256,7 @@ def build(project: Path, analysis: Path, first: int, last: int) -> dict:
         block, actual, extra, absent = chapter_block(project, analysis, chapter, first)
         cost = weight(block) + extra
         if blocks and load + cost > LOAD_LIMIT:
-            break  # 包已够大：本章留给下一批
+            break  # 묶음이 이미 충분히 크므로 이번 장은 다음 배치로 넘긴다.
         blocks.append(block)
         lengths[chapter] = actual
         load += cost
@@ -273,21 +270,21 @@ def build(project: Path, analysis: Path, first: int, last: int) -> dict:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="拼出导入长篇逐批反推细纲的任务包")
-    parser.add_argument("--project", required=True, type=Path, help="书目录（{导入书名}/）")
-    parser.add_argument("--chapters", required=True, help="章节范围 A-B，请求 10–20 章；包过大时自动少排")
-    parser.add_argument("--analysis", type=Path, help="拆文库目录，默认 书目录的上一级/拆文库/{书目录名}")
+    parser = argparse.ArgumentParser(description="가져온 장편의 상세 개요를 묶음별로 역추론하는 작업 자료 생성")
+    parser.add_argument("--project", required=True, type=Path, help="작품 폴더({가져온작품명}/)")
+    parser.add_argument("--chapters", required=True, help="장 범위 A-B. 10~20장을 요청하며 묶음이 너무 크면 자동으로 줄임")
+    parser.add_argument("--analysis", type=Path, help="분석 자료 폴더. 기본값은 작품 폴더의 상위/작품분석실/{작품폴더명}")
     args = parser.parse_args(argv)
     try:
         project = args.project.resolve()
         if not project.is_dir():
-            raise SystemExit(f"ERROR: 书目录不存在：{args.project}")
+            raise SystemExit(f"ERROR: 작품 폴더가 없습니다: {args.project}")
         first, last = parse_range(args.chapters)
         final = last_body_chapter(project)
         if last > final:
-            raise SystemExit(f"ERROR: 正文只迁到第{final}章，范围超出")
+            raise SystemExit(f"ERROR: 본문은 제{final}장까지만 이전되어 요청 범위를 벗어납니다")
         check_batch_size(first, last, final)
-        analysis = (args.analysis or project.parent / "拆文库" / project.name).resolve()
+        analysis = (args.analysis or project.parent / "작품분석실" / project.name).resolve()
         result = build(project, analysis, first, last)
     except SystemExit as exc:
         emit(str(exc), sys.stderr)
@@ -295,7 +292,7 @@ def main(argv=None) -> int:
     end = result["end"]
     out_dir = project.joinpath(*WORK_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"导入细纲_第{first:03d}-{end:03d}章.md"
+    out = out_dir / f"가져오기상세개요_제{first:03d}-{end:03d}장.md"
     out.write_text(result["text"], encoding="utf-8")
     emit(json.dumps({"brief": str(out), "chapters": f"{first}-{end}",
                      "next": end + 1 if end < final else None, "chars": result["chars"], "limit": LOAD_LIMIT,

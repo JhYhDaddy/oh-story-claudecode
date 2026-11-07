@@ -1,8 +1,8 @@
 ---
-description: 多视角小说审查；优先派发插件角色，不可用时降级 solo。
+description: 다중 관점 소설 검토. 플러그인 역할에 우선 배정하고 사용할 수 없으면 solo로 전환한다.
 skills: story-review
 ---
 
-调用 `$story-review` 审查用户指定的小说文件或章节。
+`$story-review`를 호출하여 사용자 지정 소설 파일·장을 검토한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

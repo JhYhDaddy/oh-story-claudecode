@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deterministic checks for the ZCode plugin and story-setup deployment surface.
+# ZCode 플러그인과 story-setup 배포 인터페이스의 결정론적 검사.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -54,8 +54,8 @@ for key in ('channels', 'lspServers', 'outputStyles', 'settings'):
 market = json.loads(Path('marketplace.json').read_text())
 assert market['version'] == 1
 PY
-# Both catalog paths vs both native manifests (#390) and the exact root skill set are
-# checked by check-plugin-packaging.py, which check-claude-adapter.sh runs in the same CI job.
+# 두 카탈로그 경로와 두 네이티브 매니페스트(#390), 정확한 루트 스킬 집합은
+# 같은 CI 작업에서 check-claude-adapter.sh가 실행하는 check-plugin-packaging.py가 검사한다.
 echo "  OK native plugin/marketplace manifest"
 
 python3 - <<'PY'
@@ -128,8 +128,8 @@ for name in ('consistency-checker', 'story-explorer'):
     assert module.parse_tool_list(meta['disallowedTools'], 'disallowedTools') == {'Write', 'Edit', 'Bash'}
 
 chapter = (root / 'chapter-extractor.md').read_text(encoding='utf-8')
-assert '不提供 Claude inline hook 的 per-agent 写入强隔离' in chapter
-assert '只能 Write/Edit 调用方指定的单个' in chapter
+assert any(s in chapter for s in ('不提供 Claude inline hook 的 per-agent 写入强隔离', 'Claude 인라인 훅의 에이전트별 강한 쓰기 격리를 제공하지 않습니다'))
+assert any(s in chapter for s in ('只能 Write/Edit 调用方指定的单个', '호출자가 지정한 단일 `_analysis_cache/输入-{批次ID}.md`에만 Write/Edit할 수 있으며'))
 PY
 echo "  OK plugin Agents (7 generated roles; bounded tools; no Claude-only inline hooks)"
 
@@ -138,10 +138,10 @@ import json
 from pathlib import Path
 
 supported = {'SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Stop'}
-# 事件 → 允许的 handler。只按集合校验 handler 名（"名字在白名单里就行"）等于放过
-# "SessionStart 挂 post-tool-prose-check" 这类整块复制粘贴后忘改 args[1] 的错：
-# story_zcode_hook.js 只看 process.argv[2] 分派，从不比对 hook_event_name，运行时表现是
-# 会话起点静默不注入上下文 / 写后检查拿到错 payload 后什么都不报。必须逐事件锁死。
+# 이벤트 → 허용 handler. 이름이 허용 집합에 있는지만 검사하면 블록 복사 뒤 args[1] 수정을 잊어
+# SessionStart에 post-tool-prose-check를 연결한 오류도 통과한다.
+# story_zcode_hook.js는 process.argv[2]로만 분배하고 hook_event_name을 비교하지 않는다. 그러면
+# 세션 시작 컨텍스트 주입이 사라지거나 쓰기 후 검사가 잘못된 입력으로 아무것도 보고하지 않으므로 이벤트별 고정이 필수다.
 EVENT_HANDLERS = {
     'SessionStart': {'session-start'},
     'PreToolUse': {'pre-tool-prose-guard', 'pre-tool-commit-advisory'},
@@ -155,15 +155,15 @@ assert set(config['events']) == set(plugin)
 assert set(plugin) <= supported
 
 def flatten(events):
-    # 必须把事件名一起带出来：丢掉 event key 就没法把 handler 绑回它该服务的事件。
+    # 이벤트 이름도 추출해야 한다. 이벤트 키를 버리면 handler를 담당 이벤트에 다시 연결할 수 없다.
     return [(event, hook) for event, groups in events.items() for group in groups for hook in group['hooks']]
 
 plugin_hooks = flatten(plugin)
 workspace_hooks = flatten(config['events'])
 assert len(plugin_hooks) == len(workspace_hooks) == 4
 expected_routes = {(event, handler) for event, handlers in EVENT_HANDLERS.items() for handler in handlers}
-# 两份注册各自独立对表：只改 hooks.json 不改 config.json.patch（或反之）的漂移同样要红，
-# 二者是手工分开维护的，且 check-shared-files.sh 刻意把 hooks.json 排除在字节 parity 之外。
+# 등록 두 개를 각각 독립 대조한다. hooks.json만 바꾸고 config.json.patch를 안 바꾸거나 그 반대도 실패해야 한다.
+# 둘은 별도 수동 관리하며 check-shared-files.sh는 의도적으로 hooks.json을 바이트 동등성에서 제외한다.
 for source, pairs in (('hooks.json', plugin_hooks), ('config.json.patch', workspace_hooks)):
     for event, hook in pairs:
         assert set(hook) <= {'type', 'command', 'args', 'timeoutMs'}
@@ -175,9 +175,9 @@ for source, pairs in (('hooks.json', plugin_hooks), ('config.json.patch', worksp
         f'{source}: event→handler 注册漂移', sorted(expected_routes - routes), sorted(routes - expected_routes))
 post_groups = plugin['PostToolUse']
 assert len(post_groups) == 1 and post_groups[0]['matcher'] == 'Bash|Write|Edit|ApplyPatch'
-# 路由测试（防"直调 runner 绕过 matcher"的假绿）：pre-tool-prose-guard 的 matcher 在 plugin
-# 与 workspace config 两份里必须一致，且能路由 test-zcode-hooks 会喂给它的每种工具——含
-# ApplyPatch（写正文的 apply-patch 目标必须真被 matcher 送进 handler，而不只是 runner 直调可拦）。
+# 라우팅 테스트(runner 직접 호출로 matcher를 우회한 거짓 통과 방지): pre-tool-prose-guard matcher는 플러그인과
+# 작업 공간 설정에서 같아야 하며 test-zcode-hooks가 전달할 모든 도구를 라우팅해야 한다. 여기에는
+# ApplyPatch도 포함한다(본문 apply-patch 대상이 실제 matcher를 거쳐 handler에 전달돼야 하며 직접 호출 차단만으로 부족).
 import re
 def prose_guard_matcher(events):
     for group in events['PreToolUse']:
@@ -205,21 +205,21 @@ assert_grep '\$story-long-write|\$story-setup' "$ROOT/AGENTS.md.tmpl" 'ZCode AGE
 assert_grep 'target_cli = zcode|target_cli.*zcode' skills/story-setup/SKILL.md "story-setup must document zcode target_cli"
 assert_grep 'references/deploy-zcode\.md' skills/story-setup/SKILL.md "story-setup entry must route zcode to its deploy file"
 assert_grep 'references/zcode/config\.json\.patch' skills/story-setup/references/deploy-zcode.md "story-setup manifest missing ZCode config patch"
-# 组合安装验证代理（CI 无 ZCode 运行时）：插件 manifest 与 workspace config 注册同一批 hooks，
-# 部署算法必须记录二者互斥（装插件则跳过 config hooks 合并），否则 PreToolUse/PostToolUse 双触发。
-assert_grep 'hooks 互斥' skills/story-setup/references/deploy-zcode.md "story-setup must document the plugin/workspace hooks mutex (skip config hooks merge when plugin installed, avoid double-firing)"
+# 조합 설치 대리 검증(CI에 ZCode 런타임 없음): 플러그인 매니페스트와 작업 공간 설정이 같은 훅을 등록하므로
+# 배포 알고리즘은 상호 배타성을 명시해야 한다(플러그인이 있으면 config 훅 병합 생략). 그렇지 않으면 PreToolUse/PostToolUse가 두 번 실행된다.
+assert_grep 'hooks 互斥|훅 상호 배타' skills/story-setup/references/deploy-zcode.md "story-setup must document the plugin/workspace hooks mutex (skip config hooks merge when plugin installed, avoid double-firing)"
 assert_grep '\.zcode/skills/story-setup/references/agent-references' skills/story-setup/references/deploy-zcode.md "story-setup missing ZCode reference path"
-assert_grep '更新后的插件副本' skills/story-setup/references/deploy-zcode.md "ZCode upgrade must choose the updated plugin setup, not its workspace snapshot"
-assert_grep '更新后的插件副本' skills/story-setup/UPGRADING.md "ZCode upgrade guide must explain the setup source priority"
+assert_grep '更新后的插件副本|갱신된 플러그인 사본' skills/story-setup/references/deploy-zcode.md "ZCode upgrade must choose the updated plugin setup, not its workspace snapshot"
+assert_grep '更新后的插件副本|갱신된 플러그인 사본' skills/story-setup/UPGRADING.md "ZCode upgrade guide must explain the setup source priority"
 
 python3 - <<'PY'
 from pathlib import Path
 
-# Markdown 就是运行契约：防旧宿主版本判断再次绕过实际插件注册状态。
+# Markdown이 실행 계약이다. 이전 호스트 버전 판정이 실제 플러그인 등록 상태를 다시 우회하지 않도록 한다.
 for skill in ('story', 'story-long-write', 'story-short-write', 'story-long-analyze', 'story-import', 'story-deslop', 'story-review'):
     path = Path('skills') / skill / 'SKILL.md'
     text = path.read_text(encoding='utf-8')
-    assert 'ZCode' in text and '插件' in text and '注册' in text, path
+    assert 'ZCode' in text and any(s in text for s in ('插件', '플러그인')) and any(s in text for s in ('注册', '등록')), path
     assert 'ZCode 3.3.4' not in text, f'{path}: stale fixed-version solo routing'
 deep = Path('skills/story-import/references/deep-analysis.md').read_text(encoding='utf-8')
 assert '（或 ZCode）' not in deep, 'import must not override capability detection with host-based solo'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject undeclared near-identical Markdown references across skills."""
+"""스킬 간에 등록하지 않은 거의 동일한 Markdown 참조 자료를 거부한다."""
 
 from __future__ import annotations
 

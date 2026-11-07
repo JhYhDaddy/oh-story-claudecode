@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 /**
- * Deterministic 细纲 structural verifier for story-long-write.
- *
- * Usage:
- *   node scripts/check-outline-contract.js --json <细纲路径...>
- *   node scripts/check-outline-contract.js --json --project <书目录> --chapter N
- * Exit: 0 = pass, 1 = blocking contract failures, 2 = invalid invocation.
- *
- * Scope is structural only: it decides whether the blueprint carries the fields,
- * subsections and table shape the authoritative template names. It never judges
- * whether a value is good. The contract itself sets this granularity —
- * artifact-protocols.md 要求未知字段写 `[待补充]`，所以字段必须在场，值可以未知。
+ * story-long-write의 결정적 상세 개요 구조 검사기.
+ * 사용법:
+ *   node scripts/check-outline-contract.js --json <상세개요경로...>
+ *   node scripts/check-outline-contract.js --json --project <작품디렉터리> --chapter N
+ * 종료: 0 = 통과, 1 = 차단 수준 계약 위반, 2 = 잘못된 호출.
+ * 범위는 구조뿐이다. 권위 있는 템플릿의 필드·소절·표 형태가 있는지를 확인하며 값의 품질은 판단하지 않는다.
+ * artifact-protocols.md는 알 수 없는 필드에 `[待补充]`를 쓰게 하므로 필드는 있어야 하지만 값은 미정이어도 된다.
  */
 
 'use strict'
@@ -18,10 +14,10 @@
 const fs = require('fs')
 const path = require('path')
 
-// 权威模板：references/workflow-outline.md 的细纲模板
-// 必填只留有证据或事故撑腰的核心字段；阶段位置、章节定位、结构公式、本章标价、闭环状态、
-// 写手自由区、契约风险、镜头准入、信息差触发点与「分辨率」列是可选的阅读体验字段——
-// 写了照样消费，没写不拦（#383 隔离实验：只补目标情绪与主角目标就复现了补满全部字段的收益）。
+// 권위 있는 템플릿: references/workflow-outline.md의 상세 개요 템플릿.
+// 필수 항목은 근거나 실제 사고로 뒷받침된 핵심 필드만 남긴다. 단계 위치·장 위치·구조 공식·이 장의 대가·폐회로 상태,
+// 집필자 자유 영역·계약 위험·장면 진입 기준·정보 격차 발동점과 ‘分辨率’ 열은 선택적 읽기 경험 필드다.
+// 있으면 사용하되 없어도 차단하지 않는다(#383 격리 실험: 목표 감정과 주인공 목표만 보충해도 전체 필드 보충 효과를 재현).
 const FIELDS = [
   '核心事件', '字数目标', '字数口径', '单元ID/位置', '目标情绪',
   '主角目标/关键选择', '章首钩子', '爽点', '本章禁止提前释放',
@@ -29,14 +25,14 @@ const FIELDS = [
 const SUBSECTIONS = ['内容概括', '情节安排', '人物关系和出场顺序', '情节细化']
 const FIVE_ACT = ['起因', '发展', '转折', '高潮', '结尾']
 const PLOT_HEADER_FIRST = /^(?:#|序号)$/
-// 这两个字段实测直接影响正文质量，必须有实际内容
+// 실측상 이 두 필드는 본문 품질에 직접 영향을 주므로 실제 내용이 필수다.
 const INTENT_FIELDS = ['目标情绪', '主角目标/关键选择']
 const CALIBER = 'visible_chars_v1'
-// 可选字段「契约风险」只收三档；值未知可写 [待补充]。旧稿里的「风险等级」按同一字段认（旧名）。
+// 선택 필드 ‘契约风险’은 세 단계만 받으며 미정이면 [待补充]를 쓸 수 있다. 구형 ‘风险等级’도 같은 필드로 인식한다.
 const CONTRACT_RISK_LEVELS = ['契约安全', '需补强', '契约破坏']
 
-// 「字数目标」「字数范围」「字数口径」的写法语法与 wordcount_core.py 逐字同构（scripts/test-storyctl.py 双跑同一批写法），
-// 细纲验收通过的写法，storyctl chapter check 不能再拒。值里一个数字都没有的目标/范围行是说明文字，不参与取值。
+// ‘字数目标’, ‘字数范围’, ‘字数口径’ 문법은 wordcount_core.py와 정확히 대응한다(scripts/test-storyctl.py가 같은 표기를 양쪽에서 실행).
+// 상세 개요 검증을 통과한 표기를 storyctl chapter check가 거부해서는 안 된다. 숫자가 하나도 없는 목표·범위 행은 설명문으로 보며 값을 추출하지 않는다.
 const NUMBER = '([1-9][0-9]{0,2}(?:[,，][0-9]{3})+|[1-9][0-9]*)'
 const NOTE = '(?:[（(][^（）()]*[）)])?'
 const TARGET_VALUE = new RegExp(`^(?:约|大约)?[ \\t]*${NUMBER}[ \\t]*字?(?:左右)?[ \\t]*${NOTE}$`)
@@ -97,7 +93,7 @@ function parseContractRisk(text) {
 }
 
 function fieldPattern(name) {
-  // 允许 -/*/+ 项目符号、可选 ** 加粗、全角或半角冒号
+  // -/*/+ 목록 기호, 선택적 ** 강조, 전각·반각 콜론을 허용한다.
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`^\\s*[-*+]\\s*\\*{0,2}${escaped}\\*{0,2}\\s*[：:]`, 'm')
 }
@@ -111,7 +107,7 @@ function readUtf8(file) {
   }
 }
 
-// 回报里的模板出处只列本 skill 带着的文件：导入的副本没有 workflow-outline.md，细纲写法在 outline-reverse-rules.md
+// 보고하는 템플릿 출처는 현재 스킬에 포함된 파일만 나열한다. 가져오기 사본에는 workflow-outline.md가 없고 outline-reverse-rules.md에 상세 개요 표기가 있다.
 const TEMPLATE_REFERENCES = ['references/workflow-outline.md', 'references/outline-reverse-rules.md']
   .filter((rel) => fs.existsSync(path.join(__dirname, '..', rel)))
 
@@ -137,17 +133,17 @@ function parseTableRow(line) {
 function resolveBookRoot(file, projectRoot) {
   if (projectRoot) return path.resolve(projectRoot)
   const parent = path.dirname(path.resolve(file))
-  if (path.basename(parent) === '大纲') return path.dirname(parent)
+  if (path.basename(parent) === '개요') return path.dirname(parent)
   return null
 }
 
-// 项目引用须写目录路径；裸文件名可能指向 skill reference，不猜测其归属。
-const REF_DIR_PREFIX = /^(?:设定|大纲|追踪|正文|读者笔记|对标)\//
+// 프로젝트 참조에는 디렉터리 경로가 필요하다. 파일명만 있으면 스킬 참조일 수 있으므로 소속을 추측하지 않는다.
+const REF_DIR_PREFIX = /^(?:설정|개요|추적|본문|독자메모|비교작품)\//
 
 function checkSettingRefs(text, name, file, projectRoot) {
   const bookRoot = resolveBookRoot(file, projectRoot)
   if (!bookRoot) {
-    return makeCheck('outline.setting-refs-exist', true, name, '未能定位书目录（细纲不在 大纲/ 下且未传 --project），跳过', '细纲引用的项目内文件真实存在', '无需修复。')
+    return makeCheck('outline.setting-refs-exist', true, name, '未能定位书目录（细纲不在 개요/ 下且未传 --project），跳过', '细纲引用的项目内文件真实存在', '无需修复。')
   }
   const refs = new Set()
   const pattern = /`([^`\n]+?\.md)[^`\n]*`/g
@@ -200,9 +196,9 @@ function verify(file, projectRoot = null) {
     '只补报告里缺的字段行；确实还定不下来的写 [待补充]，不为补字段新增副线或人物关系。'
   ))
 
-  // 隔离实验（同章、同写作流程，只改细纲）：只补这两个字段就能复现补齐全部字段的收益，
-  // 盲评 3/3 胜过不补；补满五个字段与只补这两个不可区分。所以这两个字段不接受占位符，
-  // 其余字段仍按契约允许 [待补充]。
+  // 같은 장·집필 절차에서 상세 개요만 바꾼 격리 실험에서는 두 필드만 보충해도 전체 필드 보충 효과가 재현되었다.
+  // 블라인드 평가에서 미보충 대비 3/3 승리했고 다섯 필드 보충과 두 필드 보충은 구별되지 않았다. 따라서 두 필드에는 자리표시자를 허용하지 않으며
+  // 나머지는 계약대로 [待补充]를 허용한다.
   const hollow = INTENT_FIELDS.filter((field) => {
     const match = text.match(new RegExp(`^\\s*[-*+]\\s*\\*{0,2}${field.replace('/', '\\/')}\\*{0,2}\\s*[：:]\\s*(.*)$`, 'm'))
     if (!match) return false
@@ -242,8 +238,8 @@ function verify(file, projectRoot = null) {
   let header = null
   for (const line of lines) {
     const cells = parseTableRow(line)
-    // 现行模板默认四列（# / 情节点 / 功能标签 / 执行边界（禁＋放）），需要时在功能标签后加「分辨率」列成五列。
-    // 两种都收：功能标签固定在第 3 列，执行边界一律取最后一列。
+    // 현재 템플릿은 기본 네 열(# / 情节点 / 功能标签 / 执行边界（禁＋放）)이며 필요하면 기능 태그 뒤에 ‘分辨率’을 넣어 다섯 열로 만든다.
+    // 둘 다 허용한다. 기능 태그는 항상 3열, 실행 경계는 항상 마지막 열이다.
     if (cells && (cells.length === 4 || cells.length === 5) && PLOT_HEADER_FIRST.test(cells[0])) {
       header = cells
       break
@@ -262,8 +258,8 @@ function verify(file, projectRoot = null) {
     '只把情节点序列改成这张表，逐点补功能标签与执行边界；不增删情节点本身。'
   ))
 
-  // 「放」半边：五列表或表头写明「禁＋放」的四列表，执行边界必须至少一个点解除限制，
-  // 全是禁令的情节点表实测会把整章压成同一个温度（015 章十一个点全「不许」）。表头没写「禁＋放」的四列表不追溯。
+  // 허용(‘放’) 부분: 5열 표 또는 ‘禁＋放’ 헤더의 4열 표에서는 최소 한 플롯 포인트의 실행 경계가 제한을 풀어야 한다.
+  // 실측에서 전부 금지인 표는 장 전체를 같은 온도로 눌렀다(015장 11개 포인트 모두 ‘不许’). ‘禁＋放’ 없는 4열 표에는 소급하지 않는다.
   if (headerOk && (header.length === 5 || /放/.test(header[header.length - 1]))) {
     const rows = []
     for (const line of lines) {
@@ -299,7 +295,7 @@ function verify(file, projectRoot = null) {
     }
   }
 
-  // 章级「禁止提前释放」只写本章特有的三五条；条目过多多半是把卷级常任禁忌逐章复读了。
+  // 장별 ‘禁止提前释放’에는 해당 장 고유의 3–5개만 쓴다. 많다면 권 단위 상시 금기를 매 장 반복했을 가능성이 높다.
   const releaseMatch = text.match(/^\s*[-*+]\s*\*{0,2}本章禁止提前释放\*{0,2}\s*[：:]\s*(.*)$/m)
   if (releaseMatch) {
     const items = releaseMatch[1].split(/[、；;，,\/]/).map((s) => s.trim()).filter(Boolean)
@@ -380,7 +376,7 @@ function report(file, checks, extra = {}) {
 }
 
 function resolveChapter(project, chapter) {
-  const dir = path.join(project, '大纲')
+  const dir = path.join(project, '개요')
   let entries
   try {
     entries = fs.readdirSync(dir)
@@ -389,14 +385,14 @@ function resolveChapter(project, chapter) {
   }
   const wanted = Number(chapter)
   const hit = entries.find((entry) => {
-    const match = entry.match(/^细纲_第0*(\d+)章.*\.md$/)
+    const match = entry.match(/^상세개요_제0*(\d+)장.*\.md$/)
     return match && Number(match[1]) === wanted
   })
   if (!hit) return { error: `${dir} 下没有第 ${wanted} 章细纲` }
   return { file: path.join(dir, hit) }
 }
 
-// --supply：批末验证供给自查已落盘。新书写在卷纲旁的 排纲底稿_{单元ID}.md；老卷纲写在单元卡块内。
+// --supply: 배치 끝에 공급 자체 점검 저장을 검증한다. 새 작품은 권 개요 옆 개요초안_{单元ID}.md, 구형 권 개요는 단위 카드 안이다.
 function hasSupplyHeading(text) {
   return text.split(/\r?\n/).some((line) => {
     const heading = line.replace(/\*\*/g, '').match(/^#{1,6}\s+(.+)$/)
@@ -405,7 +401,7 @@ function hasSupplyHeading(text) {
 }
 
 function verifySupply(volumeFile, unitId) {
-  const draftFile = path.join(path.dirname(volumeFile), `排纲底稿_${unitId}.md`)
+  const draftFile = path.join(path.dirname(volumeFile), `개요초안_${unitId}.md`)
   const draft = readUtf8(draftFile)
   if (draft.ok) {
     const ok = hasSupplyHeading(draft.text)
@@ -418,7 +414,7 @@ function verifySupply(volumeFile, unitId) {
   if (!read.ok) {
     return { schema_version: 1, verifier: 'story-long-write.outline-supply', file: path.resolve(volumeFile), unit: unitId, ok: false, evidence: read.error || '卷纲文件为空' }
   }
-  // 只检查目标单元内的标题，不把正文提及或代码示例当成小节。
+  // 대상 단위 안의 제목만 검사하며 본문 언급이나 코드 예제를 소절로 보지 않는다.
   let fence = null
   const lines = read.text.split(/\r?\n/).map((line) => {
     const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/)
@@ -454,7 +450,7 @@ function verifySupply(volumeFile, unitId) {
     file: path.resolve(volumeFile),
     unit: unitId,
     ok,
-    evidence: ok ? '单元卡含「供给自查」小节' : `没有 排纲底稿_${unitId}.md，剧情单元 ${unitId} 的卡内也没有「供给自查」小节——每批出细纲前须做供给自查（含「无缺口」情形），见 workflow-outline.md 步骤 3`,
+    evidence: ok ? '单元卡含「供给自查」小节' : `没有 개요초안_${unitId}.md，剧情单元 ${unitId} 的卡内也没有「供给自查」小节——每批出细纲前须做供给自查（含「无缺口」情形），见 workflow-outline.md 步骤 3`,
   }
 }
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# check-codex-adapter.sh — deterministic checks for the Codex adapter surface.
+# check-codex-adapter.sh — Codex 어댑터 인터페이스의 결정론적 검사.
 #
-# Codex support here is repo skill discovery (.agents/skills symlink) plus
-# `$story-setup` project deployment (.codex/agents + .codex/hooks). There is no
-# materialized plugin package; agent TOMLs are generated from the Claude agent
-# templates by scripts/generate-codex-agents.py.
+# 여기서 Codex 지원은 저장소 스킬 탐색(.agents/skills 심볼릭 링크)과
+# `$story-setup` 프로젝트 배포(.codex/agents + .codex/hooks)로 구성된다.
+# 실제 플러그인 패키지는 없다. 에이전트 TOML은 Claude 에이전트 템플릿으로부터
+# scripts/generate-codex-agents.py가 생성한다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -51,13 +51,13 @@ python3 scripts/test-codex-hook-merge.py
 
 echo "  OK JSON/Python syntax"
 
-# Windows encoding safety (issue #164 class): the hook carries Chinese 正文/细纲 over
-# stdin/stdout, so it must use UTF-8 bytes, not Windows' ANSI code page text streams.
+# Windows 인코딩 안전성(이슈 #164 유형): 훅은 중국어 본문/细纲을 표준 입출력으로 전달하므로
+# Windows ANSI 코드 페이지 텍스트 스트림 대신 UTF-8 바이트를 사용해야 한다.
 HOOK_PY="$CODEX_DIR/hooks/story_codex_hook.py"
-# Walk the AST instead of grepping lines. A line-based read_text(/encoding= pair fails both ways:
-# it reports a regression against a correct call wrapped over two lines (or against a comment that
-# merely mentions .read_text()), and it accepts `p.read_text() + p.read_text(encoding="utf-8")[:0]`
-# because the encoding token is somewhere on the line. The AST sees calls, never comments.
+# 줄 검색 대신 AST를 순회한다. 줄 단위 read_text(/encoding= 쌍 검사는 양방향으로 잘못된다.
+# 두 줄로 나뉜 올바른 호출이나 .read_text()를 언급한 주석을 회귀 오류로 보고하며,
+# `p.read_text() + p.read_text(encoding="utf-8")[:0]`는 줄 어딘가에 encoding 토큰이 있다는 이유로
+# 허용한다. AST는 주석을 보지 않고 호출을 확인한다.
 python3 - "$HOOK_PY" <<'PY'
 import ast
 import sys
@@ -98,9 +98,9 @@ PY
 
 echo "  OK Windows encoding safety (UTF-8 stdio + file reads)"
 
-# .agents/skills is a relative symlink to skills/ (the agentskills.io path Codex scans), so
-# there is no second skill copy. Must be a valid relative symlink: an invalid/absolute one
-# (openai/codex#11314) or a Windows no-symlinks text stub silently breaks discovery.
+# .agents/skills는 skills/에 대한 상대 심볼릭 링크(Codex가 스캔하는 agentskills.io 경로)이므로
+# 스킬 복사본은 따로 없다. 유효한 상대 링크여야 한다. 잘못된 링크나 절대 링크
+# (openai/codex#11314), Windows의 링크 대신 텍스트 스텁은 탐색을 조용히 망가뜨린다.
 [ -L ".agents/skills" ] || fail ".agents/skills must be a symlink (got a regular file/dir; on Windows enable git core.symlinks)"
 target="$(readlink .agents/skills)"
 [ "$target" = "../skills" ] || fail ".agents/skills symlink target must be relative '../skills', got '$target'"
@@ -113,7 +113,7 @@ done
 
 echo "  OK .agents/skills discovery symlink ($skill_count skills)"
 
-# Custom-agent TOMLs are generated deterministically from the Claude templates.
+# 사용자 지정 에이전트 TOML은 Claude 템플릿으로부터 결정론적으로 생성한다.
 python3 scripts/generate-codex-agents.py --dest "$TMP_DIR/agents" >/dev/null
 diff -qr "$TMP_DIR/agents" "$CODEX_DIR/agents" >/dev/null \
   || fail "generated Codex agents are stale; run scripts/generate-codex-agents.py"
@@ -121,8 +121,8 @@ if grep -RInE '当前 Claude 部署|(^|[^[:alnum:]_])/story(-[a-z0-9-]+)?' "$COD
   fail "generated Codex agents must use Codex platform wording and \$story* invocations"
 fi
 
-# A missing/empty source must fail before touching the destination. Otherwise a
-# typo in --source silently prunes every generated TOML while returning success.
+# 원본이 없거나 비어 있으면 대상을 건드리기 전에 실패해야 한다. 그렇지 않으면
+# --source 오타가 모든 생성 TOML을 조용히 삭제하고도 성공을 반환한다.
 mkdir -p "$TMP_DIR/empty-source" "$TMP_DIR/safe-dest"
 printf 'keep\n' > "$TMP_DIR/safe-dest/sentinel.toml"
 if python3 scripts/generate-codex-agents.py \
@@ -131,8 +131,8 @@ if python3 scripts/generate-codex-agents.py \
 fi
 assert_file "$TMP_DIR/safe-dest/sentinel.toml"
 
-# A malformed later source must also fail before any earlier valid source is
-# written. This locks the generator's validate-all-then-write behavior.
+# 뒤쪽 원본이 잘못된 경우에도 앞쪽의 유효한 원본을 쓰기 전에 실패해야 한다.
+# 이를 통해 전체 검증 후 쓰기라는 생성기 동작을 고정한다.
 mkdir -p "$TMP_DIR/malformed-source" "$TMP_DIR/transactional-dest"
 cat >"$TMP_DIR/malformed-source/a.md" <<'EOF'
 ---
@@ -153,9 +153,9 @@ fi
 diff -qr "$TMP_DIR/transactional-before" "$TMP_DIR/transactional-dest" >/dev/null \
   || fail "Codex generator modified destination before validating all sources"
 
-# A filesystem failure while publishing a later rendered file must not expose an
-# earlier update.  Keep b.toml as a directory so the second write fails after
-# a.toml has already been prepared.
+# 뒤쪽 렌더링 파일을 게시할 때 파일시스템 오류가 발생해도 앞쪽 갱신이 노출되면 안 된다.
+# b.toml을 디렉터리로 두어 a.toml이 준비된 뒤 두 번째 쓰기가
+# 실패하도록 한다.
 mkdir -p "$TMP_DIR/write-failure-source" "$TMP_DIR/write-failure-dest/b.toml"
 cat >"$TMP_DIR/write-failure-source/a.md" <<'EOF'
 ---
@@ -182,9 +182,9 @@ fi
 diff -qr "$TMP_DIR/write-failure-before" "$TMP_DIR/write-failure-dest" >/dev/null \
   || fail "Codex generator exposed a partial update after a destination write failure"
 
-# Also inject a failure during the second atomic commit (after a.toml was
-# replaced) and verify the rollback restores every generated byte while keeping
-# unrelated files in the destination directory.
+# 두 번째 원자적 커밋(a.toml 교체 이후)에도 실패를 주입하여 롤백이
+# 생성된 모든 바이트를 복원하는지 확인하고, 다음 항목도 보존하는지 확인한다.
+# 대상 디렉터리의 관련 없는 파일도 유지해야 한다.
 python3 - "scripts/generate-codex-agents.py" "$TMP_DIR" <<'PY'
 import importlib.util
 import sys
@@ -223,9 +223,9 @@ if after != before:
     raise SystemExit("Codex publisher failed to roll back an interrupted commit")
 PY
 
-# A stale generated file that cannot be removed (immutable flag, lock, read-only
-# mount) must not abort the rollback: every restorable file returns to its prior
-# bytes and the un-removable file keeps its original content.
+# 이전 생성 파일을 제거할 수 없어도(불변 플래그, 잠금, 읽기 전용 마운트)
+# 롤백이 중단되면 안 된다. 복원 가능한 파일은 모두 이전 바이트로 돌아가고
+# 제거할 수 없는 파일은 원래 내용을 유지해야 한다.
 python3 - "scripts/generate-codex-agents.py" "$TMP_DIR" <<'PY'
 import importlib.util
 import sys
@@ -245,10 +245,10 @@ spec.loader.exec_module(module)
 
 real_unlink = Path.unlink
 real_copy2 = module.shutil.copy2
-# Key the fault on the file's OWN path, not its name: a real immutable file
-# still allows being read/copied into the backup dir, so only writes and unlinks
-# targeting stale.toml itself must fail. Keying on the name would also block the
-# backup copy and abort before the rollback path is ever exercised.
+# 이름이 아닌 파일 자체 경로를 기준으로 장애를 주입한다. 실제 불변 파일도
+# 읽기와 백업 디렉터리 복사는 허용하므로 stale.toml 자체를 대상으로 하는 쓰기/삭제만
+# 실패해야 한다. 이름을 기준으로 하면 백업 복사도 막아
+# 롤백 경로를 검사하기 전에 중단된다.
 victim = (dest / "stale.toml").resolve()
 
 
@@ -282,8 +282,8 @@ if after != before:
     )
 PY
 
-# Agent names become output filenames. Reject path-like or filename-mismatched
-# names before staging so hostile/mistyped frontmatter cannot escape --dest.
+# 에이전트 이름은 출력 파일명이 된다. 경로처럼 생기거나 파일명과 불일치하는 이름은
+# 준비 단계 전에 거부해 악의적이거나 오타가 있는 프런트매터가 --dest 밖으로 벗어나지 못하게 한다.
 mkdir -p "$TMP_DIR/escape-source" "$TMP_DIR/escape-dest"
 cat >"$TMP_DIR/escape-source/safe.md" <<'EOF'
 ---
@@ -316,7 +316,7 @@ expected = {
     'chapter-extractor', 'character-designer', 'consistency-checker',
     'narrative-writer', 'story-architect', 'story-explorer', 'story-researcher',
 }
-read_only = {'consistency-checker', 'story-explorer'}  # chapter-extractor 写批次输入文件，不再只读
+read_only = {'consistency-checker', 'story-explorer'}  # chapter-extractor는 배치 입력 파일을 쓰므로 더 이상 읽기 전용이 아니다.
 found = set()
 for path in sorted(Path('skills/story-setup/references/codex/agents').glob('*.toml')):
     data = tomllib.loads(path.read_text(encoding='utf-8'))
@@ -339,8 +339,8 @@ PY
 
 echo "  OK Codex custom-agent TOML (schema + generator determinism)"
 
-# The generated registration owns only root lookup + event routing. Interpreter probing and
-# hook dispatch live in one launcher per platform instead of being copied into six JSON commands.
+# 생성 등록은 루트 탐색과 이벤트 라우팅만 담당한다. 인터프리터 탐색과 훅 분배는
+# JSON 명령 6개에 복사하지 않고 플랫폼별 실행기 하나에 둔다.
 assert_grep 'for candidate in python3 python py' "$CODEX_DIR/hooks/run-story-hook.sh" "POSIX launcher must probe Python interpreters"
 assert_grep 'for %%P in \(python3 python py\) do' "$CODEX_DIR/hooks/run-story-hook.cmd" "Windows launcher must probe the current interpreter list"
 assert_grep 'set "PYBIN=%%P"' "$CODEX_DIR/hooks/run-story-hook.cmd" "Windows launcher must retain the first working interpreter"
@@ -348,14 +348,14 @@ if grep -q 'git rev-parse' "$CODEX_DIR/hooks/hooks.json" "$CODEX_DIR/hooks/run-s
   fail "deployment hooks must not require git to launch story_codex_hook.py"
 fi
 
-# Every launcher must (a) propagate the resolved root to Python (CODEX_PROJECT_DIR=$PROJECT_ROOT)
-# and (b) no-op when the hook file is absent instead of running "//.codex/..." (root="/"). And
-# the Python hook must self-locate from __file__ so a Git Bash MSYS root still resolves on Windows.
+# 모든 실행기는 (a) 확인된 루트를 Python에 전달하고(CODEX_PROJECT_DIR=$PROJECT_ROOT)
+# (b) 훅 파일이 없으면 아무 작업도 하지 않아야 한다. root="/"일 때 "//.codex/..."를 실행하면 안 된다.
+# Python 훅도 __file__ 기준으로 자기 위치를 찾아 Git Bash MSYS 루트가 Windows에서 해석되도록 한다.
 #
-# 每份注册的 event token 还必须与三个消费方的白名单逐一对齐：run-story-hook.sh 的 case、
-# run-story-hook.cmd 的 if /I 链、story_codex_hook.py main() 的分派。少一处就是一个永久哑火的
-# hook（launcher case 落到 *) exit 2，stdout/stderr 全空），而 command↔commandWindows 的一致性
-# 断言只证明两边抄的是同一个错字。白名单从三个消费方解析出来比较，不在这里再抄第五份。
+# 각 등록의 이벤트 토큰은 소비자 세 곳의 허용 목록과 각각 일치해야 한다. run-story-hook.sh의 case,
+# run-story-hook.cmd의 if /I 연결, story_codex_hook.py main()의 분배 중 하나라도 빠지면 훅이 영구히 작동하지 않는다.
+# (실행기 case가 *) exit 2로 빠지고 표준 출력/오류가 비게 된다.) command↔commandWindows 일치 단언만으로는
+# 같은 오타를 복사했음을 증명할 뿐이다. 다섯 번째 목록을 복사하지 말고 소비자 세 곳에서 목록을 파싱해 비교한다.
 python3 - "$CODEX_DIR/hooks/hooks.json" "$CODEX_DIR/hooks/story_codex_hook.py" \
   "$CODEX_DIR/hooks/run-story-hook.sh" "$CODEX_DIR/hooks/run-story-hook.cmd" <<'PY'
 import json, re, sys
@@ -376,7 +376,7 @@ for h in all_hooks:
     assert f"'{posix_event}'" in w, f"command/commandWindows event mismatch: {posix_event} vs {w}"
     registered.append(posix_event)
 
-# 同一个 handler 被注册两次 = 复制粘贴整块后忘了改 event token，另一个事件因此没有注册。
+# 같은 handler가 두 번 등록되면 블록 복사 후 이벤트 토큰 수정을 잊어 다른 이벤트 등록이 빠진 것이다.
 dupes = sorted({e for e in registered if registered.count(e) > 1})
 assert not dupes, f"hooks.json registers the same event token more than once: {dupes}"
 
@@ -384,8 +384,8 @@ launcher_sh = Path(sys.argv[3]).read_text(encoding="utf-8")
 launcher_cmd = Path(sys.argv[4]).read_text(encoding="utf-8")
 hook_py = Path(sys.argv[2]).read_text(encoding="utf-8")
 
-# 只在 case "$EVENT" in ... esac 这一段里收 arm，且把每个 arm 的 a|b|c 全部展开：
-# 别的 case 块（比如探测 PYBIN）不会污染白名单，名单被改写成一行一个 arm 也照样解析。
+# case "$EVENT" in ... esac 구간의 분기만 모으고 각 a|b|c를 모두 펼친다.
+# PYBIN 탐색 등 다른 case는 목록을 오염시키지 않으며 분기를 한 줄씩 쓴 목록도 파싱한다.
 case_block = re.search(r'case[ \t]+"\$EVENT"[ \t]+in(.*?)esac', launcher_sh, re.S)
 assert case_block, 'run-story-hook.sh must gate "$EVENT" with a case allowlist'
 sh_tokens = set()
@@ -406,14 +406,14 @@ PY
 
 echo "  OK generated launcher routing + cmd.exe commandWindows"
 
-# Reference-path contract: generated Codex agents use only the bundle story-setup deploys.
+# 참조 경로 계약: 생성된 Codex 에이전트는 story-setup이 배포하는 번들만 사용한다.
 python3 - "$CODEX_DIR/agents" <<'PY'
 import sys
 from pathlib import Path
 for path in sorted(Path(sys.argv[1]).glob("*.toml")):
     text = path.read_text(encoding="utf-8")
     if "1. `{项目根}/" not in text:
-        continue  # this agent has no numbered reference list
+        continue  # 이 에이전트에는 번호가 붙은 참조 목록이 없다.
     assert text.count("1. `{项目根}/.codex/skills/story-setup/references/agent-references/") == 1, \
         f"{path.name}: numbered reference list must contain the canonical Codex path once"
     for stale in (".claude/skills/", ".opencode/skills/", "{项目根}/skills/story-setup/references/agent-references/"):
@@ -426,10 +426,10 @@ assert_grep '\$story-setup|\$story-long-write|/skills' "$CODEX_DIR/AGENTS.md.tmp
 assert_grep '\.codex/agents/\*\.toml' "$CODEX_DIR/AGENTS.md.tmpl" "Codex AGENTS template must mention custom agent location"
 assert_grep '\.codex/hooks\.json' "$CODEX_DIR/AGENTS.md.tmpl" "Codex AGENTS template must mention hooks location"
 assert_grep 'target_cli:.*codex|codex.*target_cli' skills/story-setup/SKILL.md "story-setup must document codex target_cli"
-# 入口按宿主只读一份部署文件；Codex 的清单、hooks 合并与 trust 提示都在 deploy-codex.md。
+# 진입점은 호스트별 배포 파일 하나만 읽는다. Codex 목록, 훅 병합, 신뢰 안내는 모두 deploy-codex.md에 있다.
 assert_grep 'references/deploy-codex\.md' skills/story-setup/SKILL.md "story-setup entry must route codex to its deploy file"
 assert_grep 'references/codex' skills/story-setup/references/deploy-codex.md "story-setup must document Codex references"
-assert_grep 'target_cli` 写入 `codex`' skills/story-setup/references/deploy-codex.md "Codex deploy file must write codex into target_cli"
+assert_grep 'target_cli`( 写入 |는 )`codex`' skills/story-setup/references/deploy-codex.md "Codex deploy file must write codex into target_cli"
 assert_grep 'merge-codex-hooks\.py' skills/story-setup/references/deploy-codex.md "Codex deploy file must merge hooks through the helper"
 assert_grep 'dangerously-bypass-hook-trust' skills/story-setup/references/deploy-codex.md "Codex deploy file must keep the hook trust install-report prompt"
 assert_grep '\.codex/agents|\.codex/hooks\.json' skills/story-review/SKILL.md "story-review must check Codex agents"

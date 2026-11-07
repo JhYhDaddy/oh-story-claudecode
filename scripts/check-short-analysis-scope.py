@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep short-analysis rubrics observational and free of long-form playbooks."""
+"""단편 분석 기준은 관찰에 집중하고 장편 작업 지침을 포함하지 않게 한다."""
 
 from __future__ import annotations
 

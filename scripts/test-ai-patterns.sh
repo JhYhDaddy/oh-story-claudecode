@@ -1,5 +1,5 @@
 #!/bin/bash
-# test-ai-patterns.sh — regression tests for the deterministic AI-pattern detector.
+# test-ai-patterns.sh — 결정론적 AI 문형 탐지기의 회귀 테스트.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -70,7 +70,7 @@ const fs = require('fs');
 const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const excerpts = report.findings.map((finding) => finding.excerpt);
 
-// Genuine flips that MUST be detected: 而是 / “，是” / compact / “；是” / hard-stop + 是.
+// 반드시 탐지할 실제 반전: 而是 / ‘，是’ / 붙여 쓰기 / ‘；是’ / 문장 끝 + 是.
 const expected = [
   '不是冷漠，而是绝望',
   '不是害怕，是累了',
@@ -79,9 +79,9 @@ const expected = [
   '不是普通的粥！ 是药',
 ];
 
-// Natural prose that MUST NOT be flagged (conjunction 只是/可是/于是/倒是, either-or
-// 不是A就是B, tag questions 是吗/是吧/是嘛/是的/是啊/是呢, issue #166) is guarded by the
-// exact finding count below: any extra hit breaks it.
+// 탐지하면 안 되는 자연스러운 문장(접속사 只是/可是/于是/倒是, 양자택일
+// 不是A就是B, 확인 질문 是吗/是吧/是嘛/是的/是啊/是呢, 이슈 #166)은 아래의
+// 정확한 발견 개수로 보호한다. 추가 탐지 하나라도 있으면 실패한다.
 if (report.findings.length !== expected.length) {
   throw new Error(`expected ${expected.length} findings, got ${report.findings.length}: ${JSON.stringify(excerpts)}`);
 }
@@ -96,7 +96,7 @@ NODE
 
 echo "AI pattern detector regression tests passed."
 
-# --- 段落级检测：碎句号 / 长段落 / 破折号（issue #188） ---
+# --- 문단 수준 탐지: 지나친 단문 / 긴 문단 / 대시(이슈 #188) ---
 FIXTURE2="$TMP_DIR/fixture-prose.md"
 LONG_PARA="他沿着长廊一直往里走，"
 i=0
@@ -106,11 +106,11 @@ while [ "$i" -lt 16 ]; do
 done
 LONG_PARA="${LONG_PARA}终于在尽头停下，盯着那点暗红看了很久。"
 {
-  # 6 句连续短叙述句 → 碎句号
+  # 짧은 서술문 6개 연속 → 지나친 단문
   printf '%s\n' '他站起来。' '他走过去。' '门开了。' '风进来。' '他停住。' '心一沉。'
-  # 破折号 → em-dash（按功能改写，不机械替换）
+  # 대시 → em-dash(기능에 따라 고치며 기계적으로 치환하지 않음)
   printf '%s\n' '她借着月光看清了桌上那张纸的边角——那是一张旧纸。'
-  # 单段超长 → long-paragraph
+  # 너무 긴 단일 문단 → long-paragraph
   printf '%s\n' "$LONG_PARA"
 } > "$FIXTURE2"
 
@@ -129,22 +129,22 @@ const fs = require('fs');
 const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const counts = report.findings.reduce((m, f) => ((m[f.type] = (m[f.type] || 0) + 1), m), {});
 
-// Exactly one of each new prose type, nothing else. Quoted short lines not
-// counting toward 碎句号 is owned by FIXTURE4 below.
+// 새 문형마다 정확히 하나씩만 탐지한다. 인용된 짧은 줄이 지나친 단문에
+// 포함되지 않는지는 아래 FIXTURE4가 검사한다.
 if (report.findings.length !== 3) {
   throw new Error(`expected 3 prose findings, got ${report.findings.length}: ${JSON.stringify(report.findings.map((f) => `${f.type}@${f.line}`))}`);
 }
 for (const type of ['period-stutter', 'em-dash', 'long-paragraph']) {
   if (counts[type] !== 1) throw new Error(`expected exactly 1 ${type}, got ${counts[type] || 0}`);
 }
-// 碎句号 must flag the narrative block (line 1).
+// 지나친 단문 규칙은 1행 서술 블록을 탐지해야 한다.
 const stutter = report.findings.find((f) => f.type === 'period-stutter');
 if (stutter.line !== 1) {
   throw new Error(`period-stutter should start at the narrative block (line 1), got line ${stutter.line}`);
 }
 NODE
 
-# --- MEDIUM-1：碎句号混合行（叙述 + 引号内物件）不能被一个引号整行豁免（#188 review） ---
+# --- MEDIUM-1: 단문 혼합 줄(서술 + 따옴표 속 사물)은 따옴표 하나로 전체 줄을 면제하면 안 됨(#188 검토) ---
 FIXTURE3="$TMP_DIR/fixture-mixed-quote.md"
 printf '%s\n' '他站起。他看见“门”。风进来。他回头。灯灭了。心一沉。' > "$FIXTURE3"
 set +e
@@ -158,7 +158,7 @@ if (st.length !== 1) throw new Error('混合引号叙述应命中碎句号: ' + 
 if (st[0].severity !== 'advisory') throw new Error('period-stutter 应为 advisory');
 NODE
 
-# 纯对话成片短句仍豁免（体裁手法）。
+# 순수 대화의 연속 단문은 여전히 제외한다(장르적 기법).
 FIXTURE4="$TMP_DIR/fixture-pure-dialogue.md"
 printf '%s\n' '“走。”' '“快。”' '“跑。”' '“停。”' '“看。”' '“听。”' > "$FIXTURE4"
 set +e
@@ -171,7 +171,7 @@ if [ "$pure_status" -ne 0 ]; then
   exit 1
 fi
 
-# --- markdown 结构行不算长段落（#188 review 新发现）---
+# --- Markdown 구조 줄은 긴 문단으로 세지 않는다(#188 검토에서 발견). ---
 FIXTURE5="$TMP_DIR/fixture-heading.md"
 node -e 'process.stdout.write("## " + "长".repeat(230) + "\n")' > "$FIXTURE5"
 set +e
@@ -184,7 +184,7 @@ if [ "$head_status" -ne 0 ]; then
   exit 1
 fi
 
-# --- severity 字段 + --fail-on 语义：仅 advisory（long-paragraph）时默认退出 1，blocking 模式退出 0 ---
+# --- severity 필드 + --fail-on 의미: advisory(long-paragraph)만 있으면 기본 종료 1, blocking 모드는 0 ---
 FIXTURE6="$TMP_DIR/fixture-advisory.md"
 node -e 'process.stdout.write("他沿着长廊一直往里走，" + "走过一道又一道紧闭的木门，".repeat(16) + "终于在尽头停下。\n")' > "$FIXTURE6"
 set +e
@@ -204,7 +204,7 @@ NODE
 [ "$adv_all" -eq 1 ] || { echo "FAIL: advisory-only 默认 --fail-on=all 应退出 1，实际 $adv_all" >&2; exit 1; }
 [ "$adv_blk" -eq 0 ] || { echo "FAIL: advisory-only --fail-on=blocking 应退出 0，实际 $adv_blk" >&2; exit 1; }
 
-# blocking（em-dash）：severity=blocking，--fail-on=blocking 退出 1。
+# blocking(em-dash): severity=blocking, --fail-on=blocking 종료 1.
 FIXTURE7="$TMP_DIR/fixture-blocking.md"
 printf '%s\n' '她停住——没说话。' > "$FIXTURE7"
 set +e
@@ -222,7 +222,7 @@ NODE
 
 echo "Prose pattern (碎句号/长段落/破折号) regression tests passed."
 
-# --- issue #205：跨空行的「不是A。/（空行）/是B」揭示句必须命中（旧 skipGap 只吞一个换行会漏）---
+# --- 이슈 #205: 빈 줄을 가로지르는 ‘A가 아니다./(빈 줄)/B다’ 반전문도 탐지해야 한다(이전 skipGap은 줄바꿈 하나만 소비해 누락). ---
 FIXTURE8="$TMP_DIR/fixture-cross-para.md"
 printf '%s\n' '中年男人消失了。' '' '不是被拖走。' '' '是整个人像被橡皮擦抹掉，全没了。' > "$FIXTURE8"
 set +e
@@ -237,7 +237,7 @@ if (ni[0].line !== 3) throw new Error('not-is 应定位到「不是」所在行 
 if (ni[0].severity !== 'blocking') throw new Error('not-is 应为 blocking');
 NODE
 
-# 引号内台词「不是A，是B」是口语辩解，不算叙述层 AI 对比句式（与碎句号一致豁免引号内容）。
+# 따옴표 안 대사의 ‘A가 아니라 B다’는 구어적 해명이므로 서술 AI 대비 문형에서 제외한다(단문 검사처럼 인용 내용 제외).
 FIXTURE9="$TMP_DIR/fixture-dialogue-notis.md"
 printf '%s\n' '“你们看见了啊，不是我要闹，是物业非法限制人身自由。”' > "$FIXTURE9"
 set +e
@@ -250,7 +250,7 @@ if [ "$dlg_status" -ne 0 ]; then
   exit 1
 fi
 
-# 引号外叙述的翻转句仍必须命中（豁免只针对引号内，别把整行叙述放过）。
+# 따옴표 밖 서술의 반전문은 계속 탐지해야 한다(제외는 따옴표 안에만 적용하며 줄 전체를 허용하지 않음).
 FIXTURE10="$TMP_DIR/fixture-narration-notis.md"
 printf '%s\n' '他冷笑一声。这不是巧合，是有人安排的。' > "$FIXTURE10"
 set +e
@@ -263,8 +263,8 @@ const ni = r.findings.filter((f) => f.type === 'not-is-comparison');
 if (ni.length !== 1) throw new Error('引号外叙述翻转句应命中 1 处 not-is: ' + JSON.stringify(r.findings.map((f) => f.type)));
 NODE
 
-# 引号不成对（多段台词只在末段收引号、全半角混用漏收）不得让 not-is 整段静默失效：
-# 引号片段按行封顶，未闭合的开引号只吃掉本行剩余部分，后面几行叙述照常参与扫描。
+# 짝 없는 따옴표(여러 문단 대사가 마지막 문단에서만 닫히거나 전각/반각 혼용으로 닫기 누락)가 not-is 검사를 통째로 무효화하면 안 된다.
+# 인용 범위는 줄 끝으로 제한한다. 닫히지 않은 따옴표는 현재 줄 나머지만 소비하고 이후 서술은 정상 검사한다.
 FIXTURE_UNCLOSED_QUOTE="$TMP_DIR/fixture-unclosed-quote-notis.md"
 printf '%s\n' \
   '她终于开口：“我不想再提这件事。' \
@@ -284,7 +284,7 @@ NODE
 
 echo "issue #205 (跨空行翻转命中 / 引号内台词豁免 / 未闭合引号不吞叙述) regression tests passed."
 
-# --- issue #205：微动作复读（「了下/了一下」式轻量补语高密度=电报体指纹）---
+# --- 이슈 #205: 미세 동작 반복(‘了下/了一下’ 같은 짧은 보어의 고밀도 사용 = 전보체 특징) ---
 FIXTURE11="$TMP_DIR/fixture-micro-tic.md"
 printf '%s\n' \
   '父亲的手停了一下。绳在铁环上松了半圈。' \
@@ -303,14 +303,14 @@ if (mt.length !== 1) throw new Error('高密度「了下/了一下」应报 1 �
 if (mt[0].severity !== 'advisory') throw new Error('micro-action-tic 应为 advisory');
 NODE
 
-# advisory 不触发 --fail-on=blocking（微动作复读是提示，不阻塞收尾流程）。
+# advisory는 --fail-on=blocking을 유발하지 않는다(미세 동작 반복은 안내이며 마무리를 차단하지 않음).
 set +e
 node "$SCRIPT" --fail-on=blocking "$FIXTURE11" > /dev/null 2>&1
 tic_blk=$?
 set -e
 [ "$tic_blk" -eq 0 ] || { echo "FAIL: micro-action-tic --fail-on=blocking 应退出 0，实际 $tic_blk" >&2; exit 1; }
 
-# 低密度（正常中文里偶尔一个「了一下/了一眼」）不报；引号内台词的「了下/了一下」不计入。
+# 저밀도(일반 중국어에서 드문 ‘了一下/了一眼’)는 보고하지 않고 따옴표 안 대사의 ‘了下/了一下’도 세지 않는다.
 FIXTURE12="$TMP_DIR/fixture-micro-tic-normal.md"
 printf '%s\n' \
   '他回到家的时候，父亲正在院子里绑架子车上的绳子，车斗里堆着几捆刚掰下来的玉米秆。' \
@@ -328,8 +328,8 @@ const mt = r.findings.filter((f) => f.type === 'micro-action-tic');
 if (mt.length !== 0) throw new Error('低密度/引号内「了下/了一下」不应报 micro-action-tic: ' + JSON.stringify(mt));
 NODE
 
-# issue #205 三轮：省略「一/两」的短尾巴（了下/了眼/了声）也是电报体反向指纹；
-# PR 文档不能推荐一个脚本抓不到、反复复用后又会显得机械的替换模板。
+# 이슈 #205 3차: ‘一/两’를 생략한 짧은 꼬리(了下/了眼/了声)도 전보체의 역방향 특징이다.
+# PR 문서는 스크립트가 찾지 못하고 반복 사용하면 기계적으로 보이는 대체 틀을 권장하면 안 된다.
 FIXTURE13="$TMP_DIR/fixture-micro-tic-short-tail.md"
 printf '%s\n' \
   '他扯了下嘴角，没接那句话。母亲把碗推过去，他看了眼，又挪开。' \
@@ -351,7 +351,7 @@ NODE
 
 echo "micro-action-tic (电报体微动作复读) regression tests passed."
 
-# --- 套式反应细节：部位微动作/语气比喻成片，提示删除测试而非禁身体描写 ---
+# --- 상투적 반응 묘사: 신체 미세 동작/어조 비유가 몰리면 삭제 시험을 안내하며 신체 묘사 자체를 금지하지 않음 ---
 FIXTURE_STOCK_REACTION="$TMP_DIR/fixture-stock-reaction.md"
 printf '%s\n' \
   '指尖在窗台上轻轻叩了一下。' \
@@ -415,9 +415,9 @@ NODE
 
 echo "stock-reaction-tic (套式反应细节) regression tests passed."
 
-# --- issue #205：抽象总结复读（命运/棋局/这一刻终于明白/才刚刚开始）---
-# 尾部补 16 行中性叙述：把「才刚刚开始」推出 trailer-ending 的文末 600 字窗口，
-# 让本 fixture 保持只验证 advisory 的 abstract-summary-tic。
+# --- 이슈 #205: 추상적 요약 반복(운명/장기판/이 순간 마침내 깨달음/이제 막 시작됨) ---
+# 끝에 중립 서술 16줄을 넣어 ‘이제 막 시작됨’을 trailer-ending의 마지막 600자 범위 밖으로 밀어낸다.
+# 이 데이터가 advisory인 abstract-summary-tic만 검증하도록 한다.
 FIXTURE14="$TMP_DIR/fixture-abstract-summary.md"
 printf '%s\n' \
   '从这一刻开始，所有安排都被推到台前。' \
@@ -441,7 +441,7 @@ if (!ast[0].excerpt.includes('从这一刻开始') || !ast[0].excerpt.includes('
 }
 NODE
 
-# advisory 不触发 --fail-on=blocking；低密度题材词与引号内台词/引用不报。
+# advisory는 --fail-on=blocking을 유발하지 않는다. 저밀도 소재어와 따옴표 안 대사/인용은 보고하지 않는다.
 set +e
 node "$SCRIPT" --fail-on=blocking "$FIXTURE14" > /dev/null 2>&1
 ast_blk=$?
@@ -466,7 +466,7 @@ NODE
 echo "abstract-summary-tic (抽象总结复读) regression tests passed."
 
 
-# --- prompt-corpus：监控摄像头式动作清单（番茄高分样本中该分布为 0，作为 advisory 提醒）---
+# --- prompt-corpus: 감시 카메라 같은 동작 나열(판체 고평가 표본에서는 분포가 0이므로 advisory 안내) ---
 FIXTURE_ACTION_LIST="$TMP_DIR/fixture-action-list.md"
 printf '%s\n' \
   '她伸手拿起桌上的杯子，取过旁边的药瓶，拧开瓶盖，倒出两片药，端起水杯，仰头咽下去，放下杯子，推开椅子，转身走到门口。' > "$FIXTURE_ACTION_LIST"
@@ -504,7 +504,7 @@ NODE
 
 echo "action-list-tic (监控摄像头式动作清单) regression tests passed."
 
-# --- issue #205：套词密度过高（高危套词聚集，具体化改写方向）---
+# --- 이슈 #205: 상투어 밀도 과다(위험 상투어 집중, 구체화 수정 방향 안내) ---
 FIXTURE16="$TMP_DIR/fixture-cliche-density.md"
 printf '%s\n' \
   '夜色静静笼罩着城市，远处霓虹隐约闪烁。' \
@@ -527,7 +527,7 @@ if (!cd[0].excerpt.includes('仿佛') || !cd[0].excerpt.includes('眼中闪过')
 }
 NODE
 
-# advisory 不触发 --fail-on=blocking；低密度题材词/引号内引用不报。
+# advisory는 --fail-on=blocking을 유발하지 않는다. 저밀도 소재어/따옴표 안 인용은 보고하지 않는다.
 set +e
 node "$SCRIPT" --fail-on=blocking "$FIXTURE16" > /dev/null 2>&1
 cliche_blk=$?
@@ -551,7 +551,7 @@ NODE
 
 echo "cliche-density-tic (套词密度过高) regression tests passed."
 
-# --- issue #205：比喻密度过高（像字比喻成片复现，回到具体画面）---
+# --- 이슈 #205: 비유 밀도 과다(像을 쓴 비유가 반복되면 구체적 장면으로 돌아가도록 안내) ---
 FIXTURE_METAPHOR="$TMP_DIR/fixture-metaphor-density.md"
 printf '%s\n' \
   '门口的雨还没停。路灯像泡在脏水里的眼珠，光晕晃得人心里发毛。' \
@@ -599,7 +599,7 @@ NODE
 
 echo "metaphor-density-tic (比喻密度过高) regression tests passed."
 
-# --- issue #205：解释链密度过高（读感像逻辑报告时的读顺处理提示）---
+# --- 이슈 #205: 설명 연결 밀도 과다(논리 보고서처럼 읽힐 때 자연스럽게 읽히도록 수정 안내) ---
 FIXTURE18="$TMP_DIR/fixture-reasoning-chain.md"
 cat > "$FIXTURE18" <<'TEXT'
 周砚站在门岗亭前，看着群消息一行行跳出来。他知道眼下最重要的任务是稳住人群，避免恐慌继续扩大。他也明白，如果业主继续围在北门，公共区域秩序会很快失控。这意味着每一句广播都必须谨慎，因为错误指令可能带来新的死亡。
@@ -624,7 +624,7 @@ if (!rc[0].excerpt.includes('他知道') || !rc[0].excerpt.includes('这意味�
 }
 NODE
 
-# advisory 不触发 --fail-on=blocking；动作化改写/引号内引用不报。
+# advisory는 --fail-on=blocking을 유발하지 않는다. 동작으로 바꾼 표현/따옴표 안 인용은 보고하지 않는다.
 set +e
 node "$SCRIPT" --fail-on=blocking "$FIXTURE18" > /dev/null 2>&1
 reason_blk=$?
@@ -699,7 +699,7 @@ NODE
 
 echo "reasoning-chain-tic (解释链密度过高) regression tests passed."
 
-# --- issue #205：系统公告公文腔过密（方括号规则行硬词过密）---
+# --- 이슈 #205: 시스템 공지의 공문체 과다(대괄호 규칙 줄에 딱딱한 단어 집중) ---
 FIXTURE21="$TMP_DIR/fixture-notice-formality.md"
 cat > "$FIXTURE21" <<'TEXT'
 【夜间不得离开本区域。】
@@ -776,7 +776,7 @@ NODE
 
 echo "system-notice-formality-tic (系统公告公文腔过密) regression tests passed."
 
-# --- issue #205：长文本过度精炼短段（读顺处理提示；不机械注水）---
+# --- 이슈 #205: 긴 글에 지나치게 압축된 짧은 문단 과다(읽기 흐름 수정 안내, 기계적 분량 늘리기 금지) ---
 FIXTURE23="$TMP_DIR/fixture-overcompressed-prose.md"
 : > "$FIXTURE23"
 for _ in $(seq 1 60); do
@@ -876,8 +876,8 @@ NODE
 
 echo "overcompressed-prose-tic (过度精炼短段) regression tests passed."
 
-# --- 密度类规则的引号豁免：台词里塞满触发词也不计入。每条用例的引号内文本
-# 都复用上面正例的原句，引号若被计入就足以命中对应规则；这里断言一条都不报。---
+# --- 밀도 규칙의 인용 제외: 대사에 유발 단어가 가득해도 세지 않는다. 각 사례의 인용문은
+# 위 양성 사례를 재사용해 포함하면 해당 규칙이 탐지할 만큼 충분하다. 여기서는 한 건도 보고하지 않음을 단언한다. ---
 node - "$SCRIPT" "$TMP_DIR" <<'NODE'
 const fs = require('fs');
 const path = require('path');
@@ -949,7 +949,7 @@ NODE
 
 echo "density-rule quote exemption regression tests passed."
 
-# --- issue #205：低连接密度 + 缺中长句（R10 保守 advisory，单低连接不够）---
+# --- 이슈 #205: 낮은 연결 밀도 + 중장문 부족(R10 보수적 advisory, 연결 밀도만 낮은 것은 부족) ---
 FIXTURE27="$TMP_DIR/fixture-low-connective-density.md"
 : > "$FIXTURE27"
 for _ in $(seq 1 50); do
@@ -976,7 +976,7 @@ low_connective_blk=$?
 set -e
 [ "$low_connective_blk" -eq 0 ] || { echo "FAIL: low-connective-density-tic --fail-on=blocking 应退出 0，实际 $low_connective_blk" >&2; exit 1; }
 
-# 引号内台词/弹幕/系统播报天然短促，不参与低连接密度统计；否则会把体裁特征误当电报体。
+# 따옴표 안 대사/실시간 댓글/시스템 방송은 본래 짧으므로 연결 밀도에서 제외해 장르 특성을 전보체로 오인하지 않는다.
 FIXTURE27B="$TMP_DIR/fixture-low-connective-quoted-stream.md"
 : > "$FIXTURE27B"
 for _ in $(seq 1 80); do
@@ -998,7 +998,7 @@ const lc = r.findings.filter((f) => f.type === 'low-connective-density-tic');
 if (lc.length !== 0) throw new Error('引号内短促台词/弹幕流不应触发 low-connective-density-tic: ' + JSON.stringify(lc));
 NODE
 
-# 所有配置过的中英文引号都应从“引号外叙述”统计中剥离；引号内含 regex 元字符也不能影响剥离。
+# 설정된 모든 중영문 따옴표를 인용 밖 서술 통계에서 제거한다. 인용 안 정규식 메타문자도 제거에 영향을 주면 안 된다.
 FIXTURE27C="$TMP_DIR/fixture-low-connective-all-quote-pairs.md"
 : > "$FIXTURE27C"
 for _ in $(seq 1 35); do
@@ -1020,7 +1020,7 @@ const lc = r.findings.filter((f) => f.type === 'low-connective-density-tic');
 if (lc.length !== 0) throw new Error('全部引号对都应剥离，不应触发 low-connective-density-tic: ' + JSON.stringify(lc));
 NODE
 
-# 单纯功能词/白话连接偏低，但中长承接句充足时不报；这是《盘龙》人工窗口误报反例的保护条件。
+# 기능어/구어 연결어만 적고 중장문 연결이 충분하면 보고하지 않는다. 《盘龙》 수동 표본의 오탐 반례를 보호하는 조건이다.
 FIXTURE28="$TMP_DIR/fixture-low-connective-long-sentences.md"
 : > "$FIXTURE28"
 for _ in $(seq 1 30); do
@@ -1042,11 +1042,11 @@ NODE
 echo "low-connective-density-tic (低连接密度 + 缺中长句) regression tests passed."
 
 # ============================================================
-# 实战测试漏网句式（A-E）：音量反差腔 / 否定排比 / 反序对比 / 预告式收尾 / 引号强调滥用
-# 正例取自实战写作抓到的真实漏网句；反例含对话豁免、either-or、正常引用与真人语料边界句。
+# 실전 누락 문형(A~E): 목소리 크기 대비 / 부정 나열 / 역순 대비 / 예고형 마무리 / 인용 강조 남용
+# 양성은 실전 집필에서 실제 놓친 문장이고 음성은 대사 제외, 양자택일, 정상 인용, 인간 문장 경계 사례를 포함한다.
 # ============================================================
 
-# --- 实战漏网 A：voice-contrast（声音不高…却…，blocking）---
+# --- 실전 누락 A: voice-contrast(목소리는 크지 않지만…그런데…, blocking) ---
 FIXTURE_VOICE="$TMP_DIR/fixture-voice-contrast.md"
 printf '%s\n' \
   '声音不高，第一句却稳稳压住了整个大厅。' \
@@ -1063,14 +1063,14 @@ const r = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const vc = r.findings.filter((f) => f.type === 'voice-contrast');
 if (vc.length !== 1) throw new Error('音量反差腔应命中 1 处 voice-contrast: ' + JSON.stringify(r.findings.map((f) => `${f.type}@${f.line}`)));
 if (vc[0].line !== 1 || vc[0].severity !== 'blocking') throw new Error('voice-contrast 应为 line 1 blocking: ' + JSON.stringify(vc[0]));
-// 引号内台词（line 2）与无转折的平铺（line 3）不算音量反差腔。
+// 인용 안 대사(2행)와 반전 없는 평범한 나열(3행)은 음량 대비 문형이 아니다.
 if (vc[0].excerpt.includes('火气')) throw new Error('引号内台词不应命中 voice-contrast: ' + JSON.stringify(vc[0]));
 NODE
 [ "$voice_blk" -eq 1 ] || { echo "FAIL: voice-contrast --fail-on=blocking 应退出 1，实际 $voice_blk" >&2; exit 1; }
 
 echo "voice-contrast (音量反差腔) regression tests passed."
 
-# --- 实战漏网 B：negation-parade（没有X，没有Y…／没X…只是Y，blocking）---
+# --- 실전 누락 B: negation-parade(X도 없고 Y도 없고…/X는 없고…그저 Y일 뿐, blocking) ---
 FIXTURE_PARADE="$TMP_DIR/fixture-negation-parade.md"
 printf '%s\n' \
   '没有伴奏，没有和声，没有提词器。' \
@@ -1091,15 +1091,15 @@ const np = r.findings.filter((f) => f.type === 'negation-parade');
 if (np.length !== 3) throw new Error('否定排比应命中 3 处 negation-parade: ' + JSON.stringify(r.findings.map((f) => `${f.type}@${f.line}`)));
 if (np[0].line !== 1 || np[1].line !== 2 || np[2].line !== 8) throw new Error('negation-parade 应命中 line 1/2 与重复「没等」的 line 8: ' + JSON.stringify(np));
 if (!np.every((f) => f.severity === 'blocking')) throw new Error('negation-parade 应为 blocking');
-// 引号内台词（line 3）与分句独立否定（line 4）不算排比；
-// 黏着语素「沉没/淹没」（line 5/6）与单个时间惯用语「没多久」（line 6/7）不算；
-// 但重复「没等 A，没等 B，只是 C」本身就是目标排比，不能被时间短语豁免吞掉。
+// 인용 안 대사(3행)와 독립 절의 부정(4행)은 부정 병렬로 세지 않는다.
+// 결합 형태소 沉没/淹没(5/6행)와 단일 시간 관용구 没多久(6/7행)는 제외한다.
+// 다만 반복된 ‘没等 A，没等 B，只是 C’는 대상 병렬이므로 시간 표현 예외로 삼키면 안 된다.
 NODE
 
 echo "negation-parade (否定排比) regression tests passed."
 
-# --- 第21章实战漏网：跨段否定三连 + 工整决策/否定并列 ---
-# 这三类都能找到正常语境，只报 advisory 交语义审查；轻量 hook 不硬拦。
+# --- 21장 실전 누락: 문단을 넘는 부정 3연속 + 정형적 결정/부정 병렬 ---
+# 세 유형 모두 정상 문맥이 있을 수 있어 advisory로 의미 검토에 넘긴다. 가벼운 훅은 강제 차단하지 않는다.
 FIXTURE_CH21_GAP="$TMP_DIR/fixture-ch21-ai-flavor-gap.md"
 printf '%s\n' \
   '至于拍不拍，怎么拍，等他把话说完再决定。' \
@@ -1131,15 +1131,15 @@ const fp = r.findings.filter((f) => f.type === 'formulaic-parallelism');
 if (fp.length !== 5) throw new Error('决策框架 + 否定并列 + 两处跨段三连应命中 5 处 advisory: ' + JSON.stringify(r.findings));
 if (fp.some((f) => f.severity !== 'advisory')) throw new Error('formulaic-parallelism 只能 advisory: ' + JSON.stringify(fp));
 if (fp.map((f) => f.line).join(',') !== '1,2,3,4,13') throw new Error('formulaic-parallelism 应定位 line 1/2/3/4/13: ' + JSON.stringify(fp));
-// either-or、普通决策句、对象只有一个字的功能性短对话、跨句独立否定都不报。
-// line 13 的正常辩解会被保守提示，但绝不得升成 blocking。
+// 양자택일, 일반 결정문, 대상이 한 글자인 기능적 짧은 대화, 문장 간 독립 부정은 보고하지 않는다.
+// 13행의 정상 해명은 보수적으로 안내할 수 있지만 절대 blocking으로 올리면 안 된다.
 if (r.findings.some((f) => f.line >= 9 && f.line <= 12)) throw new Error('第9-12行自然反例被误报: ' + JSON.stringify(r.findings));
 NODE
 [ "$ch21_gap_blk" -eq 0 ] || { echo "FAIL: 语义型工整并列不应触发 --fail-on=blocking，实际 $ch21_gap_blk" >&2; exit 1; }
 
 echo "chapter-21 AI-flavor gap regression tests passed."
 
-# --- 实战漏网 C：reverse-not-is（是A，不是B — not-is 反序变种，blocking）---
+# --- 실전 누락 C: reverse-not-is(A다, B가 아니다 — not-is 역순 변형, blocking) ---
 FIXTURE_REVNOTIS="$TMP_DIR/fixture-reverse-not-is.md"
 printf '%s\n' \
   '气息拉满不断，是真嗓子，不是修音修出来的。' \
@@ -1159,15 +1159,15 @@ const rn = r.findings.filter((f) => f.type === 'reverse-not-is');
 if (rn.length !== 1) throw new Error('反序对比腔应命中 1 处 reverse-not-is: ' + JSON.stringify(r.findings.map((f) => `${f.type}@${f.line}`)));
 if (rn[0].line !== 1 || rn[0].severity !== 'blocking') throw new Error('reverse-not-is 应为 line 1 blocking: ' + JSON.stringify(rn[0]));
 if (!rn[0].excerpt.includes('是真嗓子')) throw new Error('reverse-not-is excerpt 应含正例片段: ' + JSON.stringify(rn[0]));
-// 反例必须全部保持沉默：引号内辩解（2）、就是/也是合成词（3/4）、是啊确认语（5）、
-// 是不是问句（6）、不是吗反问尾巴（7）。
+// 모든 음성 사례는 조용해야 한다. 인용 안 해명(2), 就是/也是 합성어(3/4), 是啊 확인 표현(5),
+// 是不是 질문(6), 不是吗 반문 꼬리(7).
 NODE
 
 echo "reverse-not-is (反序对比腔) regression tests passed."
 
-# --- 实战漏网 D：trailer-ending（预告式总结收尾，仅文末 600 字窗口，blocking）---
-# 反例：窗口外叙述里的「没人知道」（line 1）、窗口内对话里的「没人知道」、
-# 真人语料报幕句「比赛正式拉开序幕」（《万疆》第120章原句式）。
+# --- 실전 누락 D: trailer-ending(예고형 요약 마무리, 마지막 600자만, blocking) ---
+# 음성: 범위 밖 서술의 ‘아무도 모른다’(1행), 범위 안 대사의 ‘아무도 모른다’,
+# 인간 문장의 안내 표현 ‘경기가 정식으로 막을 올렸다’(《万疆》 120장 원문 문형).
 FIXTURE_TRAILER="$TMP_DIR/fixture-trailer-ending.md"
 printf '%s\n' '他把口琴收进兜里。没人知道他练了多久。' > "$FIXTURE_TRAILER"
 for _ in $(seq 1 16); do
@@ -1201,7 +1201,7 @@ NODE
 
 echo "trailer-ending (预告式总结收尾) regression tests passed."
 
-# --- 实战漏网 E：quote-emphasis-tic（叙述里短词加引号强调，advisory 密度型）---
+# --- 실전 누락 E: quote-emphasis-tic(서술의 짧은 단어를 따옴표로 강조, advisory 밀도형) ---
 FIXTURE_QUOTE_EMPH="$TMP_DIR/fixture-quote-emphasis.md"
 printf '%s\n' \
   '他是被请来“把关”的，来之前心里还揣着句现成的话。' \
@@ -1227,7 +1227,7 @@ if (!qe[0].excerpt.includes('把关')) throw new Error('quote-emphasis-tic excer
 NODE
 [ "$quote_emph_blk" -eq 0 ] || { echo "FAIL: quote-emphasis-tic --fail-on=blocking 应退出 0，实际 $quote_emph_blk" >&2; exit 1; }
 
-# 低于阈值（<3 处）不报：单处强调是正常修辞；含真人语料边界句（《万疆》第40章海报标语）。
+# 임계값 미만(<3곳)은 보고하지 않는다. 단일 강조는 정상 수사이며 인간 문장 경계 사례(《万疆》 40장 포스터 문구)를 포함한다.
 FIXTURE_QUOTE_EMPH_NORMAL="$TMP_DIR/fixture-quote-emphasis-normal.md"
 printf '%s\n' \
   '凌晨十二点十分，番城旅游官网出现苏阳的照片，手里的海报变成了“我在番城”。' \
@@ -1244,8 +1244,8 @@ NODE
 
 echo "quote-emphasis-tic (引号强调滥用) regression tests passed."
 
-# --- issue #255：章尾状态总结体（trailer-summary）------------------------------
-# 细纲「结尾设定/收束状态」被原样写成总结句收章。与 trailer-ending 共用文末 600 字窗口。
+# --- 이슈 #255: 장 끝의 상태 요약체(trailer-summary) ---
+# 상세 개요의 결말 설정/마무리 상태를 그대로 요약문으로 써서 장을 끝내는 경우. trailer-ending과 마지막 600자 범위를 공유한다.
 FIXTURE_TRAILER_SUMMARY="$TMP_DIR/fixture-trailer-summary.md"
 printf '%s\n' \
   '她把账单摊在桌上，指腹压出一道白痕，纸边被汗浸软了一角。' \
@@ -1265,11 +1265,11 @@ if (ts.some((f) => f.severity !== 'blocking')) throw new Error('trailer-summary 
 NODE
 [ "$trailer_sum_blk" -eq 1 ] || { echo "FAIL: trailer-summary --fail-on=blocking 应退出 1，实际 $trailer_sum_blk" >&2; exit 1; }
 
-# 负例：语料实测出的六类结构性误报形状，逐条钉死——时间跳转（就这样，时间过去了）、
-# 及物用法（才结束了这个话题）、场内报幕（宣布…圆满落幕）、条件从句（等这一切结束了，…）、
-# 动补（说明得非常清楚）、嵌套从句（认为这一切都结束了的时候）、成语跨匹配（命中注定）、
-# 系表（结果是注定的），以及「(这|那)一刻…终于明白」与裸认知句——后两者是短篇第一人称
-# 审判金句的形状（short-craft「审判金句 / 心死余韵」是卖点），本规则一律不收。
+# 음성: 말뭉치 실측에서 나온 구조적 오탐을 각각 고정한다. 시간 전환(그렇게 시간이 흘렀다),
+# 타동 용법(그제야 이 화제를 끝냈다), 장면 안 안내(성공적으로 막을 내렸다고 선언), 조건절(이 모든 것이 끝나면…),
+# 동사 보어(아주 명확하게 설명했다), 중첩절(모든 것이 끝났다고 생각했을 때), 관용구 경계 일치(命中注定),
+# 계사 서술(결과는 정해져 있다), ‘(이|그) 순간…마침내 깨달았다’와 단순 인지문. 뒤 두 가지는 단편 1인칭의
+# 판결 명대사 형태(short-craft의 판결 명대사/마음이 식은 여운은 강점)이므로 이 규칙에서 모두 제외한다.
 FIXTURE_TRAILER_SUMMARY_NORMAL="$TMP_DIR/fixture-trailer-summary-normal.md"
 printf '%s\n' \
   '就这样，一年的时间过去了，账本从抽屉挪进了保险柜。' \
@@ -1297,10 +1297,10 @@ NODE
 
 echo "trailer-summary (章尾状态总结体) regression tests passed."
 
-# ── HTML 注释不是正文 ──────────────────────────────────────────────────────────
-# 「去味:跳过」豁免标记 `<!-- 去味:跳过 -->` 是正文里的元信息。检测器曾把 `<!--` / `-->`
-# 当成两处 blocking em-dash，storyctl chapter check 因此永远不过、豁免章永远提交不了。
-# 整行注释、行内注释、跨行注释都不参与扫描；注释外的叙述照常检测，列号不漂移。
+# ── HTML 주석은 본문이 아니다 ──
+# 검사 제외 마커 `<!-- 去味:跳过 -->`는 본문의 메타정보다. 이전 탐지기는 `<!--` / `-->`를
+# blocking em-dash 두 곳으로 오인해 storyctl chapter check가 항상 실패하고 제외한 장도 커밋하지 못했다.
+# 전체 줄/인라인/여러 줄 주석은 검사하지 않는다. 주석 밖 서술은 정상 검사하고 열 번호는 유지한다.
 FIXTURE_HTML_COMMENT="$TMP_DIR/fixture-html-comment.md"
 printf '%s\n' \
   '# 第3章 夜路' \
@@ -1328,7 +1328,7 @@ if (dashes.length !== 1 || dashes[0].line !== 9 || dashes[0].column !== 8) {
 NODE
 [ "$html_status" -eq 1 ] || { echo "FAIL: 注释外仍有破折号，--fail-on=blocking 应退出 1，实际 $html_status" >&2; exit 1; }
 
-# 只有豁免标记与干净正文的章：--fail-on=blocking 必须退出 0（chapter check 能过）。
+# 제외 마커와 정상 본문만 있는 장: --fail-on=blocking은 종료 0이어야 한다(chapter check 통과).
 FIXTURE_MARKER_ONLY="$TMP_DIR/fixture-marker-only.md"
 printf '%s\n' '# 第3章 夜路' '<!-- 去味:跳过 -->' '' '他推门出去，雨还在下。' '她把伞递给他，他没接。' > "$FIXTURE_MARKER_ONLY"
 set +e
@@ -1337,7 +1337,7 @@ marker_status=$?
 set -e
 [ "$marker_status" -eq 0 ] || { echo "FAIL: 只含豁免标记的干净章被判 blocking（exit $marker_status）：$(cat "$OUT")" >&2; exit 1; }
 
-# 漏写 `-->` 的注释到文末都没闭合：不能把后面整章藏起来，按正文扫描（`<!--` 本身不报）。
+# `-->`가 빠져 끝까지 닫히지 않은 주석은 이후 장 전체를 숨기지 말고 본문으로 검사한다(`<!--` 자체는 보고하지 않음).
 FIXTURE_UNCLOSED_COMMENT="$TMP_DIR/fixture-unclosed-comment.md"
 printf '%s\n' '# 第1章' '<!-- 作者备注' '这不是夸奖，而是命令。' '声音不大，却带着狠劲。' '他把门带上。' > "$FIXTURE_UNCLOSED_COMMENT"
 set +e
@@ -1357,10 +1357,10 @@ NODE
 
 echo "HTML comment (去味:跳过 豁免标记) regression tests passed."
 
-# ── review 分类契约：每条 finding 都带 review=semantic|mechanical ────────────────
-# 下游按 review 分流：mechanical 由写作端直接清，semantic 交语义审查判断是否保留。
-# 源码里出现的每个 finding type 都必须在分类表里（新增规则不许静默漏分类），分类表不许有
-# 源码里不存在的死条目；blocking 规则只能是 mechanical（blocking = 不需判断、必须清零）。
+# ── review 분류 계약: 모든 finding에 review=semantic|mechanical 포함 ──
+# 후속 단계는 review로 분기한다. mechanical은 집필 단계에서 바로 제거하고 semantic은 의미 검토로 유지 여부를 판단한다.
+# 소스의 모든 finding type은 분류표에 있어야 한다(새 규칙 분류 누락 금지). 분류표에 소스에 없는
+# 죽은 항목도 없어야 한다. blocking은 mechanical만 가능하다(blocking = 판단 없이 반드시 0건으로 제거).
 node "$SCRIPT" --list-review-classes > "$TMP_DIR/review-classes.json"
 node - "$SCRIPT" "$TMP_DIR/review-classes.json" <<'NODE'
 const fs = require('fs');
@@ -1384,7 +1384,7 @@ for (const t of ['em-dash', 'cliche-density-tic', 'not-is-comparison']) {
 }
 NODE
 
-# 运行期：一份多规则 fixture 的每条 finding 都带合法 review，原有字段不变，blocking 全是 mechanical。
+# 실행 시 여러 규칙의 테스트 데이터에서 모든 finding은 유효한 review를 갖고 기존 필드를 유지하며 blocking은 전부 mechanical이다.
 FIXTURE_REVIEW="$TMP_DIR/fixture-review.md"
 {
   printf '%s\n' '他不是冷漠，而是绝望。' '声音不高，第一句却稳稳压住了整个大厅。' '没有伴奏，没有和声，没有提词器。'
@@ -1415,7 +1415,7 @@ NODE
 
 echo "review classification (semantic/mechanical) contract tests passed."
 
-# --- 否定对偶（「没A，也没B」式叙述过密=英文式节奏）---
+# --- 부정 대구(‘A도 없고 B도 없다’ 서술 과밀 = 영어식 리듬) ---
 FIXTURE_NEG="$TMP_DIR/fixture-negation-pair.md"
 printf '%s\n' \
   '他没说让她住，也没说不让，自己进里间去了。' \

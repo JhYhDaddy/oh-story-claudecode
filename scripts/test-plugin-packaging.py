@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Public-CLI regressions for the cross-platform plugin packaging guard."""
+"""플랫폼 공통 플러그인 패키징 검사기의 공개 CLI 회귀 검사."""
 
 from __future__ import annotations
 

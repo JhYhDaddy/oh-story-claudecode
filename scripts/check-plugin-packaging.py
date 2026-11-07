@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the repository's Claude Code and ZCode plugin packaging contract."""
+"""저장소의 Claude Code 및 ZCode 플러그인 패키징 계약을 검증한다."""
 
 from __future__ import annotations
 

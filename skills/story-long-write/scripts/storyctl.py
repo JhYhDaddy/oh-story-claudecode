@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure, checkpoint, check, and commit long-form story chapters."""
+"""장편의 장을 측정·체크포인트 생성·검사·커밋한다."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ for _name in dir(core):
 
 CHAPTER_CHECK_SCHEMA = "story-chapter-check/v1"
 CHAPTER_ERROR_SCHEMA = "story-chapter-error/v1"
-# 书内工作目录：分组 segment、writer prompt 留档、逐章事务 JSON 的唯一落点。
-# 与 build_writer_prompt.py 同一口径；提交成功后整目录删除，失败时原样保留供重跑。
+# 작품 내부 작업 디렉터리: segment·집필 프롬프트 기록·장별 트랜잭션 JSON의 유일한 위치.
+# build_writer_prompt.py와 같다. 제출 성공 후 전체 디렉터리를 삭제하며 실패하면 재실행용으로 보존한다.
 WORK_ROOT = (".story", "work")
 
 
@@ -61,9 +61,9 @@ def _tracking_call(function: Any, *args: Any) -> Any:
 
 def _json_line(payload: dict[str, Any]) -> None:
     rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
-    # Windows runners may expose a cp1252 console even when callers explicitly
-    # consume UTF-8.  Write protocol output as bytes so JSON never depends on
-    # the host console code page.
+    # 호출자가 UTF-8을 명시해도 Windows 실행 환경의 콘솔은 cp1252일 수 있다.
+    # 프로토콜 출력을 바이트로 써 JSON이 호스트 콘솔 코드 페이지에
+    # 의존하지 않게 한다.
     sys.stdout.buffer.write(rendered.encode("utf-8"))
     sys.stdout.buffer.flush()
 
@@ -79,14 +79,12 @@ def _read_json_object(path: Path, label: str) -> dict[str, Any]:
 
 def chapter_work_dir(project: Path, chapter: int) -> Path:
     width = max(3, len(str(chapter)))
-    return project.resolve().joinpath(*WORK_ROOT, f"第{chapter:0{width}d}章")
+    return project.resolve().joinpath(*WORK_ROOT, f"제{chapter:0{width}d}장")
 
 
 def _remove_chapter_work_dir(project: Path, chapter: int) -> str | None:
-    """Delete this chapter's scratch directory after a successful commit.
-
-    Only the per-chapter directory is removed; `.story/work` and `.story` are
-    pruned only when empty, so book-level author memory under `.story/` stays.
+    """커밋 성공 후 해당 장의 작업 디렉터리를 삭제한다.
+    장별 디렉터리만 삭제하고 `.story/work`, `.story`는 비었을 때만 제거해 `.story/` 아래 작품 기억을 보존한다.
     """
     path = chapter_work_dir(project, chapter)
     if path.is_symlink():
@@ -110,7 +108,7 @@ def _project_files(
 
 
 def _json_findings(output: str) -> list[dict[str, Any]] | None:
-    """检测器 --json 输出里的 findings；输出不是预期 JSON 时返回 None（按工具故障处理，不当作无问题）。"""
+    """검사기 --json의 findings. 예상 JSON이 아니면 문제 없음 대신 도구 고장으로 처리하도록 None을 반환한다."""
     try:
         value = json.loads(output)
     except json.JSONDecodeError:
@@ -122,33 +120,31 @@ def _json_findings(output: str) -> list[dict[str, Any]] | None:
 
 
 NODE_REQUIRED = (
-    "质量检查（AI 句式、退化、标点、细纲照搬）要用 Node.js 运行，本机找不到 node。"
-    "安装 Node.js 18 或更高版本并确认 `node --version` 可用后重跑本命令；装好之前本章不能提交。"
+    "품질 검사(AI 문장 패턴, 품질 저하, 문장 부호, 상세 개요 복사)에는 Node.js가 필요하지만 현재 node를 찾을 수 없습니다. "
+    "Node.js 18 이상을 설치하고 `node --version`이 작동하는지 확인한 뒤 다시 실행하세요. 설치 전에는 이 장을 제출할 수 없습니다."
 )
 
 
 def _semantic_advisories(advisories: list[dict[str, Any]]) -> int:
-    # check-ai-patterns 给每条 finding 标 review=semantic|mechanical，退化检测器的在入口统一标 mechanical；
-    # 其余来源没标的按语义类算，宁多勿漏。
+    # check-ai-patterns는 finding마다 review=semantic|mechanical을 붙인다. 퇴화 검사기는 진입점에서 모두 mechanical로 표시한다.
+    # 다른 출처의 미표시 항목은 누락을 피하도록 의미 검토 대상으로 센다.
     return sum(1 for row in advisories if row.get("review") != "mechanical")
 
 
-# 与 hooks（JS core DESLOP_SKIP_MARKER / codex py / bash guard）同一语法：注释内只认 ASCII 空格/Tab，
-# 冒号全角半角都认；裸写不在注释里的不算。
+# 훅(JS core DESLOP_SKIP_MARKER / codex py / bash guard)과 같은 문법. 주석 안 ASCII 공백·Tab만 인식하고
+# 전각·반각 콜론을 모두 받는다. 주석 밖에 그대로 쓴 표식은 인정하지 않는다.
 DESLOP_SKIP = re.compile(r"<!--[ \t]*去味[ \t]*(：|:)[ \t]*跳过[ \t]*-->")
 
 
 def deslop_skipped(body: Path) -> bool:
-    """作者显式说本章不去味时，标题行下的 <!-- 去味:跳过 --> 豁免 AI 句式；与 hooks 同一个首 6 行窗口。"""
+    """작가가 해당 장의 AI 문체 제거를 거부하면 제목 아래 <!-- 去味:跳过 -->로 문장 패턴을 면제한다. 훅과 같은 첫 6행 범위다."""
     head = re.split(r"\r?\n", body.read_text(encoding="utf-8-sig"))[:6]
     return bool(DESLOP_SKIP.search("\n".join(head)))
 
 
 def check_blocking_quality(outline: Path, body: Path) -> dict[str, Any]:
-    """Run the deterministic prose checks.
-
-    status: pass（无 blocking）/ fail（有 blocking 正文问题）/ unavailable（检测工具缺失或崩溃，
-    不是正文问题，见 tool_errors）。
+    """결정적 본문 검사를 실행한다.
+    status: pass=blocking 없음, fail=차단할 본문 문제 있음, unavailable=검사 도구 누락·충돌(본문 문제가 아님, tool_errors 참조).
     """
     node = shutil.which("node")
     if node is None:
@@ -184,10 +180,10 @@ def check_blocking_quality(outline: Path, body: Path) -> dict[str, Any]:
         for finding in findings:
             row = {"source": name, **finding}
             if name == "degeneration":
-                # 退化类（复读、截断、拒绝语、工程词）不是 AI 味，不计入触发去 AI 味审查的语义条数。
+                # 반복·절단·거절문·작업 용어 같은 퇴화는 AI 문체가 아니므로 문체 검토 발동용 의미 항목 수에 넣지 않는다.
                 row.setdefault("review", "mechanical")
             if exempt and name == "ai-pattern" and finding.get("severity") == "blocking":
-                # 豁免只管 AI 句式；退化类（复读、截断、拒绝语、工程词）照常必须修。
+                # 면제는 AI 문장 패턴에만 적용한다. 반복·절단·거절문·작업 용어는 여전히 고쳐야 한다.
                 advisories.append({**row, "severity": "advisory", "exempted": "去味:跳过"})
                 continue
             (blocking if finding.get("severity") == "blocking" else advisories).append(row)
@@ -232,7 +228,7 @@ def check_blocking_quality(outline: Path, body: Path) -> dict[str, Any]:
     }
 
 
-# chapter check 顶层 status 与退出码：一眼分清「能提交」「要作者定」「正文要改」「工具坏了」。
+# chapter check의 최상위 status·종료 코드로 제출 가능·작가 결정 필요·본문 수정 필요·도구 고장을 구분한다.
 CHECK_EXIT_CODES = {"ready": 0, "needs_decision": 0, "blocked": 1, "invalid": 1, "tool_unavailable": 3}
 ERROR_EXIT_CODES = {"TOOL_UNAVAILABLE": 3}
 ACCEPT_FLOOR_RATIO = 0.5
@@ -260,13 +256,13 @@ def _body_digest(path: Path) -> str:
 
 
 def _record_over_baseline(project: Path, chapter: int, body_path: Path, actual: int) -> None:
-    """第一次看到 over 时记下原稿指纹：接受超长前要证明那一次净删压缩真的做过。"""
+    """처음 over를 보면 원고 지문을 기록해 초과 분량 수용 전에 한 차례 순삭제 압축을 실제 했는지 입증한다."""
     path = chapter_work_dir(project, chapter) / BASELINE_FILE
     try:
         previous = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         previous = None
-    # 已有基线且这次更短：是压缩后的复检，保留基线；更长则是重写出的新稿，重新记。
+    # 기준 원고보다 짧으면 압축 재검사이므로 기준을 유지한다. 길면 새로 쓴 원고로 보아 다시 기록한다.
     if isinstance(previous, dict) and isinstance(previous.get("actual"), int) and actual <= previous["actual"]:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -322,16 +318,14 @@ def chapter_check(project: Path, chapter: int, author_range: Any = None) -> dict
 
 
 def fix_punctuation(project: Path, chapter: int, author_range: Any = None) -> bool:
-    """Run the deterministic punctuation normalizer on the chapter body in place.
-
-    Folding it into `chapter check --fix-punctuation` lets the parent flow close a
-    chapter with one call instead of running each cleanup script separately.
+    """장 본문에 결정적 문장부호 정규화를 직접 적용한다.
+    `chapter check --fix-punctuation`에 통합해 상위 절차가 정리 스크립트를 따로 실행하지 않고 한 번에 장을 마무리하게 한다.
     """
     _, body, _, _ = _project_files(project, chapter, author_range)
     node = shutil.which("node")
     script = Path(__file__).with_name("normalize-punctuation.js")
     if node is None or not script.is_file():
-        return False  # chapter check reports the missing tool in quality.tool_errors
+        return False  # chapter check는 누락 도구를 quality.tool_errors에 보고한다.
     before = body.read_bytes()
     subprocess.run([node, str(script), str(body)], text=True, encoding="utf-8",
                    capture_output=True, check=False)
@@ -341,16 +335,16 @@ def fix_punctuation(project: Path, chapter: int, author_range: Any = None) -> bo
 def _require_acceptable_length(
     project: Path, chapter: int, checked: dict[str, Any], *, force: bool, author_range: Any = None,
 ) -> None:
-    """接受当前长度的两道底线：欠长不低于目标一半；超长先做过一次净删压缩（删掉原稿到作者范围上限
-    差额的至少一半）。作者明确拍板用 --force 越过。"""
+    """현재 길이 수용의 최소 조건 두 가지: 짧으면 목표 절반 이상, 길면 원고와 작가 상한 차이의 절반 이상을 순삭제하는 압축을 한 번 수행.
+    작가가 명시적으로 결정하면 --force로 넘을 수 있다."""
     if force:
         return
     length = checked["length"]
     if length["status"] == "under" and length["actual"] < length["target"] * ACCEPT_FLOOR_RATIO:
         raise ChapterRefused(
             "BELOW_ACCEPT_FLOOR",
-            f"本章 {length['actual']} 字，不到字数目标 {length['target']} 的一半，不能直接按当前长度接受；"
-            "先补细纲或改字数目标，作者明确要这个长度时加 --force",
+            f"이번 장은 {length['actual']}자로 목표 {length['target']}자의 절반에 못 미쳐 현재 분량을 바로 승인할 수 없습니다. "
+            "상세 개요를 보완하거나 목표 분량을 수정하세요. 작가가 현재 분량을 명시적으로 원하면 --force를 추가하세요.",
         )
     if length["status"] == "over":
         path = chapter_work_dir(project, chapter) / BASELINE_FILE
@@ -360,7 +354,7 @@ def _require_acceptable_length(
             baseline = None
         _, body_path, _, _ = _project_files(project, chapter, author_range)
         valid = isinstance(baseline, dict) and isinstance(baseline.get("actual"), int)
-        # 压缩要真删：至少删掉原稿到作者字数范围上限差额的一半（至少 1 字），删一两个字不算做过。
+        # 압축은 실제 삭제해야 한다. 원고와 작가 범위 상한 차이의 최소 절반(최소 1자)을 줄여야 하며 한두 글자만 지우면 수행으로 인정하지 않는다.
         ceiling = None
         if valid:
             gap = baseline["actual"] - length["user_band"]["max"]
@@ -371,12 +365,12 @@ def _require_acceptable_length(
             and length["actual"] <= ceiling
         )
         if not compressed:
-            detail = (f"（原稿 {baseline['actual']} 字，压缩后要不超过 {ceiling} 字，现在 {length['actual']} 字）"
+            detail = (f"(원고 {baseline['actual']}자, 압축 후 상한 {ceiling}자, 현재 {length['actual']}자)"
                       if valid else "")
             raise ChapterRefused(
                 "COMPRESSION_REQUIRED",
-                f"超长章节先按 compress-once 做一次净删压缩并重跑 chapter check{detail}，仍超长再接受当前长度；"
-                "作者明确不压缩时加 --force",
+                f"분량을 초과한 장은 먼저 compress-once로 한 번 압축하고 chapter check를 다시 실행하세요{detail}. 그래도 초과하면 현재 분량을 승인할 수 있습니다. "
+                "작가가 압축하지 않겠다고 명시하면 --force를 추가하세요.",
             )
 
 
@@ -417,7 +411,7 @@ def chapter_commit(
     checked["next_chapter_started"] = state["last_committed_chapter"] > chapter
     checked["wordcount"] = state["wordcount_records"].get(str(chapter))
     checked["mode"] = document.get("mode")
-    # The commit is already durable; a cleanup failure is reported, never turned into a failed commit.
+    # 커밋은 이미 영구 저장되었다. 정리 실패는 보고하되 커밋 실패로 바꾸지 않는다.
     try:
         checked["work_dir_removed"] = _remove_chapter_work_dir(project, chapter)
     except OSError as exc:
@@ -441,7 +435,7 @@ def _build_parser() -> StructuredArgumentParser:
             _add_range_arguments(subparser)
         if command == "checkpoint":
             subparser.add_argument("--project", type=Path,
-                                   help="书目录：与 --chapter 一起从细纲读字数目标（未给 --target 时）和「字数范围」")
+                                   help="작품 폴더: --chapter와 함께 상세 개요에서 목표 분량(--target 미지정 시)과 분량 범위를 읽음")
     chapter = commands.add_parser("chapter")
     chapter_commands = chapter.add_subparsers(dest="chapter_command", required=True)
     for command in ("check", "commit", "accept-current-length"):
@@ -453,16 +447,16 @@ def _build_parser() -> StructuredArgumentParser:
             subparser.add_argument("--input", type=Path, required=True)
         else:
             subparser.add_argument("--fix-punctuation", action="store_true",
-                                   help="先就地整理正文标点，再做检查")
+                                   help="본문 파일의 문장 부호를 먼저 정리한 뒤 검사")
         if command == "accept-current-length":
             subparser.add_argument("--force", action="store_true",
-                                   help="作者明确拍板：越过欠长一半下限与超长先压缩一次的要求")
+                                   help="작가의 명시적 결정에 따라 목표 절반 미달 제한과 초과 시 1회 압축 요구를 건너뜀")
     return parser
 
 
 def _add_range_arguments(subparser: argparse.ArgumentParser) -> None:
-    subparser.add_argument("--min-chars", type=int, help="作者本轮给定的字数下限（须与 --max-chars 同给），优先于细纲字数范围与默认 ±15%%")
-    subparser.add_argument("--max-chars", type=int, help="作者本轮给定的字数上限")
+    subparser.add_argument("--min-chars", type=int, help="이번 요청의 최소 글자 수(--max-chars와 함께 지정). 상세 개요의 범위와 기본 ±15%%보다 우선")
+    subparser.add_argument("--max-chars", type=int, help="이번 요청의 최대 글자 수")
 
 
 def _cli_author_range(args: argparse.Namespace) -> dict[str, int] | None:
@@ -494,7 +488,7 @@ def _wordcount_command(args: argparse.Namespace, author_range: dict[str, int] | 
     elif args.wordcount_command == "checkpoint":
         target = args.target
         if args.project is not None:
-            # 与 chapter check 同一优先级：命令行上下限 > 细纲「字数范围」 > 默认带。
+            # chapter check와 같은 우선순위: 명령행 상·하한 > 개요 ‘字数范围’ > 기본 범위.
             try:
                 chapter = int(args.chapter or "")
                 _, outline = read_chapter_outline(args.project, chapter)

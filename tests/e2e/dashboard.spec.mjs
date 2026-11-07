@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
-test("用现有 demo 浏览拆文库、搜索项目并编辑保存", async ({ page, request }) => {
+test("한국어 데모의 분석 자료를 열고 프로젝트를 검색·편집·저장한다", async ({ page, request }) => {
   const consoleErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
@@ -12,7 +12,7 @@ test("用现有 demo 浏览拆文库、搜索项目并编辑保存", async ({ pa
   await page.goto("/");
   await expect(page).toHaveTitle(/OH STORY/);
   await expect(page.getByText("OH STORY", { exact: true })).toBeVisible();
-  await expect(page.locator("#connectionStatus")).toContainText("仅本机");
+  await expect(page.locator("#connectionStatus")).toContainText("이 컴퓨터에서만 사용");
   await expect(page.locator("#libraryCount")).toHaveText("2");
   await expect(page.locator("#projectCount")).toHaveText("1");
   await expect(page.locator("#fileCount")).not.toHaveText("—");
@@ -25,72 +25,72 @@ test("用现有 demo 浏览拆文库、搜索项目并编辑保存", async ({ pa
 
   await expect(page.locator("#fileTree")).toContainText("盘龙");
   await expect(page.locator("#fileTree")).toContainText("曾将爱意私藏");
-  await page.locator(".file-row[data-path='拆文库/盘龙/拆文报告.md']").click();
-  await expect(page.locator("#editorTitle")).toHaveText("拆文报告.md");
+  await page.locator(".file-row[data-path='작품분석실/盘龙/작품분석보고서.md']").click();
+  await expect(page.locator("#editorTitle")).toHaveText("작품분석보고서.md");
   await expect(page.locator("#editorInput")).toHaveValue(/盘龙/);
 
   const marker = `\n\n<!-- dashboard-e2e-${Date.now()} -->`;
   await page.locator("#editorInput").fill(
     `${await page.locator("#editorInput").inputValue()}${marker}`,
   );
-  await expect(page.locator("#dirtyStatus")).toContainText("待保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 필요");
   await expect(page.locator("#saveButton")).toBeEnabled();
 
   const shortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
   await page.locator("#editorInput").press(shortcut);
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
-  await expect(page.locator("#toastRegion")).toContainText("已保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
+  await expect(page.locator("#toastRegion")).toContainText("저장했습니다");
 
   const activePath = await page.locator(".file-row[data-active='true']").getAttribute("data-path");
   const persisted = await request.get(`/api/file?path=${encodeURIComponent(activePath)}`);
   expect(persisted.ok()).toBeTruthy();
   expect((await persisted.json()).content).toContain(marker.trim());
 
-  await page.locator("#editorInput").fill("<img src=x onerror=alert('unsafe')>\n\n# 安全预览");
-  await page.getByRole("button", { name: "预览", exact: true }).click();
+  await page.locator("#editorInput").fill("<img src=x onerror=alert('unsafe')>\n\n# 安全미리 보기");
+  await page.getByRole("button", { name: "미리 보기", exact: true }).click();
   await expect(page.locator("#previewPane")).toContainText("<img src=x onerror=alert('unsafe')>");
   await expect(page.locator("#previewPane img")).toHaveCount(0);
-  await expect(page.locator("#previewPane h1")).toHaveText("安全预览");
+  await expect(page.locator("#previewPane h1")).toHaveText("安全미리 보기");
 
-  await page.getByRole("tab", { name: /写作项目/ }).click();
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
   await expect(page.locator("#treeTruncationNotice")).toHaveCount(0);
-  await expect(page.locator("#fileTree")).not.toContainText("关系.md");
-  await page.locator("summary").filter({ hasText: "设定" }).click();
-  await expect(page.locator("#fileTree")).toContainText("关系.md");
+  await expect(page.locator("#fileTree")).not.toContainText("관계.md");
+  await page.locator("summary").filter({ hasText: "설정" }).click();
+  await expect(page.locator("#fileTree")).toContainText("관계.md");
   const unfilteredRows = await page.locator("#fileTree .file-row").count();
   expect(unfilteredRows).toBeGreaterThan(1);
 
-  // 搜索由服务端按需扫描，未展开「角色」目录也必须找到江晨。
+  // 검색은 서버가 필요할 때 스캔하므로 인물 디렉터리를 펼치지 않아도 江晨을 찾아야 한다.
   await page.locator("#treeSearch").fill("江晨");
   await expect(page.locator("#fileTree")).toContainText("江晨.md");
-  await expect(page.locator("#fileTree")).not.toContainText("关系.md");
-  await expect(page.locator("#fileTree")).not.toContainText("细纲_第003章");
+  await expect(page.locator("#fileTree")).not.toContainText("관계.md");
+  await expect(page.locator("#fileTree")).not.toContainText("상세개요_제003장");
   await expect(page.locator("#fileTree")).not.toContainText("盘龙");
-  // 断言「树被过滤成命中集」而不是比行数：命中数会随 demo 增加同名文件而变化
-  // （角色既有 设定/角色/{名}.md 又有 追踪/角色状态/{名}.md），行数比较会偶然失效。
+  // 행 수 대신 트리가 검색 결과 집합으로 필터링됐는지 단언한다. 데모에 동명 파일이 늘면 결과 수도 달라진다.
+  // (인물은 설정/인물/{名}.md와 추적/인물상태/{名}.md에 모두 있으므로 행 수 비교는 우연히 실패할 수 있다.)
   const filteredPaths = await page
     .locator("#fileTree .file-row")
     .evaluateAll((rows) => rows.map((row) => row.dataset.path ?? ""));
   expect(filteredPaths.length).toBeGreaterThan(0);
   expect(filteredPaths.every((path) => path.includes("江晨"))).toBe(true);
   await page.locator("#refreshButton").click();
-  await expect(page.locator("#toastRegion")).toContainText("工作区目录已刷新");
+  await expect(page.locator("#toastRegion")).toContainText("작업 공간 목록을 새로고침했습니다");
   await expect(page.locator("#fileTree")).toContainText("江晨.md");
 
-  // 清空搜索后回到已加载目录，作者刚展开的「设定」不能被收起。
+  // 검색을 지우면 로드된 디렉터리로 돌아가며 작가가 방금 펼친 설정 디렉터리가 접히면 안 된다.
   await page.locator("#treeSearch").press("Escape");
   await expect(page.locator("#treeSearch")).toHaveValue("");
-  await expect(page.locator("#fileTree")).toContainText("关系.md");
+  await expect(page.locator("#fileTree")).toContainText("관계.md");
   expect(await page.locator("#fileTree .file-row").count()).toBe(unfilteredRows);
 
   expect(consoleErrors).toEqual([]);
 });
 
-test("从真实 demo 删除文稿前明确确认并刷新文件树", async ({ page, request }, testInfo) => {
+test("원고 삭제 전에 확인하고 파일 목록을 갱신한다", async ({ page, request }, testInfo) => {
   const retryFiles = [
-    "拆文库/盘龙/_progress.md",
-    "拆文库/盘龙/快速预览.md",
-    "拆文库/盘龙/概要.md",
+    "작품분석실/盘龙/_progress.md",
+    "작품분석실/盘龙/빠른미리보기.md",
+    "작품분석실/盘龙/개요요약.md",
   ];
   const filePath = retryFiles[testInfo.retry];
   await page.goto("/");
@@ -104,8 +104,8 @@ test("从真实 demo 删除文稿前明确确认并刷新文件树", async ({ pa
   await page.locator(`.file-row[data-path='${filePath}']`).click();
   await expect(page.locator("#editorTitle")).toHaveText(fileName);
 
-  // 断言写在 dialog 回调里就等于没写：对话框不弹时回调根本不跑。
-  // 先在回调外记录，再在点击之后断言，并且必须先测「取消删除」这条路。
+  // dialog 콜백 안의 단언은 대화상자가 열리지 않으면 실행되지 않아 검증 효과가 없다.
+  // 콜백 밖에 먼저 기록하고 클릭 후 단언한다. 반드시 삭제 취소 경로부터 검사한다.
   let dismissed = null;
   page.once("dialog", async (dialog) => {
     dismissed = { type: dialog.type(), message: dialog.message() };
@@ -115,7 +115,7 @@ test("从真实 demo 删除文稿前明确确认并刷新文件树", async ({ pa
   await expect.poll(() => dismissed).not.toBeNull();
   expect(dismissed.type).toBe("confirm");
   expect(dismissed.message).toContain(fileName);
-  expect(dismissed.message).toContain("无法撤销");
+  expect(dismissed.message).toContain("되돌릴 수 없습니다");
 
   await expect(page.locator(`.file-row[data-path='${filePath}']`)).toHaveCount(1);
   await expect(page.locator("#fileCount")).toHaveText(`${initialFileCount}+`);
@@ -132,9 +132,9 @@ test("从真实 demo 删除文稿前明确确认并刷新文件树", async ({ pa
   await expect.poll(() => accepted).not.toBeNull();
   expect(accepted.type).toBe("confirm");
   expect(accepted.message).toContain(fileName);
-  expect(accepted.message).toContain("无法撤销");
+  expect(accepted.message).toContain("되돌릴 수 없습니다");
 
-  await expect(page.locator("#toastRegion")).toContainText("已删除");
+  await expect(page.locator("#toastRegion")).toContainText("삭제했습니다");
   await expect(page.locator("#editorEmpty")).toBeVisible();
   await expect(page.locator(`.file-row[data-path='${filePath}']`)).toHaveCount(0);
   await expect(page.locator("#fileCount")).toHaveText(`${initialFileCount - 1}+`);
@@ -143,13 +143,13 @@ test("从真实 demo 删除文稿前明确确认并刷新文件树", async ({ pa
   expect(deleted.status()).toBe(404);
 });
 
-test("保存途中切走文稿，结果不能落到新打开的那份上", async ({ page, request }) => {
-  const fileA = "拆文库/盘龙/文风.md";
-  const fileB = "拆文库/盘龙/拆文报告.md";
+test("저장 중 다른 원고를 열어도 저장 결과가 섞이지 않는다", async ({ page, request }) => {
+  const fileA = "작품분석실/盘龙/문체.md";
+  const fileB = "작품분석실/盘龙/작품분석보고서.md";
   await page.goto("/");
   await expect(page.locator("#fileCount")).not.toHaveText("—");
 
-  // 把 PUT 拖慢，模拟网盘目录、杀软扫描导致的慢保存
+  // PUT을 늦춰 네트워크 드라이브나 백신 검사로 인한 느린 저장을 재현한다.
   await page.route("**/api/file", async (route) => {
     if (route.request().method() === "PUT") {
       await new Promise((accept) => setTimeout(accept, 1500));
@@ -158,27 +158,27 @@ test("保存途中切走文稿，结果不能落到新打开的那份上", async
   });
 
   await page.locator(`.file-row[data-path='${fileA}']`).click();
-  await expect(page.locator("#editorTitle")).toHaveText("文风.md");
+  await expect(page.locator("#editorTitle")).toHaveText("문체.md");
   const markerA = `\n<!-- dashboard-race-a-${Date.now()} -->`;
   await page.locator("#editorInput").fill(
     `${await page.locator("#editorInput").inputValue()}${markerA}`,
   );
   await page.locator("#saveButton").click();
-  await expect(page.locator("#dirtyStatus")).toContainText("保存中");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 중");
 
-  // 保存还在飞就切到另一份文稿并继续写
+  // 저장이 진행 중일 때 다른 원고로 전환해 계속 작성한다.
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator(`.file-row[data-path='${fileB}']`).click();
-  await expect(page.locator("#editorTitle")).toHaveText("拆文报告.md");
+  await expect(page.locator("#editorTitle")).toHaveText("작품분석보고서.md");
   const markerB = `\n<!-- dashboard-race-b-${Date.now()} -->`;
   await page.locator("#editorInput").fill(
     `${await page.locator("#editorInput").inputValue()}${markerB}`,
   );
-  await expect(page.locator("#dirtyStatus")).toContainText("待保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 필요");
 
-  // A 的保存落地时只能提示 A，B 仍是未保存状态，不能被算成已保存
-  await expect(page.locator("#toastRegion")).toContainText("已保存《文风.md》");
-  await expect(page.locator("#dirtyStatus")).toContainText("待保存");
+  // A 저장 완료 시 A만 알리고 B는 미저장 상태를 유지해야 한다. B를 저장 완료로 처리하면 안 된다.
+  await expect(page.locator("#toastRegion")).toContainText("《문체.md》을(를) 저장했습니다");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 필요");
   await expect(page.locator("#saveButton")).toBeEnabled();
 
   const persistedA = await request.get(`/api/file?path=${encodeURIComponent(fileA)}`);
@@ -186,17 +186,17 @@ test("保存途中切走文稿，结果不能落到新打开的那份上", async
   const staleB = await request.get(`/api/file?path=${encodeURIComponent(fileB)}`);
   expect((await staleB.json()).content).not.toContain(markerB.trim());
 
-  // B 自己保存时必须带 B 的版本号，不能被 A 的版本污染成假冲突
+  // B를 저장할 때는 B의 버전 번호를 사용해야 한다. A의 버전이 섞여 거짓 충돌이 생기면 안 된다.
   await page.locator("#saveButton").click();
-  await expect(page.locator("#toastRegion")).toContainText("已保存《拆文报告.md》");
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
+  await expect(page.locator("#toastRegion")).toContainText("《작품분석보고서.md》을(를) 저장했습니다");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
   await expect(page.locator("#conflictDialog")).toBeHidden();
   const savedB = await request.get(`/api/file?path=${encodeURIComponent(fileB)}`);
   expect((await savedB.json()).content).toContain(markerB.trim());
 });
 
-test("保存途中继续敲的字仍算未保存", async ({ page, request }) => {
-  const filePath = "拆文库/盘龙/文风.md";
+test("저장 중 추가한 내용은 미저장 상태로 남는다", async ({ page, request }) => {
+  const filePath = "작품분석실/盘龙/문체.md";
   await page.goto("/");
   await expect(page.locator("#fileCount")).not.toHaveText("—");
   await page.route("**/api/file", async (route) => {
@@ -207,7 +207,7 @@ test("保存途中继续敲的字仍算未保存", async ({ page, request }) => 
   });
 
   await page.locator(`.file-row[data-path='${filePath}']`).click();
-  await expect(page.locator("#editorTitle")).toHaveText("文风.md");
+  await expect(page.locator("#editorTitle")).toHaveText("문체.md");
   const saveMarker = `\n<!-- dashboard-inflight-saved-${Date.now()} -->`;
   await page.locator("#editorInput").fill(
     `${await page.locator("#editorInput").inputValue()}${saveMarker}`,
@@ -215,14 +215,14 @@ test("保存途中继续敲的字仍算未保存", async ({ page, request }) => 
 
   const shortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
   await page.locator("#editorInput").press(shortcut);
-  await expect(page.locator("#dirtyStatus")).toContainText("保存中");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 중");
   const lateMarker = "\n<!-- dashboard-inflight-late -->";
   await page.locator("#editorInput").fill(
     `${await page.locator("#editorInput").inputValue()}${lateMarker}`,
   );
 
-  await expect(page.locator("#toastRegion")).toContainText("已保存《文风.md》");
-  await expect(page.locator("#dirtyStatus")).toContainText("待保存");
+  await expect(page.locator("#toastRegion")).toContainText("《문체.md》을(를) 저장했습니다");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 필요");
   await expect(page.locator("#saveButton")).toBeEnabled();
 
   const persisted = await request.get(`/api/file?path=${encodeURIComponent(filePath)}`);
@@ -231,8 +231,8 @@ test("保存途中继续敲的字仍算未保存", async ({ page, request }) => 
   expect(content).not.toContain(lateMarker.trim());
 });
 
-test("CRLF 稿件不会被一次改动重写换行，脏标记也能清干净", async ({ page, request }) => {
-  const filePath = "长篇/让你管账号，你高燃混剪炸全网/设定/文风.md";
+test("CRLF 원고의 줄바꿈과 변경 표시를 보존한다", async ({ page, request }) => {
+  const filePath = "장편/让你管账号，你高燃混剪炸全网/설정/문체.md";
   const loaded = await request
     .get(`/api/file?path=${encodeURIComponent(filePath)}`)
     .then((response) => response.json());
@@ -244,22 +244,22 @@ test("CRLF 稿件不会被一次改动重写换行，脏标记也能清干净", 
   expect(crlfContent).toContain("\r\n");
 
   await page.goto("/");
-  await page.getByRole("tab", { name: /写作项目/ }).click();
-  await page.locator("#treeSearch").fill("文风");
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
+  await page.locator("#treeSearch").fill("문체");
   await page.locator(`.file-row[data-path='${filePath}']`).click();
-  await expect(page.locator("#editorTitle")).toHaveText("文风.md");
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
+  await expect(page.locator("#editorTitle")).toHaveText("문체.md");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
 
-  // 敲一个字再删掉就该回到「已保存」；基线留着 CRLF 时这里永远卡在待保存
+  // 한 글자를 입력했다 지우면 저장 완료로 돌아가야 한다. 기준값에 CRLF가 남으면 계속 저장 대기 상태가 된다.
   await page.locator("#editorInput").press("End");
   await page.locator("#editorInput").pressSequentially("改");
-  await expect(page.locator("#dirtyStatus")).toContainText("待保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 필요");
   await page.locator("#editorInput").press("Backspace");
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
 
   await page.locator("#editorInput").pressSequentially("改");
   await page.locator("#saveButton").click();
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
 
   const saved = await request
     .get(`/api/file?path=${encodeURIComponent(filePath)}`)
@@ -269,8 +269,8 @@ test("CRLF 稿件不会被一次改动重写换行，脏标记也能清干净", 
   expect(saved.size).toBe(Buffer.byteLength(crlfContent) + Buffer.byteLength("改"));
 });
 
-test("LF 稿件里的孤立 CR 不会把整篇保存成 CR-only", async ({ page, request }) => {
-  const filePath = "长篇/让你管账号，你高燃混剪炸全网/设定/文风.md";
+test("LF 원고 안의 단독 CR이 전체 줄바꿈을 바꾸지 않는다", async ({ page, request }) => {
+  const filePath = "장편/让你管账号，你高燃混剪炸全网/설정/문체.md";
   const loaded = await request
     .get(`/api/file?path=${encodeURIComponent(filePath)}`)
     .then((response) => response.json());
@@ -281,15 +281,15 @@ test("LF 稿件里的孤立 CR 不会把整篇保存成 CR-only", async ({ page,
   expect(converted.ok()).toBeTruthy();
 
   await page.goto("/");
-  await page.getByRole("tab", { name: /写作项目/ }).click();
-  await page.locator("#treeSearch").fill("文风");
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
+  await page.locator("#treeSearch").fill("문체");
   await page.locator(`.file-row[data-path='${filePath}']`).click();
-  await expect(page.locator("#editorTitle")).toHaveText("文风.md");
+  await expect(page.locator("#editorTitle")).toHaveText("문체.md");
 
   await page.locator("#editorInput").press("End");
   await page.locator("#editorInput").pressSequentially("改");
   await page.locator("#saveButton").click();
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
 
   const saved = await request
     .get(`/api/file?path=${encodeURIComponent(filePath)}`)
@@ -299,8 +299,8 @@ test("LF 稿件里的孤立 CR 不会把整篇保存成 CR-only", async ({ page,
   expect(saved.content.split("\n")).toHaveLength(6);
 });
 
-test("CRLF 稿件里的孤立 CR 不会反向触发整篇 LF 重写", async ({ page, request }) => {
-  const filePath = "长篇/让你管账号，你高燃混剪炸全网/设定/文风.md";
+test("CRLF 원고 안의 단독 CR이 전체를 LF로 바꾸지 않는다", async ({ page, request }) => {
+  const filePath = "장편/让你管账号，你高燃混剪炸全网/설정/문체.md";
   const loaded = await request
     .get(`/api/file?path=${encodeURIComponent(filePath)}`)
     .then((response) => response.json());
@@ -314,16 +314,16 @@ test("CRLF 稿件里的孤立 CR 不会反向触发整篇 LF 重写", async ({ p
   expect(converted.ok()).toBeTruthy();
 
   await page.goto("/");
-  await page.getByRole("tab", { name: /写作项目/ }).click();
-  await page.locator("#treeSearch").fill("文风");
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
+  await page.locator("#treeSearch").fill("문체");
   await page.locator(`.file-row[data-path='${filePath}']`).click();
   const editor = page.locator("#editorInput");
-  await expect(page.locator("#editorTitle")).toHaveText("文风.md");
+  await expect(page.locator("#editorTitle")).toHaveText("문체.md");
   await expect(editor).toBeEnabled();
   await editor.press("End");
   await editor.pressSequentially("\n改");
   await page.locator("#saveButton").click();
-  await expect(page.locator("#dirtyStatus")).toContainText("已保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장됨");
 
   const saved = await request
     .get(`/api/file?path=${encodeURIComponent(filePath)}`)
@@ -333,36 +333,36 @@ test("CRLF 稿件里的孤立 CR 不会反向触发整篇 LF 重写", async ({ p
   expect(saved.content.split("\r\n")).toHaveLength(6);
 });
 
-test("打开文稿不会收起正在翻的目录", async ({ page }) => {
-  const rowPath = "长篇/让你管账号，你高燃混剪炸全网/大纲/细纲_第002章.md";
+test("원고를 열어도 펼친 폴더가 접히지 않는다", async ({ page }) => {
+  const rowPath = "장편/让你管账号，你高燃混剪炸全网/개요/상세개요_제002장.md";
   await page.goto("/");
-  await page.getByRole("tab", { name: /写作项目/ }).click();
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
   await expect(page.locator("#fileTree")).toContainText("让你管账号，你高燃混剪炸全网");
 
-  await page.locator("summary").filter({ hasText: "大纲" }).click();
+  await page.locator("summary").filter({ hasText: "개요" }).click();
   const row = page.locator(`.file-row[data-path='${rowPath}']`);
   await expect(row).toBeVisible();
 
   await row.click();
-  await expect(page.locator("#editorTitle")).toHaveText("细纲_第002章.md");
+  await expect(page.locator("#editorTitle")).toHaveText("상세개요_제002장.md");
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute("data-active", "true");
 
   await page.locator("#refreshButton").click();
-  await expect(page.locator("#toastRegion")).toContainText("工作区目录已刷新");
+  await expect(page.locator("#toastRegion")).toContainText("작업 공간 목록을 새로고침했습니다");
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute("data-active", "true");
 
-  await page.locator("#treeSearch").fill("细纲_第002章");
-  await expect(page.locator("#fileTree")).not.toContainText("细纲_第003章");
+  await page.locator("#treeSearch").fill("상세개요_제002장");
+  await expect(page.locator("#fileTree")).not.toContainText("상세개요_제003장");
   await page.locator("#treeSearch").fill("");
   await expect(row).toBeVisible();
 });
 
-test("深目录不再被首屏扫描深度剪掉，搜索时仍能按需找到", async ({ page, request }) => {
+test("깊은 폴더의 원고도 검색으로 찾는다", async ({ page, request }) => {
   const workspace = await request.get("/api/workspace").then((response) => response.json());
   const projectPath = workspace.projects[0].path;
-  const nestedRoot = resolve(workspace.workspace.path, projectPath, "正文", "深卷");
+  const nestedRoot = resolve(workspace.workspace.path, projectPath, "본문", "深卷");
   const nestedLeaf = resolve(
     nestedRoot,
     ...Array.from({ length: 11 }, (_, index) => `第${index + 1}折`),
@@ -373,7 +373,7 @@ test("深目录不再被首屏扫描深度剪掉，搜索时仍能按需找到",
     await writeFile(resolve(nestedLeaf, "埋掉的一章.md"), "深处的正文", "utf8");
 
     await page.goto("/");
-    await page.getByRole("tab", { name: /写作项目/ }).click();
+    await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
     await page.locator("#treeSearch").fill("埋掉的一章");
     await expect(page.locator("#fileTree")).toContainText("埋掉的一章.md");
     await expect(page.locator("#treeTruncationNotice")).toHaveCount(0);
@@ -382,13 +382,13 @@ test("深目录不再被首屏扫描深度剪掉，搜索时仍能按需找到",
   }
 });
 
-test("目录读取失败时提示权限或挂载问题，而不是伪装成空库", async ({ page }) => {
+test("폴더 읽기 실패 시 권한과 연결 상태를 안내한다", async ({ page }) => {
   await page.route("**/api/workspace", async (route) => {
     const response = await route.fetch();
     const payload = await response.json();
     payload.libraries = [];
     payload.scanErrors = [
-      { path: "拆文库", code: "EACCES", message: "目录无法读取" },
+      { path: "작품분석실", code: "EACCES", message: "目录无法读取" },
     ];
     payload.limits = {
       ...payload.limits,
@@ -399,15 +399,15 @@ test("目录读取失败时提示权限或挂载问题，而不是伪装成空�
   });
 
   await page.goto("/");
-  await expect(page.locator("#treeTruncationNotice")).toContainText("拆文库无法读取");
-  await expect(page.locator("#treeTruncationNotice")).toContainText("检查这些目录的访问权限和外挂盘挂载状态");
+  await expect(page.locator("#treeTruncationNotice")).toContainText("작품분석실을(를) 읽을 수 없어");
+  await expect(page.locator("#treeTruncationNotice")).toContainText("폴더 접근 권한과 외장 드라이브 연결을 확인한 뒤 목록을 새로고침하세요");
   await expect(page.locator("#fileCount")).toHaveAttribute(
     "title",
-    "文稿随目录展开按需加载，不预先遍历整个工作区",
+    "폴더를 펼칠 때 원고를 불러옵니다. 전체 작업 공간을 미리 읽지 않습니다",
   );
 });
 
-test("顶层目录自动加载失败后停止重取，只在用户点击时重试", async ({ page }) => {
+test("폴더 자동 로드 실패 후 사용자 요청이 있을 때만 재시도한다", async ({ page }) => {
   let treeRequests = 0;
   await page.route("**/api/workspace", async (route) => {
     const response = await route.fetch();
@@ -415,7 +415,7 @@ test("顶层目录自动加载失败后停止重取，只在用户点击时重�
     payload.libraries = [
       {
         name: "坏档案",
-        path: "拆文库/坏档案",
+        path: "작품분석실/坏档案",
         type: "directory",
         children: [],
         loaded: false,
@@ -426,7 +426,7 @@ test("顶层目录自动加载失败后停止重取，只在用户点击时重�
   });
   await page.route("**/api/tree?*", async (route) => {
     const url = new URL(route.request().url());
-    if (url.searchParams.get("path") !== "拆文库/坏档案") {
+    if (url.searchParams.get("path") !== "작품분석실/坏档案") {
       await route.continue();
       return;
     }
@@ -437,14 +437,14 @@ test("顶层目录自动加载失败后停止重取，只在用户点击时重�
       body: JSON.stringify({
         error: {
           code: "directory_unreadable",
-          message: "目录无法读取，请检查访问权限或挂载状态：拆文库/坏档案",
+          message: "폴더를 읽을 수 없습니다. 접근 권한이나 드라이브 연결 상태를 확인하세요: 작품분석실/坏档案",
         },
       }),
     });
   });
 
   await page.goto("/");
-  const retry = page.getByRole("button", { name: "目录加载失败，点击重试" });
+  const retry = page.getByRole("button", { name: "폴더를 불러오지 못했습니다. 눌러서 다시 시도하세요" });
   await expect(retry).toBeVisible();
   await page.waitForTimeout(500);
   expect(treeRequests).toBe(1);
@@ -457,13 +457,13 @@ test("顶层目录自动加载失败后停止重取，只在用户点击时重�
   await expect(retry).toBeVisible();
 });
 
-test("搜索零命中时仍按具体原因显示截断警告", async ({ page }) => {
+test("검색 결과가 없어도 제한에 도달한 원인을 표시한다", async ({ page }) => {
   await page.route("**/api/search?*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        query: "不存在的文件",
+        query: "不存在的파일",
         scope: "projects",
         results: [],
         truncated: true,
@@ -484,17 +484,17 @@ test("搜索零命中时仍按具体原因显示截断警告", async ({ page }) 
   });
 
   await page.goto("/");
-  await page.getByRole("tab", { name: /写作项目/ }).click();
-  await page.locator("#treeSearch").fill("不存在的文件");
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
+  await page.locator("#treeSearch").fill("不存在的파일");
   await expect(page.locator("#fileTree")).toContainText(
-    "搜索未完成，暂时无法确认是否存在“不存在的文件”",
+    "검색이 끝나지 않아 “不存在的파일”의 존재 여부를 확인하지 못했습니다",
   );
   await expect(page.locator("#fileTree")).toContainText(
-    "搜索达到 5,000 个节点的扫描上限，后续目录尚未检查",
+    "검색 항목 수가 5,000개 한도에 도달해 나머지 폴더는 확인하지 못했습니다",
   );
 });
 
-test("搜索零命中但目录读取失败时显示权限或挂载提示", async ({ page }) => {
+test("검색 중 읽기 실패 시 권한과 연결 상태를 안내한다", async ({ page }) => {
   await page.route("**/api/search?*", async (route) => {
     await route.fulfill({
       status: 200,
@@ -510,7 +510,7 @@ test("搜索零命中但目录读取失败时显示权限或挂载提示", async
           byDepth: false,
           byReadError: true,
         },
-        scanErrors: [{ path: "示例书/正文/受限卷", code: "EACCES" }],
+        scanErrors: [{ path: "示例书/본문/受限卷", code: "EACCES" }],
         limits: {
           maxResults: 100,
           maxNodes: 5000,
@@ -521,17 +521,17 @@ test("搜索零命中但目录读取失败时显示权限或挂载提示", async
   });
 
   await page.goto("/");
-  await page.getByRole("tab", { name: /写作项目/ }).click();
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
   await page.locator("#treeSearch").fill("目标章");
   await expect(page.locator("#fileTree")).toContainText(
-    "搜索未完成，暂时无法确认是否存在“目标章”",
+    "검색이 끝나지 않아 “目标章”의 존재 여부를 확인하지 못했습니다",
   );
-  await expect(page.locator("#fileTree")).toContainText("示例书/正文/受限卷无法读取");
-  await expect(page.locator("#fileTree")).toContainText("访问权限或外挂盘挂载状态");
-  await expect(page.locator("#fileTree")).not.toContainText("没有找到“目标章”");
+  await expect(page.locator("#fileTree")).toContainText("示例书/본문/受限卷을(를) 읽을 수 없어");
+  await expect(page.locator("#fileTree")).toContainText("접근 권한이나 외장 드라이브 연결 상태");
+  await expect(page.locator("#fileTree")).not.toContainText("“目标章”을(를) 찾지 못했습니다");
 });
 
-test("宽目录按页加载，点击更多后继续追加而不丢失首批文件", async ({ page, request }) => {
+test("목록을 추가로 불러와도 앞서 표시한 파일이 유지된다", async ({ page, request }) => {
   const workspace = await request.get("/api/workspace").then((response) => response.json());
   const project = resolve(workspace.workspace.path, workspace.projects[0].path);
   const volume = resolve(project, "批量卷");
@@ -542,7 +542,7 @@ test("宽目录按页加载，点击更多后继续追加而不丢失首批文�
       await Promise.all(
         Array.from({ length: Math.min(100, 205 - start) }, (_, offset) =>
           writeFile(
-            resolve(volume, `第${String(start + offset + 1).padStart(5, "0")}章.md`),
+            resolve(volume, `제${String(start + offset + 1).padStart(5, "0")}장.md`),
             "凑数",
             "utf8",
           ),
@@ -551,38 +551,38 @@ test("宽目录按页加载，点击更多后继续追加而不丢失首批文�
     }
 
     await page.goto("/");
-    await page.getByRole("tab", { name: /写作项目/ }).click();
+    await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
     await page.locator("summary").filter({ hasText: "批量卷" }).click();
     const first = page.locator(
-      `.file-row[data-path='${workspace.projects[0].path}/批量卷/第00001章.md']`,
+      `.file-row[data-path='${workspace.projects[0].path}/批量卷/제00001장.md']`,
     );
     const last = page.locator(
-      `.file-row[data-path='${workspace.projects[0].path}/批量卷/第00205章.md']`,
+      `.file-row[data-path='${workspace.projects[0].path}/批量卷/제00205장.md']`,
     );
     await expect(first).toBeVisible();
     await expect(last).toHaveCount(0);
-    await page.getByRole("button", { name: "加载更多" }).click();
+    await page.getByRole("button", { name: "더 불러오기" }).click();
     await expect(first).toBeVisible();
     await expect(last).toBeVisible();
-    await expect(page.getByRole("button", { name: "加载更多" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "더 불러오기" })).toHaveCount(0);
   } finally {
     await rm(volume, { recursive: true, force: true });
   }
 });
 
-test("@mobile 手机视口仍可从真实长篇项目打开大纲", async ({ page }) => {
+test("@mobile 모바일 화면에서 장편 프로젝트 개요를 연다", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("OH STORY", { exact: true })).toBeVisible();
   await expect(page.locator(".archive-panel")).toBeVisible();
 
-  await page.getByRole("tab", { name: /写作项目/ }).click();
+  await page.getByRole("tab", { name: /집필 프로젝트/ }).click();
   await expect(page.locator("#fileTree")).toContainText("让你管账号，你高燃混剪炸全网");
-  await page.locator("summary").filter({ hasText: "大纲" }).click();
+  await page.locator("summary").filter({ hasText: "개요" }).click();
   await page
-    .locator(".file-row[data-path='长篇/让你管账号，你高燃混剪炸全网/大纲/大纲.md']")
+    .locator(".file-row[data-path='장편/让你管账号，你高燃混剪炸全网/개요/개요.md']")
     .click();
 
-  await expect(page.locator("#editorTitle")).toHaveText("大纲.md");
+  await expect(page.locator("#editorTitle")).toHaveText("개요.md");
   await expect(page.locator("#editorWorkspace")).toBeVisible();
   await expect(page.locator("#saveButton")).toBeVisible();
   await expect(page.locator("#editorInput")).toBeVisible();

@@ -1,36 +1,22 @@
 #!/usr/bin/env python3
-"""build_writer_prompt.py — 确定性组装 narrative-writer 的 spawn prompt 骨架。
-
-用法:
-    python build_writer_prompt.py --project <书目录> --chapter N [--out [<文件>]]
-
-`--out` 不带路径时留档到本章工作目录 `<书目录>/.story/work/第NNN章/writer_prompt.md`。
-分组 segment、prompt 留档和逐章事务 JSON 都只放这个书内工作目录——不写系统 /tmp
-（多本书/多会话同章号会互相覆盖，Windows 也没有 /tmp），也不写进 正文/（会被当成章节）。
-`storyctl.py chapter commit` 成功后自动删除该章工作目录。
-
-跑在「写前准备」第一步。stdout 分两区，`===` 分隔线以上是 prompt 正文
-（主会话照抄，空槽以外一字不改），以下是核对报告（不进 prompt）。
-
-职责边界:
-- 脚本做确定性部分：固定首行、定位、标题行字面量、细纲指针、文风全文路径与裁决、
-  上一章结尾、降档判定与情绪/节奏槽、固定块指针。
-- 脚本代查作者记忆（prose_style + story_design）并填好 author_preferences；装不下的条目在核对报告里
-  点名，并拼好章末对作者说的那句原话。
-- 脚本注入 `设定/题材定位.md`「作者已定」（本书的偏好、红线与否掉的方案），超过 AUTHOR_DECIDED_CHARS
-  可见字截断并注明去原文看；它是书级设定，优先于作者记忆。
-- 主会话填九个固定槽：执行安排 / 本章意图 / 作者本轮要求 / 本章技法 / 本节速记 / 涉及角色 /
-  genre_prose_card / 必读设定 / style_resolution。另有两个条件槽，出现时同样标［主会话填］：
-  author_preferences 块内的限定范围（--genre／--workflow）作者记忆未代查时，由主会话判断是否适用后补查
-  （脚本查询失败时则整块手查）；降档不成立时「情绪与节奏召回」也归主会话。
-  核对报告末尾的「待填槽位」给出本次实际个数（9-11）。
-  材料槽对应原流程步骤 3「写前准备」的四项输出（本节速记 / 目标情绪 / 涉及角色 /
-  本章技法）加上作者本轮要求、题材卡、设定补漏与作者偏好——都是判断，脚本做不了。
-- 续写状态卡校验后由主会话筛选，在「本节速记」槽内写入本章需要的状态。
-- 可选块缺失留标题并写明原因（「没有」与「漏了」在产物上必须长得不一样）。
-  必在块缺失退出码 2 —— 那是数据问题，要修数据后重跑，不是回落手拼的理由。
-
-Exit: 0 = 骨架已输出；2 = 输入缺失或无效。
+"""build_writer_prompt.py — narrative-writer의 spawn 프롬프트 골격을 결정적으로 구성한다.
+사용법:
+    python build_writer_prompt.py --project <작품디렉터리> --chapter N [--out [<파일>]]
+경로 없는 `--out`은 `<작품디렉터리>/.story/work/제NNN장/writer_prompt.md`에 보관한다. segment·프롬프트·장별 트랜잭션 JSON은 이곳에만 둔다.
+여러 작품·세션의 같은 장 번호가 충돌하며 Windows에는 없는 시스템 /tmp와, 장으로 오인될 본문/에는 쓰지 않는다.
+`storyctl.py chapter commit` 성공 후 해당 장 작업 디렉터리를 자동 삭제한다.
+집필 전 준비 첫 단계에 실행한다. stdout의 `===` 위는 주 세션이 빈 칸 외에는 그대로 복사할 프롬프트, 아래는 프롬프트에 넣지 않는 대조 보고서다.
+역할 경계:
+- 스크립트: 고정 첫 행·위치·제목 리터럴·상세 개요 포인터·문체 전문 경로/판정·앞 장 결말·참조 축소/감정/리듬 칸·고정 블록 포인터.
+- 작가 기억(prose_style + story_design)을 조회해 author_preferences를 채우며 누락 항목과 장말에 작가에게 전할 문장을 대조 보고서에 쓴다.
+- `설정/소재방향.md`의 ‘作者已定’(작품 선호·금지선·기각안)을 주입한다. AUTHOR_DECIDED_CHARS 가시 글자 초과 시 자르고 원문을 안내한다. 작품 설정이므로 작가 기억보다 우선한다.
+- 주 세션은 실행 계획/장 의도/이번 작가 요구/장 기법/구간 속기/관련 인물/genre_prose_card/필수 설정/style_resolution의 고정 9칸을 채운다.
+  조건부 2칸도 나타나면 주 세션 담당이다. author_preferences의 --genre/--workflow 한정 기억을 대신 조회하지 못했다면 적용 여부를 판단해 보충 조회한다(스크립트 실패 시 블록 전체 수동 조회).
+  참조 축소가 불가능하면 감정·리듬 참조도 주 세션 담당이다. 보고서 끝에는 실제 미입력 칸 수 9–11을 표시한다.
+  자료 칸은 기존 3단계 집필 전 준비의 속기·목표 감정·관련 인물·장 기법에 작가 요구·장르 카드·설정 보충·선호를 더한 것으로 모두 판단이 필요하다.
+- 이어쓰기 상태 카드는 검증 후 주 세션이 선택해 속기 칸에 이번 장에 필요한 상태를 쓴다.
+- 선택 블록이 없으면 제목과 사유를 남겨 원래 없음과 누락을 구분한다. 필수 블록 누락은 exit 2로, 자료 수정 후 재실행해야 하며 수동 조립으로 돌아갈 이유가 아니다.
+종료: 0=골격 출력, 2=입력 누락·무효.
 """
 
 import argparse
@@ -42,17 +28,17 @@ import sys
 from pathlib import Path
 from outline_view import parse as parse_volume
 
-TAIL_CHARS = 400          # 上一章结尾注入的目标字符数（按整行回退，不切半句）
+TAIL_CHARS = 400          # 앞 장 결말 주입 목표 글자 수. 문장을 자르지 않고 전체 행 단위로 거슬러 올라간다.
 STATE_SECTIONS = ("当前位置", "长期约束", "核心角色状态", "活跃伏笔", "近三章速记", "下一章承诺", "连贯性风险")
-SLOT_MARK = "［主会话填］"
-AUTHOR_DECIDED_CHARS = 600  # 「作者已定」注入上限（去空白字数）；超了截断，写手按提示回原文看
+SLOT_MARK = "［주 세션 작성］"
+AUTHOR_DECIDED_CHARS = 600  # ‘作者已定’ 주입 상한(공백 제외). 초과하면 자르고 집필자가 원문을 읽도록 안내한다.
 WORK_ROOT = (".story", "work")
 
 
 def chapter_work_dir(project: Path, chapter: int) -> Path:
-    """本章临时文件的唯一落点；与 storyctl.py 提交后清理的目录同一口径。"""
+    """이번 장 임시 파일의 유일한 위치. storyctl.py 제출 후 정리 디렉터리와 동일하다."""
     width = max(3, len(str(chapter)))
-    return project.joinpath(*WORK_ROOT, f"第{chapter:0{width}d}章")
+    return project.joinpath(*WORK_ROOT, f"제{chapter:0{width}d}장")
 
 
 def read_text(path: Path):
@@ -71,16 +57,16 @@ def substantive(text):
 
 
 def has_custom_style(text):
-    # A single substantive sentence can express the author's choice.
+    # 실질적인 문장 하나로도 작가 선택을 표현할 수 있다.
     return substantive(re.sub(r"<!--[\s\S]*?-->", "", text or ""))
 
 
 def find_chapter_file(directory: Path, chapter: int, prefix: str):
     if not directory.is_dir():
         return None
-    pattern = re.compile(rf"^{prefix}第0*{chapter}章.*\.md$")
+    pattern = re.compile(rf"^{prefix}제0*{chapter}장.*\.md$")
     for entry in sorted(directory.iterdir()):
-        if entry.is_file() and pattern.match(entry.name) and "_原稿_" not in entry.name:
+        if entry.is_file() and pattern.match(entry.name) and "_원본_" not in entry.name:
             return entry
     return None
 
@@ -103,7 +89,7 @@ def extract_field(outline_text: str, field: str):
 
 
 def extract_title(outline_text: str, chapter: int):
-    match = re.search(rf"^#{{1,4}}\s*第\s*0*{chapter}\s*章\s*[：:]\s*(.+?)\s*$",
+    match = re.search(rf"^#{{1,4}}\s*(?:第|제)\s*0*{chapter}\s*(?:章|장)\s*[：:]\s*(.+?)\s*$",
                       outline_text, re.M)
     return match.group(1).strip() if match else None
 
@@ -130,8 +116,8 @@ def extract_state_sections(state_text: str):
 
 
 def previous_chapter_tail(project: Path, chapter: int):
-    """按整行从尾部回退，凑够 TAIL_CHARS 即停 —— 不切半句。"""
-    prev = find_chapter_file(project / "正文", chapter - 1, "")
+    """끝에서 전체 행 단위로 올라가 TAIL_CHARS가 되면 멈추며 문장 중간을 자르지 않는다."""
+    prev = find_chapter_file(project / "본문", chapter - 1, "")
     if prev is None:
         return None, None
     text = read_text(prev)
@@ -149,15 +135,15 @@ def previous_chapter_tail(project: Path, chapter: int):
 
 MEMORY_KINDS = ("prose_style", "story_design")
 IMPORTANCE_RANK = {"low": 1, "medium": 2, "high": 3}
-MISSED_SHOWN = 8  # 给作者的那句话最多点名几条，其余用「等」带过；完整清单走「整理作者记忆」
-# 限定「流程」的作者记忆里，这些取值指的就是长篇写正文。
-LONG_WRITE_WORKFLOWS = {"长篇", "长篇写作", "写长篇", "长篇连载", "长篇网文", "长篇正文", "story-long-write"}
+MISSED_SHOWN = 8  # 작가에게 전할 문장에 명시할 최대 항목 수. 나머지는 ‘等’으로 줄이고 전체는 작가 기억 정리로 보낸다.
+# 절차 한정 작가 기억에서 이 값들은 장편 본문 집필을 뜻한다.
+LONG_WRITE_WORKFLOWS = {"장편", "长篇写作", "写长篇", "长篇连载", "长篇网文", "长篇正文", "story-long-write"}
 
 
 def scoped_memory_values(workspace: Path):
-    """项目级 store 里限定题材／流程的 active 条目取值：{"genre": {...}, "workflow": {...}}。"""
+    """프로젝트 store의 장르·절차 한정 active 값: {"genre": {...}, "workflow": {...}}."""
     values = {"genre": set(), "workflow": set()}
-    state = read_text(workspace / ".story" / "作者记忆" / "_author-memory-state.json")
+    state = read_text(workspace / ".story" / "작가기억" / "_author-memory-state.json")
     try:
         items = (json.loads(state) if state else {}).get("items") or {}
         items = list(items.values())
@@ -173,13 +159,13 @@ def scoped_memory_values(workspace: Path):
     return values
 
 
-WORKSPACE_MARKERS = (".active-book", "长篇", "短篇", "拆文库")
+WORKSPACE_MARKERS = (".active-book", "장편", "단편", "작품분석실")
 
 
 def memory_state_kind(directory: Path):
-    """目录下 `.story/作者记忆/` 那份 state 是哪一级：不带 book 字段为 "project"，带书名为 "book"，
-    没有或读不出为 None（与 author_memory_commit.py 的 peek_book_name 同一判据）。"""
-    text = read_text(directory / ".story" / "作者记忆" / "_author-memory-state.json")
+    """`.story/작가기억/` state에 book 필드가 없으면 project, 작품명이 있으면 book, 없거나 읽지 못하면 None이다.
+    author_memory_commit.py의 peek_book_name과 같은 기준이다."""
+    text = read_text(directory / ".story" / "작가기억" / "_author-memory-state.json")
     try:
         document = json.loads(text) if text else None
     except ValueError:
@@ -191,24 +177,22 @@ def memory_state_kind(directory: Path):
 
 
 def find_workspace(project: Path):
-    """写章代查作者记忆用的创作工作区，按 author-memory.md「存放与路由」认，返回 (目录, 是否认出)。
-
-    依次认：书目录或祖先里的 `.story-deployed`（已部署的宿主）；书目录上一层叫 长篇／短篇 时取再上一层；
-    书目录自己就有项目级作者记忆或 `书级/`（单书布局）；最近一个带 `.active-book`、`长篇/`、`短篇/`、`拆文库/`
-    或项目级作者记忆的祖先（到用户主目录为止，主目录本身不算）。都没有时把书目录当工作区，但这是猜的：
-    DSH 等宿主不写 `.story-deployed`，多书工作区里的书若被当成工作区，查询会报错或把书级记忆挪位。
+    """작가 기억 조회용 작업 공간을 author-memory.md의 저장·라우팅 규칙으로 찾아 (디렉터리, 식별 성공 여부)를 반환한다.
+    순서: 작품·상위의 `.story-deployed`; 부모가 장편/短篇이면 그 위; 작품 자체의 프로젝트 기억 또는 `书级/`;
+    `.active-book`, `장편/`, `단편/`, `작품분석실/`, 프로젝트 기억이 있는 가장 가까운 상위(홈 전까지, 홈 제외).
+    모두 없으면 작품 디렉터리를 추정 작업 공간으로 쓴다. DSH 등은 배포 표식을 쓰지 않아 다중 작품의 작품을 공간으로 오인하면 조회 오류나 기억 이동이 생긴다.
     """
     project = project.resolve()
     deployed = next((d for d in (project, *project.parents) if (d / ".story-deployed").is_file()), None)
     if deployed is not None:
         return deployed, True
-    if project.parent.name in {"长篇", "短篇"}:
+    if project.parent.name in {"장편", "단편"}:
         return project.parent.parent, True
-    if memory_state_kind(project) == "project" or (project / ".story" / "作者记忆" / "书级").is_dir():
+    if memory_state_kind(project) == "project" or (project / ".story" / "작가기억" / "书级").is_dir():
         return project, True
     try:
         home = Path.home().resolve()
-    except (RuntimeError, KeyError):  # 拿不到主目录时一路找到根
+    except (RuntimeError, KeyError):  # 홈 디렉터리를 얻지 못하면 루트까지 탐색한다.
         home = None
     for ancestor in project.parents:
         if ancestor == home:
@@ -219,8 +203,8 @@ def find_workspace(project: Path):
 
 
 def genre_line(project: Path):
-    """「题材类型」行的原文；未填的模板占位（{…}）当没有。"""
-    text = read_text(project / "设定" / "题材定位.md") or ""
+    """‘题材类型’ 행 원문. 미입력 템플릿 {…}는 없음으로 본다."""
+    text = read_text(project / "설정" / "소재방향.md") or ""
     match = re.search(r"^[ \t]*[-*+]?[ \t]*\**题材(?:类型)?\**[ \t]*[：:](.*)$", text, re.M)
     if not match or "{" in match.group(1):
         return ""
@@ -228,7 +212,7 @@ def genre_line(project: Path):
 
 
 def book_genres(project: Path):
-    """「题材类型」行按分隔符切成词。"""
+    """‘题材类型’ 행을 구분자로 나눠 단어를 얻는다."""
     return {word.casefold() for word in re.split(r"[\W_丨×]+", genre_line(project)) if word}
 
 
@@ -236,16 +220,14 @@ GENRE_CARD_DIR = Path(__file__).resolve().parent.parent / "references" / "genre-
 
 
 def match_genre_cards(project: Path):
-    """题材正文提示卡缺失时，按「题材类型」原文匹配题材卡（卡头的 genre 与 aliases），替主会话省掉整读索引。
-
-    最长匹配优先：一张卡命中的词落在另一张卡命中的更长的词里面（「玄幻言情」里的「玄幻」）时不算这张卡命中。
-    按在题材类型里出现得越靠前越优先（主题材在前），同位置按命中词更长、再按置信度高→低；
-    最多返回主、辅两张：[(路径, 置信度)]。"""
+    """장르 본문 안내 카드가 없으면 ‘题材类型’을 카드 머리 genre/aliases와 맞춰 주 세션의 전체 색인 읽기를 줄인다.
+    최장 일치 우선: ‘玄幻言情’ 안의 ‘玄幻’처럼 다른 카드의 더 긴 일치 안에 들어간 단어는 해당 카드 적중으로 세지 않는다.
+    장르 유형에서 먼저 나온 위치(주 장르), 긴 단어, 높은 신뢰도 순으로 선택한다. 최대 주·보조 두 카드의 [(경로, 신뢰도)]를 반환한다."""
     raw = genre_line(project).casefold()
     if not raw or not GENRE_CARD_DIR.is_dir():
         return []
     rank = {"high": 0, "medium": 1, "low": 2}
-    spans = []  # (起点, 终点, 卡, 置信度)：每张卡每个命中词在题材类型里的每处出现
+    spans = []  # (시작, 끝, 카드, 신뢰도): 카드별 일치 단어가 장르 유형에 나타나는 모든 위치.
     for card in sorted(GENRE_CARD_DIR.glob("*.md")):
         head = (read_text(card) or "").split("---")
         meta = head[1] if len(head) > 2 else ""
@@ -269,8 +251,8 @@ def match_genre_cards(project: Path):
 
 
 def author_decided(project: Path):
-    """`设定/题材定位.md`「## 作者已定」一节：去掉模板占位行；返回 (正文, 是否截断)。没有这一节返回 (None, False)。"""
-    text = read_text(project / "设定" / "题材定位.md") or ""
+    """`설정/소재방향.md`의 ‘## 作者已定’에서 템플릿 자리표시 행을 빼고 (본문, 절단 여부)를 반환한다. 절이 없으면 (None, False)."""
+    text = read_text(project / "설정" / "소재방향.md") or ""
     match = re.search(r"^##[ \t]*作者已定[^\n]*\n(.*?)(?=^#{1,2}[ \t]|\Z)", text, re.M | re.S)
     if not match:
         return None, False
@@ -288,23 +270,20 @@ def author_decided(project: Path):
 
 
 def query_author_memory(project: Path):
-    """代主会话做写正文那一次作者记忆查询（prose_style + story_design）。
-
-    注入块原样用 query 给的 lines 拼——每次查询的 lines ≤2KB，预算量的就是写手读到的这几行，
-    这里不另行排版。工作区按 find_workspace 认；认不出、而书目录里又是一份带书名的记忆时不代查——
-    那既可能是单书布局的旧版记忆，也可能是没有任何迹象的多书工作区里的一本书，拿书目录当工作区去查，
-    后一种会被当成前一种「归位」，此后正确的查询全部报错。
-    限定题材的条目只在取值出现在本书「题材类型」里时代查，限定流程的只认长篇写作的取值；
-    其余限定条目不猜，报给主会话自己判断。
-    返回 (注入行, 没带上的 [(ID, 断言首句)], 未代查的限定取值, 错误)；错误时由主会话按 author-memory.md 手动查询。
+    """주 세션 대신 본문 집필의 작가 기억(prose_style + story_design)을 조회한다.
+    주입은 query lines 그대로 구성한다. 각 조회 ≤2KB이며 집필자가 읽는 행을 재는 것이므로 다시 꾸미지 않는다.
+    find_workspace가 공간을 식별하지 못하고 작품 디렉터리에 작품명 있는 기억이 있으면 조회하지 않는다. 단일 작품의 구형 기억인지
+    단서 없는 다중 작품인지 구별할 수 없고 후자를 전자로 오인해 이동시키면 이후 정상 조회가 모두 실패하기 때문이다.
+    장르 한정은 값이 작품 ‘题材类型’에 있을 때, 절차 한정은 장편 집필 값일 때만 대신 조회한다. 나머지는 추측하지 않고 주 세션에 보고한다.
+    (주입 행, 누락 [(ID, 단정 첫 문장)], 미조회 한정 값, 오류)를 반환하며 오류 시 주 세션이 author-memory.md에 따라 수동 조회한다.
     """
     workspace, recognised = find_workspace(project)
     script = Path(__file__).with_name("author_memory_commit.py")
     if not script.is_file():
-        return None, [], {}, "author_memory_commit.py 缺失"
+        return None, [], {}, "author_memory_commit.py가 없습니다"
     if not recognised and memory_state_kind(project) == "book":
-        return None, [], {}, ("认不出创作工作区（书目录及祖先都没有 .active-book、长篇/、短篇/、拆文库/ 或项目级作者记忆），"
-                              "书目录里却是本书的记忆；先按 author-memory.md「存放与路由」定好 --workspace")
+        return None, [], {}, ("집필 작업 공간을 찾지 못했습니다(작품 폴더와 상위 폴더에 .active-book, 장편/, 단편/, 작품분석실/ 또는 프로젝트 작가 기억이 없음). "
+                              "작품 폴더에는 작품별 기억만 있습니다. 먼저 author-memory.md에 따라 저장 위치와 라우팅 절을 확인해 --workspace를 지정하세요")
     scoped = scoped_memory_values(workspace)
     book = book_genres(project)
     genres = sorted(v for v in scoped["genre"] if v.casefold() in book) or [None]
@@ -327,10 +306,10 @@ def query_author_memory(project: Path):
             except ValueError:
                 result = {}
             if not result.get("ok"):
-                return None, [], {}, result.get("error") or completed.stderr.strip() or "query 失败"
+                return None, [], {}, result.get("error") or completed.stderr.strip() or "query 실패"
             items, rendered = result.get("items") or [], result.get("lines") or []
             if len(items) != len(rendered):
-                return None, [], {}, "query 输出缺 lines（作者记忆脚本与组装脚本版本不一致）"
+                return None, [], {}, "query 출력에 lines가 없습니다(작가 기억 스크립트와 구성 스크립트의 버전 불일치)"
             for item, line in zip(items, rendered):
                 if item.get("id") not in seen:
                     seen.add(item.get("id"))
@@ -338,8 +317,8 @@ def query_author_memory(project: Path):
             omitted += [i for i in result.get("omitted_ids") or [] if i not in omitted]
             summaries.update(result.get("omitted_summaries") or {})
             importance.update(result.get("omitted_importance") or {})
-    # 每次查询的漏项各自按优先级排好，合并后按重要度重排（同重要度保持先后），
-    # 给作者点名的前几条才是最该知道的；某次漏、另一次带上了的不算没带上。
+    # 각 조회의 누락은 우선순위로 정렬되어 있다. 병합 후 중요도로 재정렬하고 같은 중요도는 순서를 유지한다.
+    # 작가에게 먼저 명시할 항목이 가장 중요해야 한다. 한 조회에서 빠져도 다른 조회에 포함되면 누락이 아니다.
     ranked = sorted((i for i in omitted if i not in seen),
                     key=lambda i: (-IMPORTANCE_RANK.get(importance.get(i), 0), omitted.index(i)))
     missed = [(i, summaries.get(i, "")) for i in ranked]
@@ -347,18 +326,16 @@ def query_author_memory(project: Path):
 
 
 def learn_heading_form(project: Path, chapter: int, title: str):
-    """从已有正文学标题行形态（层级／章号填充位数／分隔符），不按通用规则推导。
-
-    通用规则写的是 `## 第N章 章名`，而各书实际形态不一（本仓库某书用 `# 第015章 …`），
-    两处都对不上时写手只能自己去翻既有章——每章翻一次。这里替它翻。
+    """일반 규칙으로 추론하지 않고 기존 본문에서 제목의 단계·장 번호 채움·구분자를 배운다.
+    일반 `## 第N章 章名`과 달리 작품은 `# 第015章 …` 등을 쓴다. 어느 쪽에도 맞지 않아 집필자가 매 장 기존 장을 다시 찾는 일을 대신한다.
     """
-    body = project / "正文"
+    body = project / "본문"
     if not body.is_dir():
-        return None, "正文/ 目录不存在"
-    pattern = re.compile(r"^(#+)([ \t　]*)第(0*\d+)章([ \t　]*)(.*)$")
+        return None, "본문/ 폴더가 없습니다"
+    pattern = re.compile(r"^(#+)([ \t　]*)(?:第|제)(0*\d+)(?:章|장)([ \t　]*)(.*)$")
     best = None
     for entry in sorted(body.glob("*.md")):
-        num = re.match(r"^第(\d+)章", entry.name)
+        num = re.match(r"^제(\d+)장", entry.name)
         if not num or int(num.group(1)) == chapter:
             continue
         head = (read_text(entry) or "").lstrip().splitlines()
@@ -370,112 +347,113 @@ def learn_heading_form(project: Path, chapter: int, title: str):
             if number < chapter and (best is None or number > best[0]):
                 best = (number, hit)
     if best is None:
-        return None, "正文/ 下没有可解析标题行的既有章，写手按自身规则处理"
+        return None, "본문/에 제목 형식을 읽을 수 있는 기존 장이 없습니다. 집필자는 자신의 제목 규칙을 따르세요"
     _, hit = best
     level, gap1, digits, gap2 = hit.group(1), hit.group(2), hit.group(3), hit.group(4)
-    # 有前导零才算补零形态，且按它的位数补；`第15章` 这种不补——
-    # 否则会从两位数章学出「补到 2 位」，把第 9 章写成 `第09章`。
+    # 선행 0이 있어야 0 채움 형식으로 보고 해당 자리 수만큼 채운다. `第15章`처럼 0이 없는 형식에서
+    # 2자리 채움 규칙을 배워 9장을 `第09章`으로 쓰면 안 된다.
     if digits.startswith("0"):
-        number, how = f"{chapter:0{len(digits)}d}", f"{len(digits)} 位补零"
+        number, how = f"{chapter:0{len(digits)}d}", f"{len(digits)}자리로 앞에 0을 채움"
     else:
-        number, how = str(chapter), "不补零"
-    return (f"{level}{gap1}第{number}章{gap2 or ' '}{title}",
-            f"照既有章形态（{level} ＋ 章号{how}）")
+        number, how = str(chapter), "앞에 0을 채우지 않음"
+    start, end = ("제", "장") if hit[0].lstrip("# \t　").startswith("제") else ("第", "章")
+    return (f"{level}{gap1}{start}{number}{end}{gap2 or ' '}{title}",
+            f"기존 장 형식 적용({level} + 장 번호 {how})")
 
 
 def build(project: Path, chapter: int, report: list):
     errors = []
 
-    outline_file = find_chapter_file(project / "大纲", chapter, "细纲_")
+    outline_file = find_chapter_file(project / "개요", chapter, "상세개요_")
     if outline_file is None:
-        errors.append(f"必在块缺失：{project / '大纲'} 下没有第 {chapter} 章细纲")
+        errors.append(f"필수 자료 누락: {project / '개요'}에 제{chapter}장 상세 개요가 없습니다")
         return None, errors
     outline_text = read_text(outline_file)
     if not outline_text or not outline_text.strip():
-        errors.append(f"必在块缺失：{outline_file} 为空")
+        errors.append(f"필수 자료 누락: {outline_file}이(가) 비어 있습니다")
         return None, errors
 
     parts = []
     title = extract_title(outline_text, chapter)
 
-    # ---- 固定首行（指令，不是栏目；漏传即写手不读参考直接开写）----
+    # ---- 고정 첫 행(열 이름이 아닌 지시; 빠지면 집필자가 참조를 읽지 않고 시작함) ----
     parts.append(
-        f"本次任务：写第 {chapter} 章，执行范围见「执行安排」。开始前先按「参考文件体系」逐行独立判定命中并读取，"
-        "命中即必读，未命中不预加载；交付摘要里报出读了哪几个。")
+        f"이번 작업: 제{chapter}장 집필. 작업 범위는 ‘집필 순서’를 따르세요. 시작 전에 ‘참조 파일 체계’의 각 행을 독립적으로 판단해 해당하는 자료를 읽으세요. "
+        "해당하면 반드시 읽고, 해당하지 않으면 미리 읽지 않습니다. 전달 요약에 읽은 자료를 밝히세요.")
 
-    parts.append(f"项目目录：{project}")
-    parts.append(f"章节：第 {chapter} 章")
+    parts.append(f"프로젝트 폴더: {project}")
+    parts.append(f"대상: 제{chapter}장")
     if title:
-        out_path = project / "正文" / f"第{chapter:03d}章_{title}.md"
+        out_path = project / "본문" / f"제{chapter:03d}장_{title}.md"
     else:
-        return None, [f"细纲缺章名：{outline_file}，需要 ### 第 N 章：章名"]
+        return None, [f"상세 개요에 장 제목이 없습니다: {outline_file}. ‘### 제N장: 장 제목’ 형식이 필요합니다"]
     if any(char in title for char in '/\\'):
-        return None, ["章名不能包含路径分隔符"]
-    parts.append(f"最终输出路径：{out_path}")
+        return None, ["장 제목에 경로 구분자를 넣을 수 없습니다"]
+    parts.append(f"최종 저장 경로: {out_path}")
     if title:
         heading_line, how = learn_heading_form(project, chapter, title)
         if heading_line:
             parts.append(
-                f"标题行（逐字照抄，勿按通用规则推导）：{heading_line}")
-            report.append(f"标题行：{heading_line}　{how}")
+                f"제목 행(그대로 복사하고 일반 규칙으로 다시 만들지 않음): {heading_line}")
+            report.append(f"제목 행: {heading_line}　{how}")
         else:
-            report.append(f"标题行：未注入——{how}")
+            report.append(f"제목 행: 넣지 않음 — {how}")
 
-    # ---- 细纲：只给路径，不注入全文 ----
-    parts.append(f"细纲文件（动笔前完整读到 EOF）：{outline_file}")
+    # ---- 상세 개요: 경로만 제공하고 전문을 주입하지 않음 ----
+    parts.append(f"상세 개요 파일(집필 전에 끝까지 읽기): {outline_file}")
 
-    # ---- 续写状态卡：校验结构；主会话筛选相关状态 ----
-    state_file = project / "追踪" / "上下文.md"
+    # ---- 이어쓰기 상태 카드: 구조 검증 후 주 세션이 관련 상태 선택 ----
+    state_file = project / "추적" / "문맥.md"
     state_text = read_text(state_file)
     if not state_text:
-        errors.append(f"必在块缺失：读不到 {state_file}")
+        errors.append(f"필수 자료 누락: {state_file}을(를) 읽을 수 없습니다")
     else:
         found = extract_state_sections(state_text)
         missing = [s for s in STATE_SECTIONS if s not in found]
         if missing:
             errors.append(
-                f"必在块缺失：{state_file} 缺栏目 " + "、".join(missing) +
-                "（续写状态卡应为固定 7 栏，先用 tracking_commit.py 修派生视图）")
+                f"필수 자료 누락: {state_file}에 다음 항목이 없습니다: " + "、".join(missing) +
+                "(이어 쓰기 상태 카드는 고정된 7개 항목이어야 합니다. 먼저 tracking_commit.py로 파생 문서를 복구하세요)")
         else:
-            report.append("续写状态：七栏已校验，主会话按本章需要筛选到「本节速记」")
+            report.append("이어 쓰기 상태: 7개 항목 검증 완료. 주 세션은 이번 장에 필요한 내용만 ‘이번 장 속기’에 정리하세요")
 
-    # ---- 文风（本书自定义文风时由脚本全包）----
-    style_file = project / "设定" / "文风.md"
+    # ---- 문체: 작품 맞춤 문체는 스크립트가 전체 처리 ----
+    style_file = project / "설정" / "문체.md"
     style_text = read_text(style_file)
     custom_style = has_custom_style(style_text)
     if custom_style:
-        parts.append(f"文风路径：{style_file}（书级权威文风，写作与去味均读全文；摘要只作索引）")
+        parts.append(f"문체 파일: {style_file}(작품 문체의 기준. 집필과 AI 문체 제거 모두 전문을 읽고 요약은 색인으로만 사용)")
         parts.append(
-            "文风优先裁决：`设定/文风.md` 对句段／句法／对话落法／标点形态与删改取向的规定"
-            "按 style-resolution.md 裁决：当前请求 > 本书文风 > active 作者记忆 > 对标 > 通用参考；不覆盖细纲事实、信息边界、调用方限定的检查范围及文件结构。"
-            "风格冲突按文风写，交付摘要列出「因文风优先而未执行的通用条款」。")
-        report.append("文风：custom_style=true，表达冲突按维度裁决；reference 读取仍按任务条件")
+            "문체 우선순위: `설정/문체.md`의 문장·문단, 문법, 대화 처리, 문장 부호, 삭제·수정 방향에 관한 규정은 "
+            "style-resolution.md에 따라 현재 요청 > 작품 문체 > active 작가 기억 > 비교 작품 > 공통 참조 순으로 적용합니다. 상세 개요의 사실, 정보 경계, 호출자가 정한 검사 범위와 파일 구조는 바꾸지 않습니다. "
+            "표현 규칙이 충돌하면 작품 문체를 따르고, 전달 요약에 ‘문체 우선으로 적용하지 않은 공통 조항’을 기록하세요.")
+        report.append("문체: custom_style=true. 표현 충돌은 항목별로 판단하며 참조 읽기는 작업 조건을 따릅니다")
     else:
         parts.append(
-            "——— 文风 ———\n"
-            "（本书无可用的 设定/文风.md，未进入自定义文风模式；"
-            "按 benchmark-recall.md 走对标文风召回，由主会话补路径与召回指令）")
-        report.append("文风：custom_style=false，文风召回归主会话（未跳过，留标题）")
+            "——— 문체 ———\n"
+            "(사용할 수 있는 설정/문체.md가 없어 사용자 문체 모드를 적용하지 않습니다. "
+            "benchmark-recall.md에 따라 비교 작품 문체를 불러오고, 주 세션이 경로와 참조 지시를 채우세요)")
+        report.append("문체: custom_style=false. 문체 참조는 주 세션 담당(생략하지 않고 제목을 유지)")
 
-    # ---- 上一章结尾（不给路径，避免写手回头读整章）----
+    # ---- 앞 장 결말: 전체 장을 다시 읽지 않도록 경로는 주지 않음 ----
     if chapter > 1:
         prev_file, tail = previous_chapter_tail(project, chapter)
         if prev_file is None or not tail:
-            errors.append(f"必在块缺失：找不到或读不到第 {chapter - 1} 章正文")
+            errors.append(f"필수 자료 누락: 제{chapter - 1}장 본문을 찾거나 읽을 수 없습니다")
         else:
             parts.append(
-                "——— 上一章结尾（承接用，不重写；全章不需要，故不给路径）———\n" + tail)
-            report.append(f"上一章结尾：{prev_file.name} 末 {len(tail)} 字（按整行回退）")
+                "——— 앞 장의 끝부분(연결용이며 재작성하지 않음. 장 전체가 필요하지 않아 경로는 제공하지 않음) ———\n" + tail)
+            report.append(f"앞 장 끝부분: {prev_file.name}의 마지막 {len(tail)}자(행 전체가 포함되도록 범위를 조정)")
 
-    # ---- 必读设定：整槽归主会话 ----
+    # ---- 필수 설정: 전체 칸을 주 세션이 담당 ----
     slot_setting = (
-        "——— 必读设定 ———\n"
-        f"{SLOT_MARK} 本章要用到的设定，**直接写出那几句**，不要只给路径让写手去查"
-        "（Grep 遇超长行会被截断，最关键那句往往正好被吞）。两处来源都要过："
-        "① 细纲里显式引用的 `xxx.md`（连小节一起给）；② 细纲没点名、但本章会碰到的"
-        "（术语口径、程序、数字锚）。无则写「无」。")
+        "——— 필수 설정 ———\n"
+        f"{SLOT_MARK} 이번 장에 필요한 설정은 **해당 문장을 직접 적으세요**. 경로만 주고 집필자가 찾아보게 하지 마세요"
+        "(Grep은 긴 행을 잘라 핵심 문장이 빠질 수 있습니다). 다음 두 출처를 모두 확인하세요: "
+        "① 상세 개요가 명시한 `xxx.md`(해당 절 포함), ② 상세 개요에 이름이 없지만 이번 장에서 다루는 설정"
+        "(용어의 의미, 절차, 기준 수치). 없으면 ‘없음’으로 적으세요.")
 
-    # ---- 降档判定与情绪/节奏槽 ----
+    # ---- 참조 축소 판정과 감정·리듬 칸 ----
     unit_field = extract_field(outline_text, "单元ID/位置")
     unit_id = None
     if unit_field:
@@ -484,26 +462,26 @@ def build(project: Path, chapter: int, report: list):
             unit_id = match.group(1)
     unit_block = None
     if unit_id:
-        for volume in sorted((project / "大纲").glob("卷纲_*.md")):
+        for volume in sorted((project / "개요").glob("권개요_*.md")):
             block = extract_unit_block(read_text(volume) or "", unit_id)
             if block:
                 unit_block = block
                 break
 
     target_emotion = extract_field(outline_text, "目标情绪")
-    card_text = read_text(project / "设定" / "题材正文提示卡.md")
+    card_text = read_text(project / "설정" / "소재본문안내.md")
     engine = extract_field(unit_block or "", "单元情绪引擎")
     tempo = (extract_field(unit_block or "", "单元节拍/章功能分配")
              or extract_field(unit_block or "", "单元节拍／章功能分配"))
-    needs = {"题材正文提示卡": card_text, "目标情绪": target_emotion,
-             "单元情绪引擎": engine, "单元节拍/章功能分配": tempo}
-    why = [name + "缺有效内容" for name, value in needs.items() if not substantive(value)]
-    # 无对标（项目与工作区都没有对标书）时文风本就没有对标可召回：不因 custom_style 缺失拒绝降档。
-    # 导入的书在拆文库里留有与书目录同名的拆文目录，那是本书自己，不算对标。
+    needs = {"장르 본문 안내 카드": card_text, "목표 감정": target_emotion,
+             "단위 감정 동력": engine, "단위 박자·장 기능 배분": tempo}
+    why = [name + "에 유효한 내용이 없음" for name, value in needs.items() if not substantive(value)]
+    # 프로젝트·작업 공간에 비교 작품이 없으면 불러올 비교 문체도 없다. custom_style 누락만으로 참조 축소를 거부하지 않는다.
+    # 가져온 작품의 분석 디렉터리가 작품 디렉터리와 같은 이름이면 자기 작품이므로 비교 대상으로 세지 않는다.
     def is_benchmark(base: Path, d: Path) -> bool:
-        return d.is_dir() and not (base.name == "拆文库" and d.name == project.name)
+        return d.is_dir() and not (base.name == "작품분석실" and d.name == project.name)
     no_benchmark = not any(is_benchmark(base, d)
-                           for base in (project / "对标", project / "拆文库", project.parent / "拆文库")
+                           for base in (project / "비교작품", project / "작품분석실", project.parent / "작품분석실")
                            if base.is_dir() for d in base.iterdir())
     if not custom_style and not no_benchmark:
         why.append("custom_style=false")
@@ -511,108 +489,108 @@ def build(project: Path, chapter: int, report: list):
 
     if downgrade:
         lines = [
-            "selected_emotion_module：降档（来源：细纲「目标情绪」＋单元卡「单元情绪引擎」）",
-            f"  细纲目标情绪：{target_emotion}",
+            "selected_emotion_module: 참조 축소(출처: 상세 개요의 목표 감정「目标情绪」 + 단위 카드의 감정 동력「单元情绪引擎」)",
+            f"  상세 개요 목표 감정: {target_emotion}",
         ]
         if engine:
-            lines.append(f"  单元情绪引擎：{engine}")
-        lines.append("rhythm_reference：降档（来源：单元卡「单元节拍/章功能分配」）")
+            lines.append(f"  단위 감정 동력: {engine}")
+        lines.append("rhythm_reference: 참조 축소(출처: 단위 카드의 박자·장 기능 배분「单元节拍/章功能分配」)")
         if tempo:
             lines.append(f"  {tempo}")
-        slot_recall = "——— 情绪与节奏召回 ———\n" + "\n".join(lines)
-        report.append(f"召回降档：成立，{'无对标，' if no_benchmark and not custom_style else '文风、'}题材卡、目标情绪和单元 {unit_id} 情绪/节拍均可用")
+        slot_recall = "——— 감정·리듬 참조 ———\n" + "\n".join(lines)
+        report.append(f"참조 축소: 가능. {'비교 작품 없음. ' if no_benchmark and not custom_style else '문체, '}장르 카드, 목표 감정, 단위 {unit_id}의 감정·박자 자료를 사용할 수 있습니다")
     else:
-        slot_recall = ("——— 情绪与节奏召回 ———\n"
-                       f"{SLOT_MARK} 降档不成立（" + "、".join(why) +
-                       "），按 benchmark-recall.md 走全量召回后填此槽")
-        report.append("召回降档：不成立（" + "、".join(why) + "）—— 全量召回归主会话")
+        slot_recall = ("——— 감정·리듬 참조 ———\n"
+                       f"{SLOT_MARK} 참조를 축소할 수 없습니다(" + "、".join(why) +
+                       "). benchmark-recall.md에 따라 전체 참조를 읽은 뒤 이 칸을 채우세요")
+        report.append("참조 축소: 불가(" + "、".join(why) + ") — 전체 참조는 주 세션 담당")
 
-    # ---- 需要主会话判断的槽位 ----
+    # ---- 주 세션 판단이 필요한 칸 ----
     work_dir = chapter_work_dir(project, chapter)
     parts.append(
-        "——— 执行安排 ———\n"
-        f"{SLOT_MARK} 全章细纲用于整体编排。默认按自然转场或因果停顿分前后两组，"
-        "填写当前组的情节点/片段；先只写前组，主会话测一次 checkpoint 后"
-        "再给后组和机器剩余区间。只有用户明确要求一次成文时才填「全章，直接写最终路径」。\n"
-        f"分组临时文件：前组 {work_dir / '前组.md'}，后组 {work_dir / '后组.md'}"
-        "（只写这里，不写 /tmp 或 正文/）。")
-    parts.append(f"——— 本章意图（一句话）———\n{SLOT_MARK}")
-    parts.append("——— 作者本轮要求 ———\n"
-                 f"{SLOT_MARK} 作者这次明确说的：字数范围、必须发生、不许发生、写到哪里停、章尾要留什么；没有写「无」。")
+        "——— 집필 순서 ———\n"
+        f"{SLOT_MARK} 장 전체의 상세 개요로 구성을 잡으세요. 기본적으로 자연스러운 장면 전환이나 인과 흐름이 멈추는 지점에서 전반·후반으로 나눕니다. "
+        "현재 집필할 부분의 사건 지점·구간을 적으세요. 먼저 전반만 작성하고 주 세션이 checkpoint를 한 번 측정한 뒤 "
+        "후반 작업과 측정된 잔여 분량 범위를 전달합니다. 사용자가 한 번에 완성을 명시한 경우에만 ‘장 전체를 최종 경로에 바로 작성’으로 적으세요.\n"
+        f"구간별 임시 파일: 전반 {work_dir / '전반.md'}, 후반 {work_dir / '후반.md'}"
+        "(이곳에만 작성하고 /tmp나 본문/에는 쓰지 않음).")
+    parts.append(f"——— 이번 장의 의도(한 문장) ———\n{SLOT_MARK}")
+    parts.append("——— 작가의 이번 요청 ———\n"
+                 f"{SLOT_MARK} 작가가 이번에 명시한 분량 범위, 반드시 일어날 일, 금지한 일, 멈출 지점, 장 끝에 남길 내용을 적으세요. 없으면 ‘없음’으로 적으세요.")
     parts.append(slot_recall)
-    # 伏笔与卷级禁忌走「主会话筛选后写进速记」这条原设计路线（步骤 3 状态筛选），
-    # 不由脚本整栏注入——筛选是判断，而整栏注入还会把伏笔栏里的作者侧真相一并下放。
-    # 代价是它依赖主会话逐章想起来，所以这里把提示语写成写死的三问清单。
+    # 복선·권 단위 금기는 기존 설계대로 주 세션이 선택해 속기에 기록한다(3단계 상태 선택).
+    # 선택은 판단이며 열 전체를 주입하면 작가만 아는 진실까지 넘기므로 스크립트가 통째로 주입하지 않는다.
+    # 주 세션이 매 장 기억해야 하는 부담이 있어 고정된 세 질문 체크리스트를 안내문에 쓴다.
     parts.append(
-        "——— 本章技法 ———\n"
-        f"{SLOT_MARK} 按细纲主功能填 打脸／反转／感情／悬疑／日常／无 之一（对照 SKILL.md「本章技法」），"
-        "再写一句用在哪几段；写手按自己的读取表读对应文件，这里不摘技法。本书文风只覆盖冲突表达条款，不停读整份文件。")
+        "——— 이번 장의 기법 ———\n"
+        f"{SLOT_MARK} 상세 개요의 주된 기능에 따라 통쾌한 반격／반전／감정／미스터리／일상／없음 중 하나를 적으세요(SKILL.md의 이번 장 기법 참조). "
+        "어느 문단에 사용할지 한 문장으로 덧붙이세요. 집필자는 자신의 읽기 표에 따라 해당 파일을 읽으며 여기에는 기법을 발췌하지 않습니다. 작품 문체는 충돌하는 표현 조항만 대체하며 파일 전체의 읽기를 생략하지 않습니다.")
     parts.append(
-        "——— 本节速记 ———\n"
-        f"{SLOT_MARK} 按 workflow-chapter 步骤 3「状态筛选」产出（`追踪/上下文.md` 不注入"
-        "本 prompt，这一槽是写手唯一的状态来源）：核心角色状态里本章在场的／下一章承诺里本章"
-        "必须履行的／连贯性风险里本章相关的／活跃伏笔里**要碰**与**要避**的（只下放禁令，"
-        "「作者侧：」之后的真相留在主会话）／长期约束里本章相关的卷级常任禁忌（细纲多半只写"
-        "「见卷纲，不复读」，而卷纲不进本 prompt）／久别角色是否补读 `追踪/角色状态/{名}.md`。")
+        "——— 이번 장 속기 ———\n"
+        f"{SLOT_MARK} workflow-chapter 3단계의 상태 선택에 따라 작성하세요(`추적/문맥.md`는 "
+        "이 프롬프트에 넣지 않으며 이 칸이 집필자의 유일한 상태 정보입니다). 핵심 인물 상태 중 이번 장에 등장하는 인물／다음 장 약속 중 이번 장에 "
+        "지켜야 할 것／이번 장에 해당하는 연속성 위험／활성 복선 중 **다룰 것**과 **피할 것**(금지 사항만 전달하고 "
+        "「作者侧：」 뒤의 작가만 아는 진실은 주 세션에 남김)／장기 제약 중 이번 장에 해당하는 권 단위 상시 금기(상세 개요에는 보통 "
+        "‘권 개요 참조, 반복하지 않음’이라고만 적히지만 권 개요는 이 프롬프트에 들어가지 않음)／오랜만에 등장하는 인물의 `추적/인물상태/{이름}.md`를 추가로 읽어야 하는지.")
     parts.append(
-        "——— 涉及角色 ———\n"
-        f"{SLOT_MARK} 按细纲「人物出场顺序」与「镜头准入」的台词位／动作位分配，"
-        "列出本章要读的角色卡；本节速记已给全状态的不必再列。")
+        "——— 관련 인물 ———\n"
+        f"{SLOT_MARK} 상세 개요의 등장 순서「人物出场顺序」와 장면 참여 범위「镜头准入」에 따른 대사·행동 배분을 바탕으로 "
+        "이번 장에 읽을 인물 카드를 나열하세요. 이번 장 속기에 전체 상태를 적은 인물은 다시 나열하지 않아도 됩니다.")
     if not substantive(card_text):
         cards = match_genre_cards(project)
         if cards:
-            named = "；".join(f"{'主' if i == 0 else '辅'}题材 {card}（置信度 {level}）" for i, (card, level) in enumerate(cards))
-            report.append(f"题材卡：本书还没有题材正文提示卡，按「题材类型」匹配到 {named}；生成后落盘，后续章直接读")
+            named = "；".join(f"{'주' if i == 0 else '보조'} 장르 {card}(확신도 {level})" for i, (card, level) in enumerate(cards))
+            report.append(f"장르 카드: 작품의 장르 본문 안내 카드가 없습니다. 장르 유형「题材类型」에 따라 {named}을(를) 찾았습니다. 카드를 생성해 저장하고 이후 장에서는 바로 읽으세요")
         else:
-            report.append("题材卡：本书还没有题材正文提示卡，题材卡无匹配——读 style-genre-modules.md"
-                          "「题材正文提示卡」一节与最接近的流派一节生成后落盘")
-    parts.append("——— 题材正文提示卡（genre_prose_card，只含本章相关条目）———\n"
-                 f"{SLOT_MARK} 主题材抽 3-5 条、辅题材 1-2 条；只作内部校准，不进正文")
+            report.append("장르 카드: 작품의 장르 본문 안내 카드가 없고 일치하는 카드도 없습니다. style-genre-modules.md의 "
+                          "장르 본문 안내 카드 절과 가장 가까운 장르 절을 읽어 생성한 뒤 저장하세요")
+    parts.append("——— 장르 본문 안내 카드(genre_prose_card, 이번 장 관련 항목만) ———\n"
+                 f"{SLOT_MARK} 주 장르에서 3~5개, 보조 장르에서 1~2개 항목을 고르세요. 내부 점검에만 사용하고 본문에는 넣지 않습니다")
     parts.append(slot_setting)
     decided, cut = author_decided(project)
     if decided:
-        note = (f"\n（超过 {AUTHOR_DECIDED_CHARS} 字已截断，其余见 {project / '设定' / '题材定位.md'}「作者已定」，动笔前读完）"
+        note = (f"\n({AUTHOR_DECIDED_CHARS}자 초과로 잘랐습니다. 나머지는 {project / '설정' / '소재방향.md'}의 작가 확정 사항「作者已定」을 집필 전에 끝까지 읽으세요)"
                 if cut else "")
-        parts.append("——— 作者已定（本书的决定，高于作者记忆，与细纲冲突以细纲为准并在交付摘要里说明）———\n"
+        parts.append("——— 작가가 확정한 사항(작품의 결정이며 작가 기억보다 우선. 상세 개요와 충돌하면 개요를 따르고 전달 요약에 설명) ———\n"
                      + decided + note)
-        report.append("作者已定：已注入" + ("（超长截断，写手需回原文读完）" if cut else ""))
+        report.append("작가 확정 사항: 반영함" + ("(길이 초과로 잘랐으므로 집필자는 원문을 끝까지 읽어야 함)" if cut else ""))
     else:
-        report.append("作者已定：题材定位里没有或为空，未注入")
+        report.append("작가 확정 사항: 소재 방향 파일에 없거나 비어 있어 넣지 않음")
     lines, missed, skipped, memory_error = query_author_memory(project)
     if memory_error:
-        memory_block = (f"{SLOT_MARK} 组装脚本查询作者记忆失败（{memory_error}），"
-                        "按 author-memory.md 手动 query prose_style + story_design 后填入；无则写「无」")
-        report.append(f"作者记忆：脚本查询失败——{memory_error}，归主会话手动查询；手查有没带上的（任一次查询带上了的不算），章末照模板那一行用原话说")
+        memory_block = (f"{SLOT_MARK} 프롬프트 구성 스크립트가 작가 기억을 조회하지 못했습니다({memory_error}). "
+                        "author-memory.md에 따라 prose_style + story_design을 직접 query한 뒤 채우세요. 없으면 ‘없음’으로 적으세요")
+        report.append(f"작가 기억: 스크립트 조회 실패 — {memory_error}. 주 세션이 직접 조회하세요. 수동 조회 후에도 빠진 항목이 있다면(한 번이라도 포함한 것은 제외) 장말 보고에서 템플릿의 해당 문구로 알리세요")
     else:
-        memory_block = "\n".join(lines) if lines else "无"
-        report.append(f"作者记忆：已注入 {len(lines)} 条" if lines or missed else "作者记忆：无相关 active 条目")
+        memory_block = "\n".join(lines) if lines else "없음"
+        report.append(f"작가 기억: {len(lines)}개 반영" if lines or missed else "작가 기억: 관련 active 항목 없음")
     if missed:
-        # 装不下的不能悄悄略过：拼好给作者的原话，章末汇报照模板那一行原样说。
+        # 넣지 못한 항목은 조용히 생략하지 않는다. 작가에게 전할 원문을 만들어 장말 보고에서 템플릿 행 그대로 전달한다.
         shown = "".join(f"「{summary or item_id}」" for item_id, summary in missed[:MISSED_SHOWN])
-        more = "等" if len(missed) > MISSED_SHOWN else ""
+        more = " 등" if len(missed) > MISSED_SHOWN else ""
         report.append(
-            f"作者记忆：装不下、这章没带上 {len(missed)} 条（{'、'.join(i for i, _ in missed)}），章末汇报原样说这句——"
-            f"你记下的写作习惯这章有 {len(missed)} 条没带上：{shown}{more}；"
-            "说「整理作者记忆」可以合并相近的、调低不常用的。")
+            f"작가 기억: 분량 한도로 이번 장에 {len(missed)}개를 넣지 못함({', '.join(i for i, _ in missed)}). 장말 보고에 다음 문구를 그대로 전달하세요 — "
+            f"기록한 집필 습관 중 이번 장에 포함하지 못한 항목이 {len(missed)}개입니다: {shown}{more}. "
+            "‘작가 기억 정리’를 요청하면 비슷한 항목을 합치거나 잘 쓰지 않는 항목의 우선순위를 낮출 수 있습니다.")
     if skipped and not memory_error:
-        named = "；".join(f"{'题材' if k == 'genre' else '流程'}：{'、'.join(v)}" for k, v in skipped.items())
-        memory_block += (f"\n{SLOT_MARK} 另有限定范围的作者记忆未代查（{named}）：本书适用的，"
-                         "带 --genre／--workflow 跑 SKILL.md「核心方法」的 query 命令（--kind prose_style --kind story_design）后补进本块")
-        report.append(f"作者记忆：限定范围未代查（{named}），归主会话判断是否适用；补查有没带上的（已在本块里的不算），章末照模板那一行用原话说")
-    parts.append("——— author_preferences（作者记忆，低优先级倾向，不逐条追求命中）———\n" + memory_block)
+        named = "；".join(f"{'장르' if k == 'genre' else '절차'}: {', '.join(v)}" for k, v in skipped.items())
+        memory_block += (f"\n{SLOT_MARK} 범위가 지정된 작가 기억은 별도로 조회하지 않았습니다({named}). 작품에 해당하는 항목은 "
+                         "--genre/--workflow를 지정해 SKILL.md 핵심 방법의 query 명령(--kind prose_style --kind story_design)을 실행한 뒤 이 항목에 추가하세요")
+        report.append(f"작가 기억: 범위 한정 항목은 조회하지 않음({named}). 주 세션이 적용 여부를 판단하세요. 추가 조회 후에도 빠진 항목이 있으면(이미 이 항목에 포함된 것은 제외) 장말 보고에 템플릿의 해당 문구로 알리세요")
+    parts.append("——— author_preferences(작가 기억. 우선순위가 낮은 경향이며 모든 항목의 적용을 목표로 하지 않음) ———\n" + memory_block)
     parts.append("——— style_resolution ———\n"
-                 f"{SLOT_MARK} 本轮请求里作者对表达的明确要求及其覆盖的默认条款（没有写「无」）；"
-                 "本书文风与作者记忆的裁决见上方各块，同一裁决传去味与审稿。")
+                 f"{SLOT_MARK} 이번 요청에서 작가가 명시한 표현 요구와 그에 따라 대체되는 기본 조항을 적으세요(없으면 ‘없음’). "
+                 "작품 문체와 작가 기억의 우선순위는 위 항목을 따르며 같은 판단을 AI 문체 제거와 검토에도 전달하세요.")
 
-    parts.append("检查分工：写手负责编排、内容覆盖和格式自检；主会话质量阶段负责语义去味及最终文件扫描。写手不提前重复整轮去味或相同检查链，保留情节点落点、新增申报与原定交付。")
+    parts.append("검사 분담: 집필자는 구성, 내용 반영, 형식을 스스로 점검합니다. 주 세션의 품질 단계는 의미를 살피는 AI 문체 제거와 최종 파일 검사를 담당합니다. 집필자가 전체 문체 제거와 같은 검사 과정을 미리 반복하지 않으며, 사건 지점의 배치·추가 사항 보고·정해진 전달물을 유지합니다.")
 
-    # ---- 固定块：压成指针，不重述 agent 定义 ----
+    # ---- 고정 블록: agent 정의를 되풀이하지 않고 포인터로 압축 ----
     parts.append(
-        "本次照你的铁律 1-8 与被调用协议执行（细纲优先边界、正文形状、新增物三级、"
-        "阅读体验字段、交付三附件均以你的定义为准，此处不重述）。")
+        "이번 작업은 절대 규칙 1~8과 호출 규약을 따르세요(상세 개요 우선 경계, 본문 형식, 추가 요소의 3단계 분류「新增物三级」, "
+        "독서 경험 항목, 전달 첨부물 3종은 기존 정의를 따르며 여기서 반복하지 않습니다).")
     parts.append(
-        "字数目标按细纲执行，字数口径 visible_chars_v1；按执行安排交付，"
-        "目标按整章分量刻度使用，疏密自行分配，不拆逐点配额；不自测字数。")
+        "분량 목표는 상세 개요를 따르고 계산 기준은 visible_chars_v1입니다. 집필 순서에 따라 전달하세요. "
+        "목표는 장 전체의 분량 기준이며 밀도는 스스로 배분합니다. 사건 지점별 할당량으로 나누거나 직접 글자 수를 재지 마세요.")
 
     if errors:
         return None, errors
@@ -633,36 +611,36 @@ def main(argv=None):
     parser.add_argument("--project", required=True)
     parser.add_argument("--chapter", required=True, type=int)
     parser.add_argument("--out", nargs="?", const="", default=None,
-                        help="prompt 留档路径；不带值时留档到本章工作目录 writer_prompt.md")
+                        help="프롬프트 보관 경로. 값 없이 지정하면 이번 장 작업 폴더의 writer_prompt.md에 저장")
     args = parser.parse_args(argv)
 
     project = Path(args.project).resolve()
     if args.chapter < 1:
-        parser.error("--chapter 必须大于 0")
+        parser.error("--chapter는 0보다 커야 합니다")
     if not project.is_dir():
-        sys.stderr.write(f"项目目录不存在：{project}\n")
+        sys.stderr.write(f"프로젝트 폴더가 없습니다: {project}\n")
         return 2
 
     report = []
     prompt, errors = build(project, args.chapter, report)
     if prompt is None:
-        sys.stderr.write("组装中止，先修数据再重跑（这不是回落手拼的理由）：\n")
+        sys.stderr.write("구성을 중단했습니다. 데이터를 수정한 뒤 다시 실행하세요(수동 구성으로 대체하지 마세요): \n")
         for item in errors:
             sys.stderr.write(f"  - {item}\n")
         return 2
 
-    # 标题预检：正文目录里有没有同名章
+    # 제목 사전 검사: 본문 디렉터리의 동명 장 존재 여부.
     title = None
-    outline_file = find_chapter_file(project / "大纲", args.chapter, "细纲_")
+    outline_file = find_chapter_file(project / "개요", args.chapter, "상세개요_")
     if outline_file:
         title = extract_title(read_text(outline_file) or "", args.chapter)
     if title:
-        clashes = [p.name for p in sorted((project / "正文").glob("*.md"))
+        clashes = [p.name for p in sorted((project / "본문").glob("*.md"))
                    if p.name.endswith(f"_{title}.md")
-                   and not p.name.startswith(f"第{args.chapter:03d}章")]
+                   and not p.name.startswith(f"제{args.chapter:03d}장")]
         report.append(
-            f"标题预检：《{title}》" + ("与既有章重名 → " + "、".join(clashes)
-                                       if clashes else "无重名"))
+            f"제목 사전 검사: 《{title}》" + ("기존 장과 제목 중복 → " + "、".join(clashes)
+                                       if clashes else "제목 중복 없음"))
 
     if args.out is not None:
         out = Path(args.out) if args.out else chapter_work_dir(project, args.chapter) / "writer_prompt.md"
@@ -671,18 +649,18 @@ def main(argv=None):
             with io.open(out, "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(prompt)
         except OSError as exc:
-            sys.stderr.write(f"留档写入失败：{out}（{exc}）\n")
+            sys.stderr.write(f"보관 파일 저장 실패: {out}（{exc}）\n")
             return 2
-        report.append(f"留档：{out}")
+        report.append(f"보관 파일: {out}")
 
     sys.stdout.write(prompt)
     sys.stdout.write("\n" + "=" * 60 + "\n")
-    sys.stdout.write("以上是 prompt 正文（空槽以外一字不改，照抄）。以下不进 prompt：\n\n")
+    sys.stdout.write("위 내용이 프롬프트 본문입니다(빈칸 외에는 변경하지 말고 그대로 복사). 아래 내용은 프롬프트에 넣지 않습니다:\n\n")
     for item in report:
         sys.stdout.write(f"- {item}\n")
     sys.stdout.write(
-        f"- 待填槽位：{prompt.count(SLOT_MARK)} 个（搜 {SLOT_MARK}）\n")
-    sys.stdout.write(f"- 骨架长度：{len(prompt)} 字符\n")
+        f"- 작성할 빈칸: {prompt.count(SLOT_MARK)}개({SLOT_MARK} 검색)\n")
+    sys.stdout.write(f"- 프롬프트 틀 길이: {len(prompt)}자\n")
     return 0
 
 

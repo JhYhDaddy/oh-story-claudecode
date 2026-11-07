@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Book-local expression exceptions through the public scanners and both hook runtimes."""
+"""공개 검사기와 두 훅 런타임을 통한 작품별 표현 예외 테스트."""
 import importlib.util
 import json
 from pathlib import Path
@@ -24,9 +24,9 @@ class StyleTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.book = self.root / '书 A'
-        (self.book / '正文').mkdir(parents=True)
-        (self.book / '设定').mkdir()
-        self.file = self.book / '正文/第001章_门.md'
+        (self.book / '본문').mkdir(parents=True)
+        (self.book / '설정').mkdir()
+        self.file = self.book / '본문/제001장_门.md'
         self.allow = self.book / '.deslop-whitelist'
 
     def node(self, script, *args):
@@ -91,17 +91,17 @@ class StyleTests(unittest.TestCase):
             self.assertIn(finding, result.stdout)
         self.assertNotIn('not-is-comparison', result.stdout)
         self.assertIn('voice-contrast', result.stdout)
-        self.assertIn('占位符', result.stdout)
-        self.assertIn('疑似截断', result.stdout)
+        self.assertIn('자리표시자', result.stdout)
+        self.assertIn('잘림 의심', result.stdout)
 
     def test_next_chapter_gate_honors_only_approved_sentence(self):
-        for dirname in ['大纲', '追踪']:
+        for dirname in ['개요', '추적']:
             (self.book / dirname).mkdir()
-        # 细纲须写了内容（不计 # 号和空白 ≥30 字），否则写正文守卫先按空细纲拦下。
-        (self.book / '大纲/细纲_第002章.md').write_text('# 已确认细纲\n她在门口等了一夜，天亮时终于决定不再回头，把钥匙留在了门垫下面。', encoding='utf-8')
-        (self.book / '追踪/_tracking-state.json').write_text(json.dumps({'schema_version': 4, 'state_revision': 0, 'last_committed_chapter': 1}), encoding='utf-8')
-        (self.book / '追踪/上下文.md').write_text('> 状态修订：0', encoding='utf-8')
-        next_file = self.book / '正文/第002章_再见.md'
+        # 상세 개요에는 #과 공백을 제외하고 30자 이상의 내용이 있어야 한다. 없으면 본문 작성 가드가 빈 개요로 먼저 차단한다.
+        (self.book / '개요/상세개요_제002장.md').write_text('# 已确认细纲\n她在门口等了一夜，天亮时终于决定不再回头，把钥匙留在了门垫下面。', encoding='utf-8')
+        (self.book / '추적/_tracking-state.json').write_text(json.dumps({'schema_version': 4, 'state_revision': 0, 'last_committed_chapter': 1}), encoding='utf-8')
+        (self.book / '추적/문맥.md').write_text('> 状态修订：0', encoding='utf-8')
+        next_file = self.book / '본문/제002장_再见.md'
         for body, approved, should_block in [(APPROVED, '', True), (APPROVED, APPROVED, False), (APPROVED + OTHER, APPROVED, True)]:
             self.file.write_text(body, encoding='utf-8')
             self.allow.write_text(approved, encoding='utf-8')
@@ -110,12 +110,12 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), expected)
             self.assertEqual(expected is not None, should_block)
-            if should_block: self.assertIn('毒句式', expected)
-        (self.book / '大纲/细纲_第002章.md').unlink()
-        self.assertIn('缺少细纲', pyhook.prose_block_reason(self.root, next_file))
+            if should_block: self.assertIn('문제 문장 패턴', expected)
+        (self.book / '개요/상세개요_제002장.md').unlink()
+        self.assertIn('상세 개요가 없습니다', pyhook.prose_block_reason(self.root, next_file))
 
     def test_short_book_lookup(self):
-        self.file = self.book / '正文.md'
+        self.file = self.book / '본문.md'
         self.file.write_text(APPROVED, encoding='utf-8')
         self.allow.write_text(APPROVED, encoding='utf-8')
         self.assertEqual(self.scan().returncode, 0)

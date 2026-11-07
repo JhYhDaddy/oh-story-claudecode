@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior regression for v17 -> current Codex hook registration upgrades."""
+"""v17에서 현재 Codex 훅 등록으로 업그레이드하는 동작의 회귀 검사."""
 
 from __future__ import annotations
 
@@ -89,8 +89,8 @@ def main() -> None:
     else:
         raise AssertionError("malformed template hooks must fail")
 
-    # 用户手改出的非数组事件值（撞上模板事件名）必须走 MergeError/exit 2 诊断，
-    # 而不是 .extend() 的 AttributeError traceback。
+    # 사용자가 수동 변경한 배열 아닌 이벤트 값이 템플릿 이벤트명과 충돌하면 MergeError/exit 2로 진단해야 한다.
+    # .extend()의 AttributeError traceback을 내면 안 된다.
     for bad in ({"matcher": "Bash", "hooks": []}, "nope", 5, None, True):
         try:
             merger.merge_documents({"hooks": {"PreToolUse": bad}}, template)
@@ -99,7 +99,7 @@ def main() -> None:
         else:
             raise AssertionError(f"malformed existing event value must fail: {bad!r}")
 
-    # 未与模板撞名的非数组事件值仍原样保留（保留用户已有配置的契约不能被上面的校验收紧）。
+    # 템플릿과 이름이 충돌하지 않는 배열 아닌 이벤트 값은 그대로 보존한다. 위 검사로 사용자 기존 설정 보존 계약을 좁히면 안 된다.
     preserved = merger.merge_documents({"hooks": {"UserEvent": {"a": 1}}}, template)
     assert preserved["hooks"]["UserEvent"] == {"a": 1}, preserved
 

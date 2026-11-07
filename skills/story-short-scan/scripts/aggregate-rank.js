@@ -1,24 +1,20 @@
 #!/usr/bin/env node
 /**
- * aggregate-rank.js — 把榜单 Markdown 聚合成一张短表，主会话只读这张表。
- *
- * 输入：各平台采集脚本写出的榜单文件（或按同样格式手动整理的榜单）：
- *   首行 `# {平台} · {榜单名}`，条目 `### #{排名} {书名}`（起点为 `## #`），
- *   下一行 `*作者 · 题材 · ... *` 元信息；可选 `## {题材/频道} — N 本` 分组、
- *   `**标签：** a、b`、`**字数：X**`、`**总推荐：X**`、`**简介**` 段或 `> 简介`。
- *
- * 用法：
- *   node aggregate-rank.js <榜单文件或目录>... [--out 扫榜聚合.md] [--top 3]
+ * aggregate-rank.js — 순위 Markdown을 짧은 표로 집계해 주 세션이 이 표만 읽게 한다.
+ * 입력은 플랫폼 수집 스크립트가 만든 순위 파일 또는 같은 형식의 수동 정리 파일이다.
+ * 첫 행 `# {平台} · {榜单名}`, 항목 `### #{排名} {书名}`(치디안은 `## #`),
+ * 다음 행 `*作者 · 题材 · ... *`. 선택적으로 `## {题材/频道} — N 本` 그룹,
+ * `**标签：** a、b`, `**字数：X**`, `**总推荐：X**`, `**简介**` 절 또는 `> 简介`를 쓴다.
+ * 사용법:
+ *   node aggregate-rank.js <순위파일또는디렉터리>... [--out 순위조사집계.md] [--top 3]
  *        [--desc 30] [--sparse 15] [--scale long|short] [--json]
- *   node aggregate-rank.js <榜单文件或目录>... --sample <题材/标签/书名词> [--n 5]
- *
- * 聚合：每平台按题材给本数、占比、热度中位数、字数中位数、高频标签与样本够不够；
- * 全局给标签热词、字数分布、书名常见词、多榜重合与每题材代表作。同一平台内
- * 书名+作者相同视为同一本书，只计一次。样本门槛默认 15 本，刺猬猫每榜只有前 10 本，默认按 10 本；
- * 给了 --sparse 就所有平台都用它。同平台两份榜单条目逐条相同（如起点手机版两个签约榜
- * 是同一页）只按一份计，免得多榜重合虚高。整份没有热度数字的榜（如书库按页序排）只算名次，
- * 不参与选热度口径。文件头写了「每题材上限」的榜（番茄逐题材取前 N 本）在输出里注明本数是
- * 采样上限。只读输入，除 --out 外不写文件。
+ *   node aggregate-rank.js <순위파일또는디렉터리>... --sample <장르/태그/제목단어> [--n 5]
+ * 플랫폼별 장르의 권수·비중·인기도 중앙값·글자 수 중앙값·빈번한 태그·표본 충분성을 제공한다.
+ * 전역으로 태그 인기어·글자 수 분포·흔한 제목 단어·여러 순위 중복·장르 대표작을 제공한다.
+ * 같은 플랫폼의 제목+작가가 같으면 한 작품으로 한 번만 센다. 기본 표본 기준은 15권, 순위당 10위만 있는 츠웨이마오는 10권이다.
+ * --sparse를 주면 모든 플랫폼에 적용한다. 항목이 모두 같은 동일 플랫폼 순위(예: 같은 페이지인 치디안 모바일의 두 계약 순위)는
+ * 하나로 계산해 중복을 부풀리지 않는다. 인기도 숫자가 전혀 없는 순위(예: 페이지순 라이브러리)는 순서만 계산하고 인기도 기준 선택에는 참여하지 않는다.
+ * 머리에 ‘每题材上限’이 있는 순위(판체의 장르별 상위 N권)는 권수가 표본 상한임을 출력한다. 입력은 읽기 전용이며 --out 외에는 파일을 쓰지 않는다.
  */
 
 "use strict";
@@ -26,16 +22,16 @@
 const fs = require("fs");
 const path = require("path");
 
-const OWN_OUTPUT_PREFIXES = ["扫榜聚合", "选题决策", "短篇扫榜结论"];
+const OWN_OUTPUT_PREFIXES = ["순위조사집계", "소재선정", "단편순위조사결론", "扫榜聚合", "选题决策", "短篇扫榜结论"];
 const SHORT_PLATFORMS = new Set(["点众", "黑岩", "知乎盐言", "盐言", "番茄短篇", "七猫短篇"]);
 const METRIC_PRIORITY = ["在读", "热度", "收藏", "赞同", "点赞", "阅读", "月票", "总推荐", "榜单值", "营养液", "积分", "评分"];
-// 每榜条目少的小平台，样本门槛默认按这里的本数；其余平台默认 DEFAULT_SPARSE。
+// 항목이 적은 소규모 플랫폼의 표본 기준은 여기의 권수, 나머지는 DEFAULT_SPARSE가 기본이다.
 const SMALL_PLATFORM_SPARSE = { "刺猬猫": 10 };
 const DEFAULT_SPARSE = 15;
 const UNRESOLVED_TITLES = new Set(["（标题待解析）", "（书名待解析）", ""]);
 
 // ---------------------------------------------------------------------------
-// 参数
+// 인자
 // ---------------------------------------------------------------------------
 
 function parseArgs(argv) {
@@ -84,16 +80,16 @@ function parseArgs(argv) {
 }
 
 const USAGE = [
-  "用法：node aggregate-rank.js <榜单文件或目录>... [--out 扫榜聚合.md] [--top 3] [--desc 30]",
+  "用法：node aggregate-rank.js <榜单文件或目录>... [--out 순위조사집계.md] [--top 3] [--desc 30]",
   "                            [--sparse 15，刺猬猫默认 10] [--scale long|short] [--json]",
   "      node aggregate-rank.js <榜单文件或目录>... --sample <题材/标签/书名词> [--n 5]",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
-// 数值与字段解析
+// 숫자·필드 파싱
 // ---------------------------------------------------------------------------
 
-/** 「12.3万」「1,234」「45」→ 数字；[待补]、未知、空 → null。 */
+/** ‘12.3万’, ‘1,234’, ‘45’는 숫자로, [待补]·미상·빈 값은 null로 변환한다. */
 function parseNumber(raw) {
   if (raw === undefined || raw === null) return null;
   const text = String(raw).replace(/[,，\s]/g, "");
@@ -148,14 +144,14 @@ function splitTags(text) {
 }
 
 // ---------------------------------------------------------------------------
-// 文件解析
+// 파일 파싱
 // ---------------------------------------------------------------------------
 
 const TITLE_RE = /^#\s+(.+?)\s*·\s*(.+?)\s*$/;
 const ENTRY_RE = /^#{2,3}\s+#(\d+)\s+(.*)$/;
 const SECTION_RE = /^##\s+(.+?)\s+—\s+(.+)$/;
 const HEADER_RE = /^-\s*([^：:]+)[：:]\s*(.*)$/;
-// 番茄文件头「- 每题材上限 ≈ 20」不带冒号，单独认。
+// 판체 머리의 ‘- 每题材上限 ≈ 20’은 콜론이 없어 따로 인식한다.
 const CAP_RE = /^-\s*每题材上限\s*[≈约：:]?\s*(\d+)/;
 
 function parseRankFile(filePath) {
@@ -164,8 +160,8 @@ function parseRankFile(filePath) {
   const firstHeading = lines.find((line) => /^#\s/.test(line));
   const tm = firstHeading ? firstHeading.match(TITLE_RE) : null;
   if (!tm) return null;
-  // 首行像榜单、却一条条目都没有：多半是采集没拿到数据。仍返回，交给「采集情况」列进「没采到」，
-  // 但不进题材统计。
+  // 첫 행은 순위처럼 보이지만 항목이 없으면 수집 실패 가능성이 높다. 반환은 하되 수집 상황의 ‘没采到’에 넣고
+  // 장르 통계에는 포함하지 않는다.
 
   const file = {
     path: filePath,
@@ -275,8 +271,8 @@ function parseEntry(entry, file) {
   let metaGenre = "";
   const rest = cls.rest;
   if (file.platform === "刺猬猫" && rest.length < 2) {
-    // 采集脚本写的刺猬猫条目只有一个文字字段：榜首是作者，其余是题材。
-    // 作者手动整理的「作者 · 题材」两段都有，按通用位置读。
+    // 수집한 츠웨이마오 항목의 텍스트 필드는 하나뿐이다. 1위는 작가, 나머지는 장르다.
+    // 수동 정리한 ‘作者 · 题材’가 모두 있으면 일반 위치로 읽는다.
     if (entry.rank === 1) author = rest[0] || "";
     else metaGenre = rest[0] || "";
   } else {
@@ -284,12 +280,12 @@ function parseEntry(entry, file) {
     metaGenre = rest[1] || "";
     for (const extra of rest.slice(2)) tags.push(...splitTags(extra));
   }
-  // 黑岩「男频/现言」：斜杠后才是题材。
+  // 헤이옌 ‘男频/现言’: 슬래시 뒤가 장르다.
   if (metaGenre.includes("/")) {
     const parts = metaGenre.split("/").filter(Boolean);
     metaGenre = parts[parts.length - 1] || metaGenre;
   }
-  // 起点「玄幻·东方玄幻」：主类当题材，子类进标签，免得题材表被子类打散。
+  // 치디안 ‘玄幻·东方玄幻’: 주분류를 장르로, 하위 분류를 태그로 넣어 장르 표가 쪼개지지 않게 한다.
   if (metaGenre.includes("·")) {
     const [main, ...subs] = metaGenre.split("·").map((x) => x.trim()).filter(Boolean);
     metaGenre = main || metaGenre;
@@ -332,7 +328,7 @@ function collectFiles(inputs) {
 }
 
 // ---------------------------------------------------------------------------
-// 聚合
+// 집계
 // ---------------------------------------------------------------------------
 
 function median(values) {
@@ -376,8 +372,8 @@ function isNewList(list) {
   return /新书|新人|新手|新作|潜力/.test(list);
 }
 
-// 门槛的分母只算上过带热度数字的榜的书（inMetricList）。只有名次的榜（如书库按页序排）
-// 本来就没有热度，算进分母的话，书库页取得多，同平台大热榜的真实热度会被挤成「按榜单名次」。
+// 기준의 분모는 인기도 숫자가 있는 순위에 오른 작품(inMetricList)만 센다. 순서만 있는 페이지순 라이브러리는
+// 원래 인기도가 없으므로 포함하면 페이지를 많이 수집할수록 실제 인기 순위의 기준이 ‘순위 순서’로 밀려난다.
 function pickMetric(books) {
   const counts = new Map();
   for (const b of books) for (const k of Object.keys(b.metrics)) counts.set(k, (counts.get(k) || 0) + 1);
@@ -386,7 +382,7 @@ function pickMetric(books) {
   return "";
 }
 
-// 题材里有的书没热度时，有值的书少于这个数就不报中位：一两本书的数字代表不了整个题材。
+// 장르 안 일부 작품만 인기도가 있으면 그 수가 이 기준보다 적을 때 중앙값을 보고하지 않는다. 한두 작품이 장르 전체를 대표할 수 없다.
 const MIN_HEAT_KNOWN = 3;
 
 function titleGrams(titles, minCount) {
@@ -403,14 +399,14 @@ function titleGrams(titles, minCount) {
     .slice(0, 20);
 }
 
-// 条目逐条相同（名次、书名、作者都一样）的两份榜是同一份数据。书名有没解出来的不比，
-// 免得两份都是「（标题待解析）· 未知」的榜被误判成同一份。
+// 순위·제목·작가가 항목별로 같은 두 목록은 같은 데이터다. 제목을 해석하지 못한 항목은 비교하지 않아
+// 모두 ‘（标题待解析）· 未知’인 두 목록을 같다고 오판하지 않는다.
 function entrySignature(file) {
   if (!file.entries.length || file.entries.some((e) => !e.resolved)) return "";
   return file.platform + "\n" + file.entries.map((e) => `${e.rank}|${normKey(e.title)}|${normKey(e.author)}`).join("\n");
 }
 
-// 给后读到的重复榜标上 duplicateOf（重复调用结果不变）；聚合和抽样都跳过它们。
+// 뒤에 읽은 중복 목록에 duplicateOf를 붙인다(재호출에도 결과 동일). 집계·표본 추출은 이를 건너뛴다.
 function markDuplicateLists(parsedFiles) {
   const firstBySignature = new Map();
   for (const file of parsedFiles) {
@@ -441,11 +437,11 @@ function aggregate(parsedFiles, opts) {
     const entries = files.flatMap((f) => f.entries);
     const scale = opts.scale || (SHORT_PLATFORMS.has(platform) ? "short" : "long");
     const sparse = sparseFor(platform, opts);
-    // 整份没有一条带热度数字的榜只算名次榜，它的书不进热度口径门槛的分母（见 pickMetric）。
+    // 인기도 숫자가 전혀 없는 목록은 순서 목록으로만 보며 인기도 기준의 분모에 넣지 않는다(pickMetric 참조).
     const rankOnlyFiles = files.filter((f) => !f.entries.some((e) => Object.keys(e.metrics).length));
     const rankOnlyEntries = new Set(rankOnlyFiles.flatMap((f) => f.entries));
 
-    // 同平台同书（书名+作者）只算一本；记录它出现在哪些榜。
+    // 동일 플랫폼의 제목+작가가 같은 작품은 한 권으로 세고 등장한 순위 목록을 기록한다.
     const books = new Map();
     for (const e of entries) {
       const key = e.resolved ? `${normKey(e.title)}|${normKey(e.author)}` : `${e.file}|${e.list}|${e.rank}`;
@@ -577,7 +573,7 @@ function truncate(text, n) {
 }
 
 // ---------------------------------------------------------------------------
-// 输出
+// 출력
 // ---------------------------------------------------------------------------
 
 function fmtNum(n) {
@@ -591,14 +587,14 @@ function pct(x) {
   return `${Math.round(x * 100)}%`;
 }
 
-// 题材热度中位：全都有值照旧只写数；部分有值写明几本有值；有值太少（见 MIN_HEAT_KNOWN）不写数。
+// 장르 인기도 중앙값: 모두 값이 있으면 숫자만, 일부만 있으면 유효 권수도 쓴다. MIN_HEAT_KNOWN보다 적으면 숫자를 쓰지 않는다.
 function fmtHeatMedian(g) {
   if (!g.heatKnown || g.heatKnown === g.count) return fmtNum(g.heatMedian);
   if (g.heatMedian === null) return `—（只有 ${g.heatKnown} 本有值）`;
   return `${fmtNum(g.heatMedian)}（${g.heatKnown} 本有值）`;
 }
 
-// 文件头「数据质量」是给脚本和维护者看的标记；「扫榜聚合.md」落在作者文件夹，翻成白话。
+// 머리의 ‘数据质量’는 스크립트·유지보수자용 표식이다. 작가 폴더에 저장하는 ‘순위조사집계.md’에서는 쉬운 말로 바꾼다.
 const QUALITY_WORDS = {
   "[OK]": "正常",
   "[标题解析异常]": "书名大多没解出来",

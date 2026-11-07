@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral regression tests for the single-authority tracking state tool."""
+"""단일 기준 원본을 사용하는 추적 상태 도구의 동작 회귀 테스트."""
 
 from __future__ import annotations
 
@@ -172,8 +172,8 @@ class TrackingCommitTests(unittest.TestCase):
             input_path = Path(self.temporary.name) / f"{command}-{os.urandom(4).hex()}.json"
             input_path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
             args.extend(["--input", str(input_path)])
-        # 工具按 UTF-8 直写字节；text=True 默认按 locale 解码，Windows 的 cp1252
-        # 会在读中文提示时 UnicodeDecodeError，必须显式指定 UTF-8。
+        # 도구는 UTF-8 바이트를 직접 쓴다. text=True는 기본적으로 로캘로 디코딩하므로 Windows의 cp1252에서는
+        # 중국어 안내를 읽을 때 UnicodeDecodeError가 발생한다. 반드시 UTF-8을 명시한다.
         completed = subprocess.run(
             args, text=True, capture_output=True, check=False, encoding="utf-8"
         )
@@ -191,15 +191,15 @@ class TrackingCommitTests(unittest.TestCase):
         )
 
     def write_chapter_contract(self, chapter: int, *, actual: int = 800, target: int = 1000) -> bytes:
-        (self.project / "大纲").mkdir(exist_ok=True)
-        (self.project / "正文").mkdir(exist_ok=True)
+        (self.project / "개요").mkdir(exist_ok=True)
+        (self.project / "본문").mkdir(exist_ok=True)
         width = max(3, len(str(chapter)))
-        (self.project / "大纲" / f"细纲_第{chapter:0{width}d}章.md").write_text(
+        (self.project / "개요" / f"상세개요_제{chapter:0{width}d}장.md").write_text(
             f"- 字数目标：{target} 字\n- 字数口径：visible_chars_v1\n",
             encoding="utf-8",
         )
         body = ("# 标题\n" + "字" * actual + "。\n").encode("utf-8")
-        (self.project / "正文" / f"第{chapter:0{width}d}章_测试.md").write_bytes(body)
+        (self.project / "본문" / f"제{chapter:0{width}d}장_测试.md").write_bytes(body)
         return body
 
     def bind_wordcount(
@@ -219,11 +219,11 @@ class TrackingCommitTests(unittest.TestCase):
         return document
 
     def read_state(self) -> dict[str, object]:
-        return json.loads((self.project / "追踪/_tracking-state.json").read_text(encoding="utf-8"))
+        return json.loads((self.project / "추적/_tracking-state.json").read_text(encoding="utf-8"))
 
     def test_init_creates_one_structured_authority_and_only_derived_views(self) -> None:
         self.init()
-        tracking = self.project / "追踪"
+        tracking = self.project / "추적"
         state = self.read_state()
 
         self.assertEqual(state["schema_version"], 4)
@@ -235,14 +235,14 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertNotIn("wordcount_policy", state)
         self.assertNotIn("wordcount_events", state)
         self.assertFalse((tracking / "_tracking-meta.json").exists())
-        self.assertFalse((tracking / "时间线/事件库.json").exists())
-        self.assertIn("状态修订：0", (tracking / "上下文.md").read_text(encoding="utf-8"))
+        self.assertFalse((tracking / "시간선/사건목록.json").exists())
+        self.assertIn("状态修订：0", (tracking / "문맥.md").read_text(encoding="utf-8"))
         self.run_tool("check")
 
     def test_commit_updates_state_and_all_demo_derived_views(self) -> None:
         self.init()
         self.run_tool("commit", transaction(1, character=True, foreshadow=True, timeline=True))
-        tracking = self.project / "追踪"
+        tracking = self.project / "추적"
         state = self.read_state()
 
         self.assertEqual(state["last_committed_chapter"], 1)
@@ -250,11 +250,11 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertIn("江晨", state["characters"])
         self.assertIn("F027", state["foreshadow"])
         self.assertIn("E010", state["timeline"])
-        self.assertIn("状态修订：1", (tracking / "上下文.md").read_text(encoding="utf-8"))
-        self.assertIn("F027｜专业团队仍拍不出江晨原版的灵魂", (tracking / "上下文.md").read_text(encoding="utf-8"))
-        self.assertIn("军方培养江晨另有尚未公开的后续安排", (tracking / "时间线/作者真相.md").read_text(encoding="utf-8"))
-        self.assertNotIn("军方培养江晨另有尚未公开的后续安排", (tracking / "时间线/读者已知.md").read_text(encoding="utf-8"))
-        self.assertTrue((tracking / "逐章记录/第001章.md").exists())
+        self.assertIn("状态修订：1", (tracking / "문맥.md").read_text(encoding="utf-8"))
+        self.assertIn("F027｜专业团队仍拍不出江晨原版的灵魂", (tracking / "문맥.md").read_text(encoding="utf-8"))
+        self.assertIn("军方培养江晨另有尚未公开的后续安排", (tracking / "시간선/작가용진실.md").read_text(encoding="utf-8"))
+        self.assertNotIn("军方培养江晨另有尚未公开的后续安排", (tracking / "시간선/독자가아는사실.md").read_text(encoding="utf-8"))
+        self.assertTrue((tracking / "장별기록/제001장.md").exists())
         self.run_tool("check")
 
     def test_simple_wordcount_record_commits_the_exact_current_body(self) -> None:
@@ -274,7 +274,7 @@ class TrackingCommitTests(unittest.TestCase):
         )
         self.assertEqual(record["status"], "under")
         self.assertEqual(record["resolution"], "accepted_current_length")
-        self.assertEqual((self.project / "正文/第001章_测试.md").read_bytes(), original)
+        self.assertEqual((self.project / "본문/제001장_测试.md").read_bytes(), original)
         self.run_tool("check")
 
     def test_body_or_target_change_rejects_a_prepared_record_without_writes(self) -> None:
@@ -283,14 +283,14 @@ class TrackingCommitTests(unittest.TestCase):
         document = self.bind_wordcount(transaction(1))
         before = self.read_state()
 
-        body_path = self.project / "正文/第001章_测试.md"
+        body_path = self.project / "본문/제001장_测试.md"
         body_path.write_bytes(original_body + "变".encode("utf-8"))
         changed_body = self.run_tool("commit", document, expect=2)
         self.assertIn("wordcount record is stale", changed_body.stderr)
         self.assertEqual(self.read_state(), before)
 
         body_path.write_bytes(original_body)
-        (self.project / "大纲/细纲_第001章.md").write_text(
+        (self.project / "개요/상세개요_제001장.md").write_text(
             "- 字数目标：1100 字\n- 字数口径：visible_chars_v1\n", encoding="utf-8"
         )
         changed_target = self.run_tool("commit", document, expect=2)
@@ -324,7 +324,7 @@ class TrackingCommitTests(unittest.TestCase):
         state = self.read_state()
         self.assertEqual(state["state_revision"], 1)
         self.assertEqual(set(state["wordcount_records"]), {"1"})
-        self.assertEqual(len(list((self.project / "追踪/逐章记录").glob("第001章.md"))), 1)
+        self.assertEqual(len(list((self.project / "추적/장별기록").glob("제001장.md"))), 1)
 
     def test_character_snapshot_lists_are_not_limited_to_eight_items(self) -> None:
         self.init()
@@ -351,7 +351,7 @@ class TrackingCommitTests(unittest.TestCase):
         completed = self.run_tool("commit", rejected, expect=2)
         self.assertIn("hard cap of 8192 bytes", completed.stderr)
         self.assertEqual(self.read_state(), before)
-        self.assertFalse((self.project / "追踪/逐章记录/第002章.md").exists())
+        self.assertFalse((self.project / "추적/장별기록/제002장.md").exists())
 
     def test_missing_active_snapshot_is_rejected_before_any_write(self) -> None:
         self.init()
@@ -363,7 +363,7 @@ class TrackingCommitTests(unittest.TestCase):
 
         self.assertIn("has no current snapshot", result.stderr)
         self.assertEqual(self.read_state(), before)
-        self.assertFalse((self.project / "追踪/逐章记录/第001章.md").exists())
+        self.assertFalse((self.project / "추적/장별기록/제001장.md").exists())
 
     def test_partial_view_write_keeps_old_authority_and_same_transaction_can_retry(self) -> None:
         self.init()
@@ -373,7 +373,7 @@ class TrackingCommitTests(unittest.TestCase):
         original = module.atomic_write_text
 
         def fail_on_foreshadow(path: Path, payload: str) -> None:
-            if path.name == "伏笔.md":
+            if path.name == "복선.md":
                 raise OSError("injected derived-view failure")
             original(path, payload)
 
@@ -382,7 +382,7 @@ class TrackingCommitTests(unittest.TestCase):
             module.apply_transaction(self.project, document)
 
         self.assertEqual(self.read_state()["state_revision"], 0)
-        self.assertIn("状态修订：1", (self.project / "追踪/上下文.md").read_text(encoding="utf-8"))
+        self.assertIn("状态修订：1", (self.project / "추적/문맥.md").read_text(encoding="utf-8"))
         self.run_tool("check", expect=2)
 
         module.atomic_write_text = original
@@ -410,7 +410,7 @@ class TrackingCommitTests(unittest.TestCase):
         self.run_tool("commit", transaction(3, next_commitment="结算五天百万粉任务。"))
         self.run_tool("commit", transaction(1, mode="revision", next_commitment="修订章当时的旧承诺。"))
 
-        context = (self.project / "追踪/上下文.md").read_text(encoding="utf-8")
+        context = (self.project / "추적/문맥.md").read_text(encoding="utf-8")
         self.assertIn("结算五天百万粉任务", context)
         self.assertNotIn("修订章当时的旧承诺", context)
 
@@ -445,26 +445,26 @@ class TrackingCommitTests(unittest.TestCase):
     def test_imported_cutoff_requires_only_new_daily_records(self) -> None:
         self.init(last_chapter=27)
         self.run_tool("commit", transaction(28, character=True))
-        tracking = self.project / "追踪"
+        tracking = self.project / "추적"
 
-        self.assertFalse((tracking / "逐章记录/第027章.md").exists())
-        self.assertTrue((tracking / "逐章记录/第028章.md").exists())
+        self.assertFalse((tracking / "장별기록/제027장.md").exists())
+        self.assertTrue((tracking / "장별기록/제028장.md").exists())
         self.assertEqual(self.read_state()["imported_through_chapter"], 27)
         self.run_tool("check")
 
     def test_imported_chapter_revision_creates_an_overlay_record(self) -> None:
         self.init(last_chapter=20)
         self.run_tool("commit", transaction(10, mode="revision"))
-        self.assertTrue((self.project / "追踪/逐章记录/第010章.md").exists())
+        self.assertTrue((self.project / "추적/장별기록/제010장.md").exists())
         self.assertEqual(self.read_state()["imported_through_chapter"], 20)
         self.run_tool("check")
 
     def test_check_compares_derived_views_to_state_without_parsing_markdown(self) -> None:
         self.init()
         self.run_tool("commit", transaction(1, character=True, foreshadow=True, timeline=True))
-        tracking = self.project / "追踪"
+        tracking = self.project / "추적"
 
-        path = tracking / "角色状态/江晨.md"
+        path = tracking / "인물상태/江晨.md"
         path.write_text("# 任意手改格式\n", encoding="utf-8")
         result = self.run_tool("check", expect=2)
         self.assertIn("derived view differs from _tracking-state.json", result.stderr)
@@ -474,22 +474,22 @@ class TrackingCommitTests(unittest.TestCase):
 
     def test_check_rejects_orphan_character_file(self) -> None:
         self.init()
-        orphan = self.project / "追踪/角色状态/CONFLICT.md"
+        orphan = self.project / "추적/인물상태/CONFLICT.md"
         orphan.write_text("# orphan\n", encoding="utf-8")
         result = self.run_tool("check", expect=2)
         self.assertIn("character snapshot files differ", result.stderr)
 
     def test_draft_prefills_current_context_so_only_the_delta_is_written(self) -> None:
         self.init()
-        (self.project / "大纲").mkdir(exist_ok=True)
-        (self.project / "大纲" / "细纲_第001章.md").write_text("### 第 1 章：看片会\n", encoding="utf-8")
+        (self.project / "개요").mkdir(exist_ok=True)
+        (self.project / "개요" / "상세개요_제001장.md").write_text("### 제 1 장：看片会\n", encoding="utf-8")
         completed = subprocess.run(
             [sys.executable, str(TOOL), "draft", "--project", str(self.project), "--chapter", "1"],
             text=True, capture_output=True, check=False, encoding="utf-8")
         self.assertEqual(completed.returncode, 0, completed.stderr)
         guide = json.loads(completed.stdout)
         draft_path = Path(guide["draft"])
-        self.assertEqual(draft_path, self.project / ".story/work/第001章/tracking.json")
+        self.assertEqual(draft_path, self.project / ".story/work/제001장/tracking.json")
         self.assertEqual(guide["mode"], "append")
         self.assertEqual(guide["limits_chars"]["delta.result"], 160)
         draft = json.loads(draft_path.read_text(encoding="utf-8"))
@@ -497,7 +497,7 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertEqual(draft["expected_state_revision"], self.read_state()["state_revision"])
         self.assertEqual(draft["context"]["long_term_constraints"],
                          self.read_state()["context"]["long_term_constraints"])
-        # 新章的故事时间与场景不沿用上一章：留空，逼着按本章结尾填；上一章的值另给参考。
+        # 새 장의 이야기 시간과 장면은 이전 장에서 가져오지 않고 비워 둔다. 이번 장의 끝을 기준으로 작성하게 하며 이전 값은 별도 참고로 제공한다.
         previous = self.read_state()["context"]["position"]
         self.assertEqual((draft["context"]["position"]["story_time"], draft["context"]["position"]["scene"]), ("", ""))
         self.assertEqual(guide["previous_position"], {"story_time": previous["story_time"], "scene": previous["scene"]})
@@ -507,12 +507,12 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertEqual(self.read_state()["last_committed_chapter"], 0)
         draft["context"]["position"].update({"story_time": "看片会当晚", "scene": "剪辑室"})
         draft_path.write_text(json.dumps(draft, ensure_ascii=False), encoding="utf-8")
-        # 重跑 draft 只刷新修订号，不冲掉已填内容。
+        # draft 재실행은 리비전만 갱신하고 이미 입력한 내용을 지우지 않는다.
         again = subprocess.run(
             [sys.executable, str(TOOL), "draft", "--project", str(self.project), "--chapter", "1"],
             text=True, capture_output=True, check=False, encoding="utf-8")
         self.assertEqual(again.returncode, 0, again.stderr)
-        self.assertIn("原样保留", json.loads(again.stdout)["fill"])
+        self.assertIn("그대로 유지했습니다", json.loads(again.stdout)["fill"])
         draft = json.loads(draft_path.read_text(encoding="utf-8"))
         self.assertEqual(draft["delta"]["result"], "江晨在看片会上保住了原版。")
         self.run_tool("commit", draft)
@@ -520,8 +520,8 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertEqual(self.read_state()["context"]["position"]["scene"], "剪辑室")
 
     def test_common_model_spellings_commit_on_first_try(self) -> None:
-        # 实测（v0.8.1 solo A/B，10 章）首次提交全被退回：章号写成字符串、自造 planned_chapter、
-        # action 写 add、新书快照的 identity 写成列表。这些写法含义明确，照收并规范成正式形状。
+        # 실측(v0.8.1 solo A/B, 10장)에서는 장 번호를 문자열로 쓰거나 planned_chapter를 임의로 만들어 첫 제출이 모두 반려되었다.
+        # action을 add로 쓰고 새 작품 스냅샷의 identity를 목록으로 쓴 경우도 있었다. 의미가 명확한 표기는 받아들인 뒤 정식 형식으로 정규화한다.
         self.init()
         document = transaction(1, character=True, foreshadow=True, timeline=True)
         row = document["delta"]["foreshadow_changes"][0]
@@ -540,7 +540,7 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertEqual(state["characters"]["江晨"]["relationships"], ["与钟嘉嘉协作"])
 
     def test_status_verbs_fill_a_missing_status_and_reject_a_contradicting_one(self) -> None:
-        # resolve/回收 映射成 upsert 时，动作词本身就是「已回收」的意图：缺 status 按它补，矛盾就退回并说清怎么写。
+        # resolve/回收를 upsert로 매핑할 때 동작어 자체에 ‘회수 완료’ 의도가 있다. status가 없으면 보충하고 충돌하면 반려하며 올바른 표기를 안내한다.
         self.init()
         document = transaction(1, foreshadow=True)
         row = document["delta"]["foreshadow_changes"][0]
@@ -554,7 +554,7 @@ class TrackingCommitTests(unittest.TestCase):
             document = transaction(2, foreshadow=True)
             document["delta"]["foreshadow_changes"][0].update({"action": verb, "status": status})
             stderr = self.run_tool("commit", document, expect=2).stderr
-            self.assertIn(f"action={verb} 与 status={status} 矛盾", stderr)
+            self.assertIn(f"action={verb}과(와) status={status}가 모순됩니다", stderr)
             self.assertIn(hint, stderr)
         self.assertEqual(self.read_state()["last_committed_chapter"], 1)
 
@@ -578,7 +578,7 @@ class TrackingCommitTests(unittest.TestCase):
         document["delta"]["foreshadow_changes"][0]["payoff_note"] = "看片会后"
         completed = self.run_tool("commit", document, expect=2)
         self.assertIn("contains unsupported fields: payoff_note", completed.stderr)
-        self.assertIn("只收 action, id, importance, planned_resolution_chapter, planted_chapter, status, summary",
+        self.assertIn("허용 값: action, id, importance, planned_resolution_chapter, planted_chapter, status, summary",
                       completed.stderr)
         document = transaction(1, foreshadow=True)
         document["delta"]["foreshadow_changes"][0]["action"] = "merge"
@@ -601,19 +601,19 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertEqual(set(foreshadow), {"action", "id", "summary", "planted_chapter",
                                            "planned_resolution_chapter", "status", "importance"})
         self.assertEqual(shapes["delta.timeline_events[]"]["reveal_status"], "未揭示|部分揭示|已揭示")
-        snapshot_shape = shapes["character_snapshots.{角色名}"]
-        self.assertEqual(snapshot_shape["identity"], "一句话")
-        self.assertEqual(snapshot_shape["open_threads"], ["一条一句"])
+        snapshot_shape = shapes["character_snapshots.{인물명}"]
+        self.assertEqual(snapshot_shape["identity"], "한 문장")
+        self.assertEqual(snapshot_shape["open_threads"], ["항목당 한 문장"])
 
     def test_redraft_with_stale_revision_rebuilds_context_and_keeps_filled_parts(self) -> None:
         self.init()
-        (self.project / "大纲").mkdir(exist_ok=True)
-        (self.project / "大纲" / "细纲_第001章.md").write_text("### 第 1 章：看片会\n", encoding="utf-8")
+        (self.project / "개요").mkdir(exist_ok=True)
+        (self.project / "개요" / "상세개요_제001장.md").write_text("### 제 1 장：看片会\n", encoding="utf-8")
         draft_cmd = [sys.executable, str(TOOL), "draft", "--project", str(self.project), "--chapter", "1"]
         first = subprocess.run(draft_cmd, text=True, capture_output=True, check=False, encoding="utf-8")
         draft_path = Path(json.loads(first.stdout)["draft"])
         state = self.read_state()
-        # 过期草稿：中间别的事务改过 state 后，旧草稿的修订号与 context 都是旧的。
+        # 만료된 초안: 다른 트랜잭션이 state를 변경하면 이전 초안의 리비전과 context는 모두 오래된 값이다.
         stale = json.loads(draft_path.read_text(encoding="utf-8"))
         stale["expected_state_revision"] = state["state_revision"] + 7
         stale["context"]["position"]["volume"] = "旧卷名"
@@ -622,7 +622,7 @@ class TrackingCommitTests(unittest.TestCase):
         draft_path.write_text(json.dumps(stale, ensure_ascii=False), encoding="utf-8")
         again = subprocess.run(draft_cmd, text=True, capture_output=True, check=False, encoding="utf-8")
         self.assertEqual(again.returncode, 0, again.stderr)
-        self.assertIn("context 按当前状态重建", json.loads(again.stdout)["fill"])
+        self.assertIn("현재 상태로 context를 재구성", json.loads(again.stdout)["fill"])
         rebuilt = json.loads(draft_path.read_text(encoding="utf-8"))
         self.assertEqual(rebuilt["expected_state_revision"], state["state_revision"])
         self.assertEqual(rebuilt["context"]["position"]["volume"], state["context"]["position"]["volume"])
@@ -634,8 +634,8 @@ class TrackingCommitTests(unittest.TestCase):
 
     def test_redraft_merge_keeps_the_drafts_own_additions_and_retirements(self) -> None:
         self.init()
-        (self.project / "大纲").mkdir(exist_ok=True)
-        (self.project / "大纲" / "细纲_第001章.md").write_text("### 第 1 章：看片会\n", encoding="utf-8")
+        (self.project / "개요").mkdir(exist_ok=True)
+        (self.project / "개요" / "상세개요_제001장.md").write_text("### 제 1 장：看片会\n", encoding="utf-8")
         draft_cmd = [sys.executable, str(TOOL), "draft", "--project", str(self.project), "--chapter", "1"]
         first = subprocess.run(draft_cmd, text=True, capture_output=True, check=False, encoding="utf-8")
         draft_path = Path(json.loads(first.stdout)["draft"])
@@ -643,16 +643,16 @@ class TrackingCommitTests(unittest.TestCase):
         old = state["context"]["long_term_constraints"][0]
         stale = json.loads(draft_path.read_text(encoding="utf-8"))
         stale["expected_state_revision"] = state["state_revision"] + 7
-        stale["context"]["long_term_constraints"] = ["本章新立的约束。"]  # 删旧条目、加新条目
+        stale["context"]["long_term_constraints"] = ["本章新立的约束。"]  # 이전 항목을 삭제하고 새 항목을 추가한다.
         stale["delta"]["retired_context_items"] = [old]
         stale["delta"]["result"] = "江晨保住了原版。"
         stale["context"]["position"].update({"story_time": "当晚", "scene": "剪辑室", "volume": "旧卷名"})
         draft_path.write_text(json.dumps(stale, ensure_ascii=False), encoding="utf-8")
         again = subprocess.run(draft_cmd, text=True, capture_output=True, check=False, encoding="utf-8")
         guide = json.loads(again.stdout)
-        self.assertIn("卷信息与当前状态不同", guide["fill"])
+        self.assertIn("권 정보가 달라 현재 상태를 적용했습니다", guide["fill"])
         rebuilt = json.loads(draft_path.read_text(encoding="utf-8"))
-        # 本章的新增留下、退役的不回来。
+        # 이번 장의 새 항목은 남기고 퇴역한 항목은 되살리지 않는다.
         self.assertEqual(rebuilt["context"]["long_term_constraints"], ["本章新立的约束。"])
         self.run_tool("commit", rebuilt)
         self.assertEqual(self.read_state()["context"]["long_term_constraints"], ["本章新立的约束。"])
@@ -660,7 +660,7 @@ class TrackingCommitTests(unittest.TestCase):
     def test_redraft_revision_and_names_are_not_merged_back_silently(self) -> None:
         self.init()
         self.run_tool("commit", transaction(1))
-        # 修订草稿：中间可能插进新章并退役条目，旧草稿多出的条目不能自动带回。
+        # 수정 초안: 중간에 새 장이 추가되고 항목이 퇴역할 수 있으므로 이전 초안에만 남은 항목을 자동 복원하지 않는다.
         draft_cmd = [sys.executable, str(TOOL), "draft", "--project", str(self.project), "--chapter", "1"]
         first = subprocess.run(draft_cmd, text=True, capture_output=True, check=False, encoding="utf-8")
         self.assertEqual(json.loads(first.stdout)["mode"], "revision")
@@ -670,17 +670,17 @@ class TrackingCommitTests(unittest.TestCase):
         stale["expected_state_revision"] = state["state_revision"] + 7
         stale["context"]["long_term_constraints"].append("已被后续章节退役的条目。")
         stale["context"]["active_character_names"].append("路人乙")
-        stale["character_snapshots"] = {"路人乙": {"name": "路人乙"}}  # 后续章节已退役的角色的旧快照
+        stale["character_snapshots"] = {"路人乙": {"name": "路人乙"}}  # 이후 장에서 퇴역한 인물의 이전 스냅샷.
         draft_path.write_text(json.dumps(stale, ensure_ascii=False), encoding="utf-8")
         again = subprocess.run(draft_cmd, text=True, capture_output=True, check=False, encoding="utf-8")
         fill = json.loads(again.stdout)["fill"]
         rebuilt = json.loads(draft_path.read_text(encoding="utf-8"))
         self.assertEqual(rebuilt["context"]["long_term_constraints"], state["context"]["long_term_constraints"])
         self.assertNotIn("路人乙", rebuilt["context"]["active_character_names"])
-        self.assertIn("没有自动带回", fill)
+        self.assertIn("자동 복원하지 않았습니다", fill)
         self.assertIn("已被后续章节退役的条目。", fill)
-        self.assertIn("在场角色 路人乙", fill)
-        self.assertIn("角色快照 路人乙", fill)
+        self.assertIn("등장 인물 路人乙", fill)
+        self.assertIn("인물 스냅샷 路人乙", fill)
         self.assertEqual(rebuilt["character_snapshots"], {})
 
     def draft(self, chapter: int) -> tuple[dict[str, object], Path]:
@@ -692,7 +692,7 @@ class TrackingCommitTests(unittest.TestCase):
         return guide, Path(guide["draft"])
 
     def test_revision_draft_keeps_commitments_that_contain_the_separator(self) -> None:
-        # 承诺原文带「；」：非最新章的修订草稿从逐章记录读回承诺，不能把一条拆成两条。
+        # 약속 원문에 ‘；’가 포함된 경우: 최신 장이 아닌 장의 수정 초안은 장별 기록에서 약속을 읽으며 한 항목을 둘로 나누면 안 된다.
         self.init()
         commitment = "江晨答应交片；但只交原版，不交删改版。"
         self.run_tool("commit", transaction(1, next_commitment=commitment))
@@ -700,9 +700,9 @@ class TrackingCommitTests(unittest.TestCase):
         _, draft_path = self.draft(1)
         draft = json.loads(draft_path.read_text(encoding="utf-8"))
         self.assertEqual(draft["delta"]["next_chapter_commitments"], [commitment])
-        # 照预填提交后再读回，仍是同一条（渲染与读回互逆）。
+        # 미리 채운 값으로 제출하고 다시 읽어도 같은 한 항목이어야 한다. 렌더링과 다시 읽기는 서로 역연산이다.
         self.run_tool("commit", draft)
-        (self.project / ".story/work/第001章/tracking.json").unlink()
+        (self.project / ".story/work/제001장/tracking.json").unlink()
         _, draft_path = self.draft(1)
         again = json.loads(draft_path.read_text(encoding="utf-8"))
         self.assertEqual(again["delta"]["next_chapter_commitments"], [commitment])
@@ -711,11 +711,11 @@ class TrackingCommitTests(unittest.TestCase):
         self.init()
         self.run_tool("commit", transaction(1))
         self.run_tool("commit", transaction(2))
-        (self.project / "追踪/逐章记录/第001章.md").unlink()
+        (self.project / "추적/장별기록/제001장.md").unlink()
         guide, _ = self.draft(1)
         self.assertEqual(guide["mode"], "revision")
-        self.assertNotIn("已按本章现有逐章记录预填", guide["fill"])
-        self.assertIn("逐章记录缺失", guide["fill"])
+        self.assertNotIn("기존 장별 기록으로 미리 채웠습니다", guide["fill"])
+        self.assertIn("장별 기록이 없거나", guide["fill"])
 
     def test_revision_draft_prefills_the_committed_record_so_nothing_is_wiped(self) -> None:
         self.init()
@@ -723,14 +723,14 @@ class TrackingCommitTests(unittest.TestCase):
         first["delta"]["constraints"] = ["原版视频不能再被替换。"]
         self.run_tool("commit", first)
         self.run_tool("commit", transaction(2, character=True))
-        record_path = self.project / "追踪/逐章记录/第001章.md"
+        record_path = self.project / "추적/장별기록/제001장.md"
         before = record_path.read_text(encoding="utf-8")
 
         guide, draft_path = self.draft(1)
         self.assertEqual(guide["mode"], "revision")
-        # 修订的 delta 是本章修订后的完整记录，不是「只填变化」。
+        # 수정 delta는 변경 부분만 입력하는 것이 아니라 수정 후 해당 장의 전체 기록이다.
         self.assertNotIn("只填 delta 里本章的变化", guide["fill"])
-        self.assertIn("完整记录", guide["fill"])
+        self.assertIn("전체 기록", guide["fill"])
         draft = json.loads(draft_path.read_text(encoding="utf-8"))
         delta = draft["delta"]
         self.assertEqual(delta["result"], first["delta"]["result"])
@@ -741,7 +741,7 @@ class TrackingCommitTests(unittest.TestCase):
         self.assertEqual(delta["next_chapter_commitments"], first["delta"]["next_chapter_commitments"])
         self.assertIn("江晨", draft["character_snapshots"])
 
-        # 只改修订真正改变的一项，其余照预填提交：逐章记录除结果外逐字不变，check 通过。
+        # 실제 수정한 한 항목만 바꾸고 나머지는 미리 채운 값으로 제출한다. 장별 기록은 결과 외에는 그대로이며 check를 통과한다.
         delta["result"] = "江晨在看片会上保住原版，并当场剪出新预告。"
         self.run_tool("commit", draft)
         after = record_path.read_text(encoding="utf-8")
@@ -758,7 +758,7 @@ class TrackingCommitTests(unittest.TestCase):
         _, draft_path = self.draft(1)
         draft = json.loads(draft_path.read_text(encoding="utf-8"))
         self.run_tool("commit", draft)
-        record = (self.project / "追踪/逐章记录/第001章.md").read_text(encoding="utf-8")
+        record = (self.project / "추적/장별기록/제001장.md").read_text(encoding="utf-8")
         self.assertIn("## 本章退役登记", record)
         self.assertIn(constraint, record)
         self.run_tool("check")
@@ -767,49 +767,49 @@ class TrackingCommitTests(unittest.TestCase):
         self.init()
         body = self.write_chapter_contract(1, actual=1000, target=1000)
         self.run_tool("commit", self.bind_wordcount(transaction(1), resolution="within_user_band"))
-        (self.project / "正文/第001章_测试.md").write_bytes(body.replace("字".encode("utf-8"), "改".encode("utf-8"), 50))
+        (self.project / "본문/제001장_测试.md").write_bytes(body.replace("字".encode("utf-8"), "改".encode("utf-8"), 50))
         before = self.read_state()
         result = self.run_tool("commit", transaction(1, mode="revision"), expect=2)
         self.assertIn("storyctl.py chapter commit", result.stderr)
         self.assertEqual(self.read_state(), before)
-        # 报错说清改的是哪一项，并指向带 storyctl 的写作 skill（story-review / story-import 不带 storyctl）。
-        self.assertIn("第1章正文已改", result.stderr)
-        self.assertIn("story-long-write 的 storyctl.py chapter commit", result.stderr)
-        # 正文没动的纯追踪修订（例如修派生视图）照常可提交。
-        (self.project / "正文/第001章_测试.md").write_bytes(body)
+        # 오류는 변경된 항목을 명시하고 storyctl이 포함된 집필 스킬을 안내한다. story-review / story-import에는 storyctl이 없다.
+        self.assertIn("제1장의 본문이(가) 변경되었습니다", result.stderr)
+        self.assertIn("story-long-write의 storyctl.py chapter commit", result.stderr)
+        # 본문을 건드리지 않는 추적 정보만의 수정(예: 파생 뷰 수정)도 정상적으로 제출할 수 있다.
+        (self.project / "본문/제001장_测试.md").write_bytes(body)
         self.run_tool("commit", transaction(1, mode="revision"))
-        # 只改字数目标：报「字数目标已改」，不谎报正文已改。
-        outline = self.project / "大纲/细纲_第001章.md"
+        # 글자 수 목표만 바뀌면 목표가 바뀌었다고 알리고 본문이 바뀌었다고 잘못 알리지 않는다.
+        outline = self.project / "개요/상세개요_제001장.md"
         original_outline = outline.read_text(encoding="utf-8")
         outline.write_text(original_outline.replace("1000 字", "1200 字"), encoding="utf-8")
         result = self.run_tool("commit", transaction(1, mode="revision"), expect=2)
-        self.assertIn("第1章字数目标已改", result.stderr)
+        self.assertIn("제1장의 목표 분량이(가) 변경되었습니다", result.stderr)
         self.assertNotIn("正文已改", result.stderr)
 
     def test_tracking_only_revision_survives_a_later_author_range_line(self) -> None:
-        # 提交时细纲没写「字数范围」（记录无 author_range）；作者事后给细纲补一行范围。正文与目标都没动，
-        # 纯追踪修订不该被当成「正文或字数目标已改」拒掉。
+        # 제출 시 상세 개요에 ‘字数范围’가 없어 author_range가 기록되지 않았고, 작가가 나중에 범위를 추가했다. 본문과 목표가 그대로라면
+        # 추적 정보만의 수정을 본문이나 글자 수 목표가 바뀌었다는 이유로 거부하면 안 된다.
         self.init()
         self.write_chapter_contract(1, actual=1000, target=1000)
         self.run_tool("commit", self.bind_wordcount(transaction(1), resolution="within_user_band"))
-        outline = self.project / "大纲/细纲_第001章.md"
+        outline = self.project / "개요/상세개요_제001장.md"
         outline.write_text(outline.read_text(encoding="utf-8") + "- 字数范围：1500-2000 字\n", encoding="utf-8")
         self.run_tool("commit", transaction(1, mode="revision"))
         self.run_tool("check")
 
     def test_tracking_only_revision_survives_a_non_numeric_target_note(self) -> None:
-        # 旧细纲在数字目标旁留了一行「字数目标：按卷规划」式说明：不含数字的行是说明文字，
-        # 已提交章的纯追踪修订照常核对并通过；两个数字值冲突仍拒。
+        # 이전 상세 개요에서 숫자 목표 옆에 ‘字数目标：按卷规划’ 같은 설명 행을 둔 경우, 숫자 없는 행은 설명문으로 취급한다.
+        # 이미 제출한 장의 추적 정보만 수정할 때도 정상 대조하여 통과한다. 두 숫자 값이 충돌하면 여전히 거부한다.
         self.init()
         self.write_chapter_contract(1, actual=1000, target=1000)
         self.run_tool("commit", self.bind_wordcount(transaction(1), resolution="within_user_band"))
-        outline = self.project / "大纲/细纲_第001章.md"
+        outline = self.project / "개요/상세개요_제001장.md"
         original = outline.read_text(encoding="utf-8")
         outline.write_text(original + "- 字数目标：按卷规划\n", encoding="utf-8")
         self.run_tool("commit", transaction(1, mode="revision"))
         outline.write_text(original + "- 字数目标：1200 字\n", encoding="utf-8")
         result = self.run_tool("commit", transaction(1, mode="revision"), expect=2)
-        self.assertIn("字数记录无法核对", result.stderr)
+        self.assertIn("분량 기록을 대조할 수 없습니다", result.stderr)
 
     def test_retired_item_still_in_context_is_rejected(self) -> None:
         self.init()
@@ -824,9 +824,9 @@ class TrackingCommitTests(unittest.TestCase):
         document["delta"]["result"] = "江晨" * 100
         document["delta"]["foreshadow_changes"][0]["summary"] = "老兵" * 70
         result = self.run_tool("commit", document, expect=2)
-        self.assertIn("2 个字段超长", result.stderr)
-        self.assertIn("delta.result exceeds 480 bytes（现 200 字，上限约 160 字，至少删 40 字）", result.stderr)
-        self.assertIn("summary exceeds 360 bytes（现 140 字，上限约 120 字，至少删 20 字）", result.stderr)
+        self.assertIn("2개 필드가 길이 한도를 초과했습니다", result.stderr)
+        self.assertIn("delta.result exceeds 480 bytes(현재 200자, 상한 약 160자, 최소 40자 삭제 필요)", result.stderr)
+        self.assertIn("summary exceeds 360 bytes(현재 140자, 상한 약 120자, 최소 20자 삭제 필요)", result.stderr)
         self.assertEqual(self.read_state()["last_committed_chapter"], 0)
 
     def test_unknown_fields_are_rejected(self) -> None:
@@ -837,42 +837,42 @@ class TrackingCommitTests(unittest.TestCase):
         self.init()
         state = self.read_state()
         state["status"] = "clean"
-        (self.project / "追踪/_tracking-state.json").write_text(
+        (self.project / "추적/_tracking-state.json").write_text(
             json.dumps(state, ensure_ascii=False), encoding="utf-8"
         )
         result = self.run_tool("check", expect=2)
         self.assertIn("unsupported fields", result.stderr)
 
     def test_init_archives_a_pre_transaction_tracking_directory(self) -> None:
-        tracking = self.project / "追踪"
+        tracking = self.project / "추적"
         tracking.mkdir()
-        (tracking / "角色状态.md").write_text("# 旧角色状态\n", encoding="utf-8")
-        (tracking / "时间线.md").write_text("# 旧时间线\n", encoding="utf-8")
+        (tracking / "인물상태.md").write_text("# 旧角色状态\n", encoding="utf-8")
+        (tracking / "시간선.md").write_text("# 旧时间线\n", encoding="utf-8")
         (tracking / "_tracking-meta.json").write_text("{}\n", encoding="utf-8")
 
         result = self.run_tool("init", initial_document())
-        self.assertIn("_旧追踪存档", result.stderr)
-        archive = tracking / "_旧追踪存档"
-        self.assertEqual((archive / "角色状态.md").read_text(encoding="utf-8"), "# 旧角色状态\n")
-        self.assertEqual((archive / "时间线.md").read_text(encoding="utf-8"), "# 旧时间线\n")
-        self.assertFalse((tracking / "角色状态.md").exists())
-        self.assertTrue((tracking / "角色状态").is_dir())
+        self.assertIn("_이전추적보관", result.stderr)
+        archive = tracking / "_이전추적보관"
+        self.assertEqual((archive / "인물상태.md").read_text(encoding="utf-8"), "# 旧角色状态\n")
+        self.assertEqual((archive / "시간선.md").read_text(encoding="utf-8"), "# 旧时间线\n")
+        self.assertFalse((tracking / "인물상태.md").exists())
+        self.assertTrue((tracking / "인물상태").is_dir())
         self.run_tool("check")
 
     def test_failed_init_leaves_the_old_tracking_directory_untouched(self) -> None:
-        tracking = self.project / "追踪"
+        tracking = self.project / "추적"
         tracking.mkdir()
-        (tracking / "角色状态.md").write_text("# 旧角色状态\n", encoding="utf-8")
+        (tracking / "인물상태.md").write_text("# 旧角色状态\n", encoding="utf-8")
         invalid = initial_document()
         invalid["baseline"] = {}
 
         self.run_tool("init", invalid, expect=2)
-        self.assertTrue((tracking / "角色状态.md").exists())
-        self.assertFalse((tracking / "_旧追踪存档").exists())
+        self.assertTrue((tracking / "인물상태.md").exists())
+        self.assertFalse((tracking / "_이전추적보관").exists())
 
     def test_commit_and_check_still_refuse_a_retired_layout(self) -> None:
         self.init()
-        (self.project / "追踪/时间线.md").write_text("# 旧时间线\n", encoding="utf-8")
+        (self.project / "추적/시간선.md").write_text("# 旧时间线\n", encoding="utf-8")
         result = self.run_tool("check", expect=2)
         self.assertIn("retired tracking files", result.stderr)
         result = self.run_tool("commit", transaction(1), expect=2)
@@ -885,7 +885,7 @@ class TrackingCommitTests(unittest.TestCase):
         result = self.run_tool("commit", silent, expect=2)
         self.assertIn("retired_context_items", result.stderr)
         self.assertEqual(self.read_state()["state_revision"], 0)
-        self.assertFalse((self.project / "追踪/逐章记录/第001章.md").exists())
+        self.assertFalse((self.project / "추적/장별기록/제001장.md").exists())
 
     def test_declared_context_retirement_is_recorded_in_the_chapter_delta(self) -> None:
         self.init()
@@ -896,7 +896,7 @@ class TrackingCommitTests(unittest.TestCase):
         self.run_tool("commit", declared)
 
         self.assertEqual(self.read_state()["context"]["long_term_constraints"], [])
-        delta_text = (self.project / "追踪/逐章记录/第001章.md").read_text(encoding="utf-8")
+        delta_text = (self.project / "추적/장별기록/제001장.md").read_text(encoding="utf-8")
         self.assertIn("## 本章退役登记", delta_text)
         self.assertIn(constraint, delta_text)
         self.run_tool("check")
@@ -904,39 +904,39 @@ class TrackingCommitTests(unittest.TestCase):
     def test_retiring_a_core_character_removes_its_derived_view(self) -> None:
         self.init()
         self.run_tool("commit", transaction(1, character=True))
-        self.assertTrue((self.project / "追踪/角色状态/江晨.md").exists())
+        self.assertTrue((self.project / "추적/인물상태/江晨.md").exists())
 
         retire = transaction(2)
         retire["delta"]["retired_characters"] = ["江晨"]
         self.run_tool("commit", retire)
 
         self.assertNotIn("江晨", self.read_state()["characters"])
-        self.assertFalse((self.project / "追踪/角色状态/江晨.md").exists())
-        self.assertIn("角色状态：江晨", (self.project / "追踪/逐章记录/第002章.md").read_text(encoding="utf-8"))
+        self.assertFalse((self.project / "추적/인물상태/江晨.md").exists())
+        self.assertIn("角色状态：江晨", (self.project / "추적/장별기록/제002장.md").read_text(encoding="utf-8"))
         self.run_tool("check")
 
     def test_an_interrupted_archive_can_be_resumed(self) -> None:
-        tracking = self.project / "追踪"
-        (tracking / "_旧追踪存档").mkdir(parents=True)
-        (tracking / "角色状态.md").write_text("# 未搬完\n", encoding="utf-8")
-        (tracking / "_旧追踪存档/时间线.md").write_text("# 上次已搬\n", encoding="utf-8")
+        tracking = self.project / "추적"
+        (tracking / "_이전추적보관").mkdir(parents=True)
+        (tracking / "인물상태.md").write_text("# 未搬完\n", encoding="utf-8")
+        (tracking / "_이전추적보관/시간선.md").write_text("# 上次已搬\n", encoding="utf-8")
 
         self.run_tool("init", initial_document())
-        archive = tracking / "_旧追踪存档"
-        self.assertEqual((archive / "角色状态.md").read_text(encoding="utf-8"), "# 未搬完\n")
-        self.assertEqual((archive / "时间线.md").read_text(encoding="utf-8"), "# 上次已搬\n")
+        archive = tracking / "_이전추적보관"
+        self.assertEqual((archive / "인물상태.md").read_text(encoding="utf-8"), "# 未搬完\n")
+        self.assertEqual((archive / "시간선.md").read_text(encoding="utf-8"), "# 上次已搬\n")
         self.run_tool("check")
 
     def test_archive_never_clobbers_an_already_archived_file(self) -> None:
-        tracking = self.project / "追踪"
-        (tracking / "_旧追踪存档").mkdir(parents=True)
-        (tracking / "角色状态.md").write_text("现役\n", encoding="utf-8")
-        (tracking / "_旧追踪存档/角色状态.md").write_text("存档\n", encoding="utf-8")
+        tracking = self.project / "추적"
+        (tracking / "_이전추적보관").mkdir(parents=True)
+        (tracking / "인물상태.md").write_text("现役\n", encoding="utf-8")
+        (tracking / "_이전추적보관/인물상태.md").write_text("存档\n", encoding="utf-8")
 
         result = self.run_tool("init", initial_document(), expect=2)
         self.assertIn("already exists", result.stderr)
-        self.assertEqual((tracking / "角色状态.md").read_text(encoding="utf-8"), "现役\n")
-        self.assertEqual((tracking / "_旧追踪存档/角色状态.md").read_text(encoding="utf-8"), "存档\n")
+        self.assertEqual((tracking / "인물상태.md").read_text(encoding="utf-8"), "现役\n")
+        self.assertEqual((tracking / "_이전추적보관/인물상태.md").read_text(encoding="utf-8"), "存档\n")
 
     def test_a_character_can_die_and_retire_in_one_transaction(self) -> None:
         self.init()
@@ -946,7 +946,7 @@ class TrackingCommitTests(unittest.TestCase):
         farewell["delta"]["retired_characters"] = ["江晨"]
         self.run_tool("commit", farewell)
 
-        record = (self.project / "追踪/逐章记录/第002章.md").read_text(encoding="utf-8")
+        record = (self.project / "추적/장별기록/제002장.md").read_text(encoding="utf-8")
         self.assertIn("江晨｜核心｜在最终一战中阵亡，彻底退场", record)
         self.assertIn("角色状态：江晨", record)
         self.assertNotIn("江晨", self.read_state()["characters"])
@@ -1010,13 +1010,13 @@ class TrackingCommitTests(unittest.TestCase):
     def test_twenty_active_characters_pass_and_the_twenty_first_is_rejected_before_any_write(self) -> None:
         result = self.run_tool("init", self.cast_document(21), expect=2)
         self.assertIn("at most 20 names", result.stderr)
-        # 只允许留下加锁时建的空 追踪/ 目录。
-        self.assertFalse((self.project / "追踪/_tracking-state.json").exists())
-        self.assertFalse((self.project / "追踪/上下文.md").exists())
-        self.assertFalse((self.project / "追踪/角色状态").exists())
+        # 잠금을 만들 때 생성한 빈 추적/ 디렉터리만 남길 수 있다.
+        self.assertFalse((self.project / "추적/_tracking-state.json").exists())
+        self.assertFalse((self.project / "추적/문맥.md").exists())
+        self.assertFalse((self.project / "추적/인물상태").exists())
 
         self.run_tool("init", self.cast_document(20))
-        context = (self.project / "追踪/上下文.md").read_text(encoding="utf-8")
+        context = (self.project / "추적/문맥.md").read_text(encoding="utf-8")
         self.assertIn("女主20｜", context)
         self.run_tool("check")
 
@@ -1026,18 +1026,18 @@ class TrackingCommitTests(unittest.TestCase):
         result = self.run_tool("commit", overflow, expect=2)
         self.assertIn("at most 20 names", result.stderr)
         self.assertEqual(self.read_state(), before)
-        self.assertFalse((self.project / "追踪/逐章记录/第001章.md").exists())
+        self.assertFalse((self.project / "추적/장별기록/제001장.md").exists())
 
     def test_existing_state_with_six_to_twenty_active_characters_still_checks_drafts_and_commits(self) -> None:
-        # 旧版只收 6 人；作者改过脚本写下的 7–20 人 state，升级后必须照常 check / draft / commit。
+        # 이전 버전은 6명만 허용했다. 작가가 스크립트의 state를 7–20명으로 수정했어도 업그레이드 후 check / draft / commit이 정상 동작해야 한다.
         for count in (6, 7, 20):
             with self.subTest(count=count):
                 self.project = Path(self.temporary.name) / f"群像{count}"
                 self.project.mkdir()
                 self.run_tool("init", self.cast_document(count))
                 self.run_tool("check")
-                (self.project / "大纲").mkdir()
-                (self.project / "大纲" / "细纲_第001章.md").write_text("### 第 1 章：家宴\n", encoding="utf-8")
+                (self.project / "개요").mkdir()
+                (self.project / "개요" / "상세개요_제001장.md").write_text("### 제 1 장：家宴\n", encoding="utf-8")
                 drafted = subprocess.run(
                     [sys.executable, str(TOOL), "draft", "--project", str(self.project), "--chapter", "1"],
                     text=True, capture_output=True, check=False, encoding="utf-8")
@@ -1056,9 +1056,9 @@ class TrackingCommitTests(unittest.TestCase):
     def test_hot_context_byte_cap_still_rejects_a_full_cast_before_any_write(self) -> None:
         result = self.run_tool("init", self.cast_document(20, long_fields=True), expect=2)
         self.assertIn("hot context exceeds 12288 bytes", result.stderr)
-        self.assertFalse((self.project / "追踪/_tracking-state.json").exists())
-        self.assertFalse((self.project / "追踪/上下文.md").exists())
-        self.assertFalse((self.project / "追踪/角色状态").exists())
+        self.assertFalse((self.project / "추적/_tracking-state.json").exists())
+        self.assertFalse((self.project / "추적/문맥.md").exists())
+        self.assertFalse((self.project / "추적/인물상태").exists())
 
         self.run_tool("init", self.cast_document(20))
         grown = transaction(1)
@@ -1069,12 +1069,12 @@ class TrackingCommitTests(unittest.TestCase):
             name: {**snapshot(), "identity": "身" * 80, "state": "状" * 100, "goal": "目" * 100} for name in names
         }
         before = self.read_state()
-        context_before = (self.project / "追踪/上下文.md").read_bytes()
+        context_before = (self.project / "추적/문맥.md").read_bytes()
         result = self.run_tool("commit", grown, expect=2)
         self.assertIn("hot context exceeds 12288 bytes", result.stderr)
         self.assertEqual(self.read_state(), before)
-        self.assertEqual((self.project / "追踪/上下文.md").read_bytes(), context_before)
-        self.assertFalse((self.project / "追踪/逐章记录/第001章.md").exists())
+        self.assertEqual((self.project / "추적/문맥.md").read_bytes(), context_before)
+        self.assertFalse((self.project / "추적/장별기록/제001장.md").exists())
 
 
 if __name__ == "__main__":

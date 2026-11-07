@@ -1,39 +1,39 @@
-# Agent Note: 给作者的报告只讲故事，不讲工程
+# Agent Note: 작가용 보고는 개발 세부 대신 이야기를 설명
 
 Status: implemented
 
 ## Problem
 
-真实会话测试里，交给作者的报告满是作者看不懂、也用不上的工程细节：脚本名和通过/失败清单（`check-ai-patterns.js` …）、字段与状态名（`visible_chars_v1`、`last_committed_chapter`、`state_revision`）、内部清单与严重度代号（S1–S4、Gate、「7 Gate」）、没有故事标签的裸编号（F057、E015、REL-001），甚至把 flag 名（`accept-current-length`）当选项让作者选。story-import 的导入完成报告曾经写出 `visible_chars_v1`、`imported_through_chapter=6`、F001–F007 / E001–E010 和「`tracking_commit.py init` 与 `check` 均通过」，作者读完仍不知道该核对什么、下一步说什么。
+실제 세션 테스트의 작가 보고에는 이해하기 어렵고 필요도 없는 개발 정보가 가득했다. `check-ai-patterns.js` 같은 스크립트별 통과·실패 목록, `visible_chars_v1`, `last_committed_chapter`, `state_revision` 필드·상태, S1–S4·Gate·“7 Gate” 같은 내부 목록·심각도 코드, 이야기 설명 없는 F057·E015·REL-001 번호, 선택지로 제시한 `accept-current-length` 플래그까지 있었다. story-import 완료 보고는 `visible_chars_v1`, `imported_through_chapter=6`, F001–F007 / E001–E010, “`tracking_commit.py init`과 `check` 모두 통과”를 썼지만 작가는 무엇을 확인하고 다음에 무엇을 말해야 할지 몰랐다.
 
-根因有两层：一是模板本身把内部结构原样暴露（story-review 报告开头强制逐字输出 `Requested Mode` / `Effective Mode` / `Fallback` / `Rubric Source`，Severity Counts 用 S1–S4；deslop 问题表带 Gate 列；导入报告写「唯一结构化 state + 派生快照 + 固定 7 栏上下文」）；二是模板没写清「哪些不能写」，模型就把内部自检结果、校验命令一并念给作者。
+원인은 두 가지다. 템플릿이 내부 구조를 그대로 노출했다. story-review 머리말은 `Requested Mode` / `Effective Mode` / `Fallback` / `Rubric Source`를 그대로 출력하도록 강제하고 Severity Counts는 S1–S4를 썼다. deslop 표에는 Gate 열, 가져오기 보고에는 “유일한 구조화 state＋파생 스냅샷＋고정 7칸 컨텍스트”가 있었다. 또 쓰면 안 되는 내용을 명시하지 않아 모델이 내부 자체 검사·명령까지 작가에게 읽어 주었다.
 
 ## Decision
 
-- **报告写给作者**：每份作者可见的报告/消息模板只讲四件事——做了什么（故事语言）、发现了什么（白话 + 作者原文举例）、要作者决定什么（问题 + 自然语言选项 + 推荐默认）、下一步怎么说。脚本名、字段名、flag、状态码、内部清单名不进正文；编号只能以「故事描述（ID）」出现。确需保留的执行细节（如审稿降级原因、作者记忆回执）只放块尾一行「技术备注：」。
-- **模板显式标注**：作者可见模板写在普通 ```` ```md ```` 围栏里，上一行加 `<!-- author-report -->` 标记，`scripts/check-author-reports.py` 只扫紧跟标记的围栏，拦截已知内部名、脚本/配置文件名、flag、snake_case / kebab-case 标识符（`/story-*`、`$story-*` 命令除外）、英文工程词、S1–S4、Gate 与裸编号；块尾技术备注豁免且只能一行。编号必须挂故事标签，「描述（ID）」与「ID（描述）」两种写法都放行。`REQUIRED` 列出必须带模板块的文件及最少块数，防止标记被悄悄删掉。作者记忆回执例外：整条回复就是模板两行，写成围栏块时模型把围栏原样回给了作者（发版前实测 2/2），改用行内示例后 2/2 为纯文本两行，所以 `author-memory.md` 不用围栏、不在 `REQUIRED` 里。围栏信息串原先直接写成 `author-report`，发版前实测审稿报告整份连围栏回给了作者；同一本书用 v0.7.10 的 ```` ```md ```` 模板审则没有，改成「标记行 + ```` ```md ````」后复测为纯文本（各 1 次）。守卫现在拒收信息串为 `author-report` 的旧写法。守卫注册在 `cross-platform.yml` 的 static-check job，`--self-test` 自带正反例。规则只有这一份，也只有这一个守卫：`static-check.py` 不再扫描 author-report 块、不另维护词表（两份词表曾对编号写法要求相反，且各有漏词；后来两处同跑一份规则也只是重复执行）。
-- **本次覆盖的 skill**：
-  - story-review：新增「报告面向作者」小节；S1 → 必须改、S2 → 建议改、S3/S4 → 可以不改；reviewer 名与 APPROVE/CONCERNS 换成「这次怎么审的」「总体判断」；新增「需要你决定」「没法判断的地方」；Mode / Fallback / Rubric 收进块尾技术备注。统一 Findings Schema 保留为 reviewer 与综合裁决之间的内部格式。
-  - story-import：导入完成报告改成「导进来了 / 我整理出了 / 请你核对 / 需要你决定 / 下一步：说『日更』就从第 N+1 章接着写」；质量检查清单明确是自检、不念给作者；未部署环境的二选一和对标缺资料的提示改成白话。
-  - story-deslop：检测表去掉 Gate 列（Gate 换算保留为内部计数说明），润色结果改成等级 → 改了什么 → 字数 → 改前改后 → 需要你看一眼。
-  - story（路由）与作者记忆协议：新增「回执怎么告诉作者」——先一句人话（「记住了：《书名》的对话一律用「」」），机器回执放技术备注行；预算提醒不原样贴，改说哪几条习惯写正文时可能顾不上；查询降级不再标 `Fallback: agent unavailable -> direct lookup`。协议是 `author-memory-reference` 共享组的 canonical，四个副本经 `shared-references.py sync` 同步。
-  - story-short-analyze：续跑三选一与完成消息改成作者问法，不报字段名和 Stage 编号；结构计数不达标时先自己补，补不出来才用故事话告诉作者缺什么。
-  - story-long-scan / story-short-scan：扫榜报告标为作者模板并加一行原则（没采到的榜用一句话说明，不贴脚本名与 SKIP）；短篇报告补上 skill 开头要求的可信度与复扫时间。
-  - story-cover：新增交付消息模板；问输出目录时不把 `BOOK_DIR` 变量名抛给作者。
-- story-long-write、story-long-analyze、story-short-write、story-setup 的作者报告由并行改动按同一原则处理，本篇不覆盖其细节。
+- **작가를 위한 보고**: 모든 작가용 보고·메시지 템플릿은 한 일(이야기 용어), 발견한 점(쉬운 말＋작가 원문 예시), 작가가 정할 것(질문＋자연어 선택지＋추천 기본값), 다음에 할 말의 네 가지를 다룬다. 스크립트·필드·플래그·상태 코드·내부 목록명은 본문에 넣지 않고 번호는 “이야기 설명(ID)”으로만 쓴다. 검토 축소 사유나 작가 메모리 응답 같은 필요한 실행 내역은 블록 끝의 “기술 비고:” 한 줄에 둔다.
+- **템플릿 명시적 표식**: 작가용 템플릿은 일반 ```` ```md ```` 블록에 쓰고 바로 앞줄에 `<!-- author-report -->`를 붙인다. `scripts/check-author-reports.py`는 표식 바로 뒤 블록만 검사해 알려진 내부명, 스크립트·설정 파일명, flag, snake_case / kebab-case 식별자(`/story-*`, `$story-*` 제외), 영어 개발 용어, S1–S4, Gate, 설명 없는 번호를 차단한다. 끝의 기술 비고는 예외지만 한 줄만 허용한다. 번호는 이야기 라벨과 함께 “설명(ID)” 또는 “ID(설명)” 둘 다 허용한다. `REQUIRED`는 필수 템플릿 파일과 최소 블록 수로 표식 삭제를 방지한다. 작가 메모리 응답은 예외다. 전체가 두 줄인 답변을 블록으로 쓰니 모델이 블록까지 그대로 반환했다(출시 전 실측 2/2). 인라인 예시로 바꾸자 2/2가 평문 두 줄이어서 `author-memory.md`는 코드 블록과 `REQUIRED`에서 제외한다. 처음에는 블록 정보 문자열을 `author-report`로 썼는데 실제 원고 검토가 블록까지 통째로 반환했다. 같은 책의 v0.7.10 ```` ```md ```` 템플릿은 그렇지 않았고 “표식 행＋```` ```md ````”로 바꾼 뒤 평문으로 나왔다(각 1회). 이제 검사는 예전 `author-report` 정보 문자열을 거부한다. 검사는 `cross-platform.yml`의 static-check job에 등록하고 `--self-test`에 양성·음성 사례를 둔다. 규칙과 담당 검사는 하나뿐이며 `static-check.py`는 블록을 별도로 훑거나 어휘 목록을 유지하지 않는다. 이전 두 목록은 번호 형식 요구가 반대이고 각각 누락 용어도 있었다. 나중에 같은 규칙을 두 번 실행한 방식도 단순 중복이었다.
+- **이번 대상 스킬**:
+  - story-review: “작가용 보고” 절을 추가한다. S1은 필수 수정, S2는 수정 권장, S3/S4는 수정 선택으로 옮긴다. reviewer명과 APPROVE/CONCERNS는 “검토 방식”, “종합 판단”으로 바꾸고 “결정해 주세요”, “판단할 수 없는 부분”을 추가한다. Mode / Fallback / Rubric은 끝 기술 비고에 둔다. Findings Schema는 reviewer와 종합 판단 사이의 내부 형식으로 보존한다.
+  - story-import: 완료 보고를 “가져온 내용 / 정리한 내용 / 확인할 내용 / 결정할 사항 / 다음: ‘일일 집필’이라고 하면 제N+1장부터 이어쓰기”로 바꾼다. 품질 목록은 작가에게 읽어 주지 않는 자체 검사라고 명시한다. 미배포 환경의 두 선택지와 비교 자료 누락 안내도 쉽게 바꾼다.
+  - story-deslop: 문제 표의 Gate 열을 없애고 환산은 내부 집계 설명에 남긴다. 교정 결과는 등급 → 바뀐 내용 → 글자 수 → 전후 비교 → 확인할 사항 순서다.
+  - story 라우터·작가 메모리 프로토콜: “작가에게 응답하기”를 추가한다. 먼저 “기억했습니다. 《작품명》의 대화에는 항상 「」를 쓰겠습니다” 같은 문장을 쓰고 기계 응답은 기술 비고에 둔다. 예산 경고를 붙이지 말고 본문 집필 때 챙기지 못할 수 있는 습관을 설명한다. 조회 대체에서 `Fallback: agent unavailable -> direct lookup`을 내세우지 않는다. 프로토콜은 `author-memory-reference` 공유 그룹의 canonical이며 네 복사본은 `shared-references.py sync`로 동기화한다.
+  - story-short-analyze: 재개 세 선택지·완료 메시지는 필드·Stage 번호 없이 작가에게 묻는다. 구조 수가 기준 미달이면 먼저 자체 보완하고 불가능할 때만 이야기 용어로 부족한 것을 알린다.
+  - story-long-scan / story-short-scan: 조사 보고에 작가 템플릿 표식을 붙이고 수집 실패 순위는 스크립트명·SKIP 대신 한 문장으로 설명하도록 한다. 단편 보고에는 진입부가 요구하는 신뢰도·재조사 시점을 보완한다.
+  - story-cover: 전달 메시지 템플릿을 추가하고 출력 디렉터리 질문에 `BOOK_DIR` 변수명을 내세우지 않는다.
+- story-long-write, story-long-analyze, story-short-write, story-setup 보고는 병렬 변경에서 같은 원칙으로 다루며 여기서는 세부를 다루지 않는다.
 
 ## Alternatives considered
 
-- **全文扫描所有 skill 文档里的工程词**——最强理由：不用维护标记，覆盖面最大。否：SKILL.md 本身就是写给 agent 的操作说明，脚本名、字段名是合法且必要的指令内容，全文扫描会满屏误报，最后只能靠白名单，失去意义。
-- **在运行时对模型输出做后处理过滤**——最强理由：直接拦住真正发给作者的文本，而不是只管模板。否：本产品是 Markdown 工作流，没有统一的输出拦截层；各宿主 hook 能力不一，且过滤只能删词、不能把「F003」改写成「玉佩的来历」，治标不治本。
-- **把工程细节整段删掉，不留技术备注**——最强理由：作者界面最干净。否：审稿降级原因、作者记忆回执在报 bug 和核对「是否真的记住了」时有用；限定为块尾一行，既可查又不打扰阅读。
-- **保留 S1–S4 但在旁边加中文解释**——最强理由：与 reviewer 内部 schema 一一对应，排序无歧义。否：作者只关心「要不要改」，三档白话足够决策；内部仍用 S1–S4 排序，转写发生在综合裁决之后。
+- **모든 스킬 문서의 개발 용어 전수 검사** — 표식 관리 없이 범위가 가장 넓다. 그러나 SKILL.md는 에이전트 작업 지침이므로 스크립트·필드가 필수이며 전수 검사는 오탐과 허용 목록만 늘려 의미가 없다.
+- **런타임 모델 출력 후처리 필터** — 템플릿이 아니라 실제 작가 전달문을 차단한다. 그러나 제품은 Markdown 워크플로로 공통 출력 차단 계층이 없고 호스트별 훅 능력도 다르다. 필터는 단어를 삭제할 뿐 F003을 “옥패의 유래”로 바꾸지 못한다.
+- **기술 비고 없이 개발 세부 전체 삭제** — 작가 화면은 가장 깔끔하다. 그러나 검토 축소 사유·메모리 응답은 버그 보고와 실제 저장 확인에 유용하다. 끝 한 줄이면 읽기를 방해하지 않고 확인할 수 있다.
+- **S1–S4 유지＋중국어 설명** — 내부 schema와 1:1 대응해 정렬이 명확하다. 그러나 작가에게는 수정 여부의 쉬운 세 등급이면 충분하다. 내부 정렬은 S1–S4를 유지하고 종합 판단 후 표현을 바꾼다.
 
 ## Consequences
 
-- **收益**：作者读报告就知道要核对什么、拍板什么、下一步说什么；新增或修改作者模板时，常见工程词会在 CI 被拦下。
-- **代价与已知上限**：守卫只查带标记的模板块，模型临场自由发挥的回复仍可能夹带黑话，只能靠模板里的原则句约束；中文工程腔（如「派生视图」「固定 7 栏」）规则拦不住，靠评审。英文工程词清单与裸编号正则需要随新术语增补。story-deslop SKILL.md 净减约 185 字，仍在预算内；story-review、story-import 不在热路径预算表内。
+- **이점**: 작가는 보고만 읽고 확인·결정·다음 요청을 알 수 있다. 템플릿 추가·수정 때 흔한 개발 용어는 CI가 차단한다.
+- **비용과 한계**: 표식 블록만 검사하므로 모델의 즉흥 답변에는 내부 용어가 섞일 수 있어 원칙 문장에 의존한다. “파생 뷰”, “고정 7칸” 같은 중국어 개발 표현은 검사로 못 잡아 수동 검토가 필요하다. 영어 용어 목록·번호 정규식은 새 용어에 맞춰 늘려야 한다. story-deslop SKILL.md는 순감 약 185자로 예산 안이며 story-review·story-import는 상시 경로 예산 표에 없다.
 
-## Verification
+## 검증
 
-`python3 scripts/check-author-reports.py --self-test`；`python3 scripts/check-author-reports.py`；`bash scripts/check-shared-files.sh`（作者记忆协议四个副本一致）；`bash scripts/check-doc-budget.sh`。
+`python3 scripts/check-author-reports.py --self-test`; `python3 scripts/check-author-reports.py`; `bash scripts/check-shared-files.sh`(작가 메모리 복사본 네 개 일치); `bash scripts/check-doc-budget.sh`.

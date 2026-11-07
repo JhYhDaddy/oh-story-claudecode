@@ -1,24 +1,24 @@
 #!/bin/bash
-# test-charcount-portable.sh — 验证「跨平台字符统计」命令在三大平台 + Windows
-# Microsoft Store 占位程序场景下都能正确数出中文字符数。
+# test-charcount-portable.sh — 크로스 플랫폼 문자 수 명령이 주요 세 플랫폼과 Windows
+# Microsoft Store 자리표시자 상황에서도 중국어 문자 수를 정확히 세는지 검증한다.
 #
-# 背景：技能文档要求模型用下面这条探测命令统计字数。Windows 上 python.org 安装后
-# `python3` 会落到 Microsoft Store 占位程序、以 exit 49 静默失败，必须按
-# python3 -> python -> py 探测出真正可用的解释器。GitHub windows-latest 自带可用的
-# python3，因此 `--stub` 模式人为塞入一个 exit-49 的假 python3 来复现真实故障。
+# 배경: 스킬 문서는 아래 탐색 명령으로 글자 수를 세도록 요구한다. Windows에서 python.org 설치 후에도
+# `python3`가 Microsoft Store 자리표시자를 실행해 종료 49로 조용히 실패할 수 있으므로
+# python3 -> python -> py 순으로 실제 인터프리터를 찾아야 한다. GitHub windows-latest에는 사용 가능한
+# python3가 있어 --stub 모드가 종료 49의 가짜 python3를 삽입해 실제 장애를 재현한다.
 #
-# 用法：
-#   bash scripts/test-charcount-portable.sh           # 用真实解释器
-#   bash scripts/test-charcount-portable.sh --stub     # 模拟 Store 占位程序(exit 49)
+# 사용법:
+#   bash scripts/test-charcount-portable.sh           # 실제 인터프리터 사용
+#   bash scripts/test-charcount-portable.sh --stub     # Store 자리표시자 재현(종료 49)
 #
-# 命令直接从 story-short-write/references/short-format.md「字数统计」节的第一个 bash 块
-# 抽取执行，不手抄：文档改了命令，本测试跑的就是新命令。check-python-invocation.sh
-# 守卫文档不回退成裸 python3；本脚本守卫这条命令真的能跑出正确结果。
+# story-short-write/references/short-format.md의 글자 수 통계 절 첫 bash 블록에서 명령을 직접
+# 추출해 실행한다. 복사하지 않아 문서가 바뀌면 새 명령을 검사한다. check-python-invocation.sh는
+# 문서의 python3 직접 호출 회귀를 막고 이 스크립트는 명령이 실제로 정확한 결과를 내는지 검사한다.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOC="$REPO_ROOT/skills/story-short-write/references/short-format.md"
-COUNT_BLOCK="$(awk '/^## 字数统计/{s=1;next} s&&/^```bash$/{b=1;next} b&&/^```$/{exit} b' "$DOC")"
+COUNT_BLOCK="$(awk '/^## (字数统计|글자 수 계산)/{s=1;next} s&&/^```bash$/{b=1;next} b&&/^```$/{exit} b' "$DOC")"
 case "$COUNT_BLOCK" in
   *PYBIN*) ;;
   *) echo "FAIL: 未能从 $DOC 的「字数统计」节抽到探测 + 统计命令" >&2; exit 1 ;;
@@ -30,15 +30,15 @@ STUB=0
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# 中文目录 + 中文文件名，复现 issue #121 的路径场景
+# 중국어 디렉터리와 파일명으로 이슈 #121의 경로 상황을 재현한다.
 BOOK_DIR="$WORK/小说项目/第一卷"
 mkdir -p "$BOOK_DIR"
-# 12 个码位：中文字数测试(6) + ABC(3) + 123(3)，无结尾换行
-printf '%s' '中文字数测试ABC123' > "$BOOK_DIR/正文.md"
+# 코드 포인트 12개: 中文字数测试(6) + ABC(3) + 123(3), 끝 줄바꿈 없음
+printf '%s' '中文字数测试ABC123' > "$BOOK_DIR/본문.md"
 EXPECT=12
 
-# 先记住一个真正可用的解释器。stub 必须自给自足，不假设当前机器
-# 同时安装了 python3 和 python/py（某些 macOS 环境只有 python3）。
+# 실제 사용 가능한 인터프리터를 먼저 기록한다. 스텁은 자체 완결적이어야 하며 현재 기기에
+# python3와 python/py가 함께 있다고 가정하지 않는다(일부 macOS는 python3만 있음).
 REAL_PYTHON=""
 for candidate in python3 python py; do
   if "$candidate" -c "" >/dev/null 2>&1; then
@@ -49,7 +49,7 @@ done
 [ -n "$REAL_PYTHON" ] || { echo "FAIL: no working Python interpreter" >&2; exit 1; }
 
 if [ "$STUB" -eq 1 ]; then
-  # 塞一个永远 exit 49 的假 python3 到 PATH 最前面，复现 Windows Store 占位程序
+  # 항상 exit 49인 가짜 python3를 PATH 맨 앞에 넣어 Windows Store 자리표시자를 재현한다.
   FAKEBIN="$WORK/fakebin"
   mkdir -p "$FAKEBIN"
   printf '#!/bin/sh\nexit 49\n' > "$FAKEBIN/python3"
@@ -61,10 +61,10 @@ if [ "$STUB" -eq 1 ]; then
   echo "[stub] python3 现在固定 exit 49（模拟 Microsoft Store 占位程序）"
 fi
 
-# 在书目录里原样执行文档命令（相对路径 正文.md）——这正是技能里模型的用法：
-# 先 cd 到项目/正文目录再用相对路径。Windows Git Bash 下若把绝对 POSIX 路径
-# （/tmp/...、/c/...）直接喂给原生 Windows python，会被解析成 C:\tmp\... 而找不到文件；
-# 相对路径按子进程真实 cwd 解析，三平台一致。末行回报命令选中的解释器，供 stub 断言。
+# 책 디렉터리에서 문서 명령을 그대로 실행한다(상대 경로 본문.md). 스킬에서 모델이 쓰는 방식과 같다.
+# 먼저 프로젝트/본문 디렉터리로 cd한 뒤 상대 경로를 쓴다. Windows Git Bash에서 절대 POSIX 경로를
+# (/tmp/...、/c/...) 네이티브 Windows Python에 바로 넘기면 C:\tmp\...로 해석해 파일을 찾지 못한다.
+# 상대 경로는 자식 프로세스의 실제 cwd로 해석해 세 플랫폼이 같다. 마지막 줄은 선택한 인터프리터를 보고해 스텁 단언에 쓴다.
 OUT="$(cd "$BOOK_DIR" && eval "$COUNT_BLOCK"; printf '\n__PYBIN=%s\n' "${PYBIN:-}")"
 PYBIN="$(printf '%s\n' "$OUT" | sed -n 's/^__PYBIN=//p')"
 GOT="$(printf '%s\n' "$OUT" | sed '/^__PYBIN=/d;/^$/d')"

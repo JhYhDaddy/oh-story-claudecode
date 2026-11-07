@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# check-openclaw-skills.sh — OpenClaw AgentSkills/frontmatter compatibility checks.
-# Static by default; set OPENCLAW_REAL_CHECK=1 to run an isolated OpenClaw CLI
-# smoke test with a temporary profile and workspace.
+# check-openclaw-skills.sh — OpenClaw AgentSkills/프런트매터 호환성 검사.
+# 기본은 정적 검사다. OPENCLAW_REAL_CHECK=1이면 임시 프로필과 작업 공간으로
+# 격리된 OpenClaw CLI 스모크 테스트를 실행한다.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -60,8 +60,8 @@ for path in skill_files:
         try:
             data[key] = json.loads(value) if value.startswith(('"', '{', '[', 'true', 'false', 'null')) else value
         except Exception:
-            # OpenClaw accepts YAML/JSON5. This repository deliberately keeps a
-            # strict-JSON single-line subset for older/fallback parser compatibility.
+            # OpenClaw는 YAML/JSON5를 허용한다. 이 저장소는 이전/대체 파서 호환성을 위해
+            # 엄격한 JSON 한 줄 부분집합을 의도적으로 유지한다.
             data[key] = value.strip('"')
     name = data.get('name')
     desc = data.get('description')
@@ -137,8 +137,8 @@ if [ "${OPENCLAW_REAL_CHECK:-0}" = "1" ]; then
   }
   trap cleanup EXIT
 
-  # Official OpenClaw path overrides keep profiles, config, credentials, and
-  # sessions inside the disposable test root instead of the caller's HOME.
+  # 공식 OpenClaw 경로 재정의로 프로필, 설정, 자격 증명, 세션을
+  # 호출자의 HOME 대신 폐기 가능한 테스트 루트 안에 둔다.
   export OPENCLAW_HOME="$TMP_DIR/home"
   export OPENCLAW_STATE_DIR="$TMP_DIR/state"
   export OPENCLAW_CONFIG_PATH="$TMP_DIR/state/openclaw.json"
@@ -146,8 +146,8 @@ if [ "${OPENCLAW_REAL_CHECK:-0}" = "1" ]; then
   mkdir -p "$TMP_DIR/workspace"
   echo "  OpenClaw: $(openclaw --version)"
   cp -R "$SKILLS_DIR" "$TMP_DIR/workspace/skills"
-  # Exercise the documented top-level metadata.openclaw.os gate with a platform
-  # that intentionally excludes the current runner.
+  # 현재 실행 환경을 의도적으로 제외하는 플랫폼을 사용해 문서에 명시된
+  # 최상위 metadata.openclaw.os 조건을 검사한다.
   case "$(uname -s)" in
     Darwin) PROBE_OS="linux" ;;
     *) PROBE_OS="darwin" ;;

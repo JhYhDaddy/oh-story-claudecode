@@ -1,5 +1,5 @@
-name: 功能请求
-description: 提议有明确用户问题、使用场景和验收结果的新能力
+name: "기능 요청"
+description: "해결할 사용자 문제, 사용 상황, 완료 기준이 명확한 새 기능을 제안합니다"
 title: "[Feature] "
 labels:
   - enhancement
@@ -8,76 +8,76 @@ body:
   - type: markdown
     attributes:
       value: |
-        请说明功能要解决的用户问题、使用场景与期望结果。Runtime / IDE 适配请求请同时提供官方扩展或 Skills 文档。
+        기능이 해결할 사용자 문제, 사용 상황, 기대 결과를 설명해 주세요. 런타임·IDE 지원 요청에는 공식 확장 기능 또는 스킬 문서도 함께 제공해 주세요.
 
   - type: textarea
     id: problem
     attributes:
-      label: 要解决的问题
-      description: 谁在什么场景下遇到了什么阻碍？当前为什么无法完成？
-      placeholder: 当我……时，因为……，目前无法……
+      label: "해결하려는 문제"
+      description: "누가 어떤 상황에서 어떤 장애를 겪나요? 현재는 왜 작업을 완료할 수 없나요?"
+      placeholder: "……할 때 …… 때문에 현재 ……할 수 없습니다."
     validations:
       required: true
 
   - type: textarea
     id: proposal
     attributes:
-      label: 建议方案
-      description: 描述你期望增加或改变的能力，不要求给出实现细节。
+      label: "제안하는 방법"
+      description: "추가하거나 바꾸고 싶은 기능을 설명해 주세요. 구현 세부 사항까지 제시할 필요는 없습니다."
     validations:
       required: true
 
   - type: textarea
     id: acceptance
     attributes:
-      label: 可验收结果
-      description: 说明实现后用户能完成什么，以及怎样判断功能已经可用。
-      placeholder: 实现后，在……环境执行……应当……
+      label: "완료 기준"
+      description: "구현 후 사용자가 무엇을 할 수 있고, 기능을 사용할 수 있게 되었는지 어떻게 판단할지 설명해 주세요."
+      placeholder: "구현 후 …… 환경에서 ……를 실행하면 ……가 되어야 합니다."
     validations:
       required: true
 
   - type: textarea
     id: current_workaround
     attributes:
-      label: 当前替代方案
-      description: 目前是否能通过已有 Skill、通用 Skills 路径或手工步骤完成？
+      label: "현재의 대체 방법"
+      description: "현재 기존 스킬, 범용 스킬 경로, 수동 절차로 완료할 수 있나요?"
     validations:
       required: true
 
   - type: input
     id: runtime_docs
     attributes:
-      label: Runtime / IDE 官方文档
-      description: 仅适配请求必填；其他功能请求可填“不适用”。
-      placeholder: 官方扩展、插件、Agent、Skills 或 Hooks 文档链接
+      label: "런타임·IDE 공식 문서"
+      description: "호스트 지원 요청일 때만 내용을 반드시 제공해야 합니다. 다른 기능 요청은 “해당 없음”으로 적어도 됩니다."
+      placeholder: "공식 확장 기능·플러그인·에이전트·스킬·훅 문서 링크"
     validations:
       required: true
 
   - type: dropdown
     id: contribution
     attributes:
-      label: 贡献意愿
+      label: "기여 가능 여부"
       options:
-        - 我可以帮助测试
-        - 我可以尝试提交 PR
-        - 我可以提供环境或复现材料
-        - 暂时只能提出需求
+        - 테스트를 도울 수 있습니다
+        - PR 제출을 시도할 수 있습니다
+        - 환경이나 재현 자료를 제공할 수 있습니다
+        - 현재는 요구 사항만 제안할 수 있습니다
     validations:
       required: true
 
   - type: textarea
     id: additional_context
     attributes:
-      label: 其他上下文
-      description: 可补充截图、相似产品行为、相关 Issue 或资料。
+      label: "추가 맥락"
+      description: "스크린샷, 유사 제품의 동작, 관련 Issue나 자료를 추가할 수 있습니다."
 
   - type: checkboxes
     id: checks
     attributes:
-      label: 提交前确认
+      label: "제출 전 확인"
       options:
-        - label: 我搜索过现有 Issue 和 Discussion，没有找到相同请求。
+        - label: "기존 Issue와 Discussion을 검색했으며 같은 요청을 찾지 못했습니다."
           required: true
-        - label: 我确认这不是单纯的使用方法问题；使用问题应前往 Discussions。
+        - label: "단순한 사용법 질문이 아님을 확인했습니다. 사용법 질문은 Discussions에 남겨야 합니다."
           required: true
 

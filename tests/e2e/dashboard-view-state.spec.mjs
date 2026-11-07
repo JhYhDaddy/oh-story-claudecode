@@ -2,15 +2,15 @@ import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
-const fileA = "拆文库/盘龙/dashboard-view-a.md";
-const fileB = "拆文库/盘龙/dashboard-view-b.md";
+const fileA = "작품분석실/盘龙/dashboard-view-a.md";
+const fileB = "작품분석실/盘龙/dashboard-view-b.md";
 const original = "# 状态恢复\n\n这是磁盘上的正文。\n";
 const documentUrl = (file, mode = "edit") => `/?${new URLSearchParams({ file, mode })}`;
 
 test.beforeEach(async ({ request }) => {
   const { workspace } = await (await request.get("/api/workspace")).json();
   await writeFile(resolve(workspace.path, fileA), original);
-  await writeFile(resolve(workspace.path, fileB), "# 另一份文稿\n");
+  await writeFile(resolve(workspace.path, fileB), "# 另一份원고\n");
 });
 
 test.afterEach(async ({ request }) => {
@@ -18,12 +18,12 @@ test.afterEach(async ({ request }) => {
   await Promise.all([fileA, fileB].map((file) => rm(resolve(workspace.path, file), { force: true })));
 });
 
-test("@mobile 刷新和重新进入恢复视图、文件、模式及行号偏好，显式链接优先", async ({ page }) => {
+test("@mobile 새로고침 후 보기·파일·모드·줄 번호를 복원하고 명시적 링크를 우선한다", async ({ page }) => {
   await page.goto(documentUrl(fileA));
   await expect(page.locator("#editorInput")).toHaveValue(original);
-  await page.getByRole("button", { name: "预览", exact: true }).click();
+  await page.getByRole("button", { name: "미리 보기", exact: true }).click();
   await page.locator("#lineNumbersButton").click();
-  // 文件所属集合与当前侧栏视图可以不同，恢复时应分别保留。
+  // 파일의 소속 모음과 현재 사이드바 보기는 다를 수 있으므로 복원 시 각각 유지해야 한다.
   if (await page.locator("#mobileBackButton").isVisible()) {
     await page.locator("#mobileBackButton").click();
   }
@@ -42,25 +42,25 @@ test("@mobile 刷新和重新进入恢复视图、文件、模式及行号偏好
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("#deleteButton").click();
-  await expect(page.locator("#toastRegion")).toContainText("已删除");
+  await expect(page.locator("#toastRegion")).toContainText("삭제했습니다");
   await expect(page.locator("#editorWorkspace")).toBeHidden();
   await expect(page.locator("#fileTree")).toBeVisible();
   expect(new URL(page.url()).searchParams.has("file")).toBe(false);
   await page.reload();
-  await expect(page.locator("#connectionStatus")).toContainText("仅本机");
+  await expect(page.locator("#connectionStatus")).toContainText("이 컴퓨터에서만 사용");
   await expect(page.locator("#editorWorkspace")).toBeHidden();
-  await expect(page.locator("#toastRegion")).not.toContainText("不存在");
+  await expect(page.locator("#toastRegion")).not.toContainText("파일이 없습니다");
 });
 
-test("目录刷新和取消切换保留未保存正文，状态记忆只保存位置", async ({ page, context }) => {
+test("목록 갱신과 전환 취소 시 미저장 원고를 유지한다", async ({ page, context }) => {
   await page.goto(documentUrl(fileA));
   await expect(page.locator("#editorInput")).toHaveValue(original);
-  const draft = `${original}未保存的改动`;
+  const draft = `${original}未저장的改动`;
   await page.locator("#editorInput").fill(draft);
   await page.locator("#refreshButton").click();
-  await expect(page.locator("#toastRegion")).toContainText("工作区目录已刷新");
+  await expect(page.locator("#toastRegion")).toContainText("작업 공간 목록을 새로고침했습니다");
   await expect(page.locator("#editorInput")).toHaveValue(draft);
-  await expect(page.locator("#dirtyStatus")).toContainText("待保存");
+  await expect(page.locator("#dirtyStatus")).toContainText("저장 필요");
   let dismissed = false;
   page.once("dialog", async (dialog) => {
     dismissed = true;
@@ -70,17 +70,17 @@ test("目录刷新和取消切换保留未保存正文，状态记忆只保存�
   expect(dismissed).toBe(true);
   await expect(page.locator("#editorInput")).toHaveValue(draft);
   expect(new URL(page.url()).searchParams.get("file")).toBe(fileA);
-  await page.getByRole("button", { name: "预览", exact: true }).click();
+  await page.getByRole("button", { name: "미리 보기", exact: true }).click();
   const stored = await page.evaluate(() => JSON.stringify(localStorage));
-  expect(stored).not.toContain("未保存的改动");
+  expect(stored).not.toContain("未저장的改动");
   const reopened = await context.newPage();
   await reopened.goto("/");
   await expect(reopened.locator("#previewPane")).toBeVisible();
-  await expect(reopened.locator("#previewPane")).not.toContainText("未保存的改动");
+  await expect(reopened.locator("#previewPane")).not.toContainText("未저장的改动");
   await reopened.close();
 });
 
-test("工作区隔离、损坏状态和失效文件均可正常恢复到可用页面", async ({ page, request }) => {
+test("작업 공간을 구분하고 손상된 상태와 없는 파일을 복구한다", async ({ page, request }) => {
   const data = await (await request.get("/api/workspace")).json();
   const key = `story_dashboard_view:${data.workspace.path}`;
   await page.goto(documentUrl(fileA));
@@ -90,17 +90,17 @@ test("工作区隔离、损坏状态和失效文件均可正常恢复到可用�
   }));
   await page.goto("/");
   await expect(page.locator("#editorEmpty")).toBeVisible();
-  await expect(page.locator("#connectionStatus")).toContainText("仅本机");
+  await expect(page.locator("#connectionStatus")).toContainText("이 컴퓨터에서만 사용");
   await page.unroute("**/api/workspace");
 
   await page.evaluate((key) => localStorage.setItem(key, "{broken"), key);
   await page.goto("/");
   await expect(page.locator("#editorEmpty")).toBeVisible();
   await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({
-    file: "拆文库/盘龙/不存在的文稿.md", view: "invalid", mode: "invalid",
+    file: "작품분석실/盘龙/不存在的원고.md", view: "invalid", mode: "invalid",
   })), key);
   await page.goto("/");
-  await expect(page.locator("#toastRegion")).toContainText("不存在");
+  await expect(page.locator("#toastRegion")).toContainText("파일이 없습니다");
   await expect(page.locator("#editorEmpty")).toBeVisible();
   await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)).file, key)).toBeNull();
   expect(new URL(page.url()).searchParams.has("file")).toBe(false);
@@ -108,7 +108,7 @@ test("工作区隔离、损坏状态和失效文件均可正常恢复到可用�
   await expect(page.locator("#editorInput")).toHaveValue(original);
 });
 
-test("禁用 localStorage 时仍能使用文件链接和行号", async ({ page }) => {
+test("localStorage 없이도 파일 링크와 줄 번호를 사용한다", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
@@ -122,7 +122,7 @@ test("禁用 localStorage 时仍能使用文件链接和行号", async ({ page }
   expect(errors).toEqual([]);
 });
 
-test("明暗默认跟随系统，手动切换后刷新仍保留", async ({ page }) => {
+test("시스템 테마를 따르되 수동 선택을 기억한다", async ({ page }) => {
   const scheme = () => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
@@ -139,7 +139,7 @@ test("明暗默认跟随系统，手动切换后刷新仍保留", async ({ page 
   await expect.poll(scheme).toBe("dark");
 });
 
-test("@mobile 行号随中文长段、空行和滚动对齐，预览保留源文件行号", async ({ page }, testInfo) => {
+test("@mobile 긴 문단·빈 줄·스크롤에서 줄 번호를 맞추고 미리 보기에도 유지한다", async ({ page }, testInfo) => {
   const errors = [];
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
@@ -158,7 +158,7 @@ test("@mobile 行号随中文长段、空行和滚动对齐，预览保留源文
   });
   await expect.poll(heightDifference).toBeLessThanOrEqual(2);
   await page.locator("#editorInput").press(process.platform === "darwin" ? "Meta+End" : "Control+End");
-  // 显式滚动也覆盖浏览器与宿主系统快捷键不同的情况。
+  // 명시적 스크롤은 브라우저와 호스트 운영체제의 단축키가 다른 경우도 다룬다.
   await page.locator("#editorInput").evaluate((input) => { input.scrollTop = input.scrollHeight; });
   await expect.poll(() => page.evaluate(() => Math.abs(
     document.querySelector("#editorInput").scrollTop - document.querySelector("#lineNumbersGutter").scrollTop,
@@ -171,9 +171,9 @@ test("@mobile 行号随中文长段、空行和滚动对齐，预览保留源文
   await expect(page.locator("#lineNumbersGutter")).toBeHidden();
   await page.locator("#lineNumbersButton").click();
   await expect.poll(heightDifference).toBeLessThanOrEqual(2);
-  const markdown = "# 标题\n\n一段正文。\n- 项目\n> 引用\n```txt\n示例\n```\n\n尾声";
+  const markdown = "# 标题\n\n一段正文。\n- 프로젝트\n> 引用\n```txt\n示例\n```\n\n尾声";
   await page.locator("#editorInput").fill(markdown);
-  await page.getByRole("button", { name: "预览", exact: true }).click();
+  await page.getByRole("button", { name: "미리 보기", exact: true }).click();
   expect(await page.locator("#previewPane [data-line]").evaluateAll((nodes) => nodes.map((node) => node.dataset.line)))
     .toEqual(["1", "3", "4", "5", "6", "10"]);
   await expect(page.locator("#previewPane pre")).toHaveText("示例");

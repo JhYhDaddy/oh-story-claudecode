@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for the structured skill Markdown checker."""
+"""구조화된 스킬 Markdown 검사기의 회귀 테스트."""
 
 from __future__ import annotations
 
@@ -329,7 +329,7 @@ def test_unlinked_section_covers_cjk_without_spaces() -> None:
         assert result.returncode == 1, result.stdout + result.stderr
         assert "[unlinked-skill-section]" in result.stdout, result.stdout
         assert "详见SKILL.md的阶段二流程" in result.stdout, result.stdout
-        # 括号里原样引用标题不是模糊猜测，不在本规则范围内
+        # 괄호 안에 제목을 그대로 인용하는 것은 모호한 추측이 아니므로 이 규칙의 범위에 포함하지 않는다.
         assert "起点采集目标" not in result.stdout, result.stdout
         assert result.stdout.count("[unlinked-skill-section]") == 1, result.stdout
 
@@ -393,7 +393,7 @@ def test_emphasized_paths_are_still_existence_checked() -> None:
             "[broken-inline-path] skills/demo/SKILL.md:7" in result.stdout
         ), result.stdout
         assert "references/definitely-missing.md" in result.stdout, result.stdout
-        # 真通配符仍按父目录校验，不能因为剥强调符而被截断成断链
+        # 실제 와일드카드는 부모 디렉터리를 기준으로 검사한다. 강조 기호를 제거하다 잘려서 끊어진 링크로 판정하면 안 된다.
         assert result.stdout.count("[broken-inline-path]") == 1, result.stdout
         assert "[broken-inline-path] skills/demo/SKILL.md:9" not in result.stdout, result.stdout
 
@@ -436,7 +436,7 @@ def test_brace_enumerations_name_each_file() -> None:
 
         result = run(root)
         assert result.returncode == 1, result.stdout + result.stderr
-        # 点名枚举展开成逐个路径：缺失成员是断链，命中成员算已引用，未点名的仍是死引用
+        # 명시한 열거 항목을 개별 경로로 펼친다. 누락된 항목은 끊어진 링크, 일치하는 항목은 참조됨, 명시하지 않은 항목은 미사용 참조다.
         assert "references/rubrics/zhihu.md" in result.stdout, result.stdout
         assert "[broken-inline-path]" in result.stdout, result.stdout
         assert (
@@ -467,7 +467,7 @@ def test_launcher_reports_missing_git_repository() -> None:
             text=True,
             encoding="utf-8",
         )
-        # `set -e` 曾让裸赋值直接中断脚本：退出码 128 且无任何提示
+        # 이전에는 `set -e` 때문에 단순 대입에서 바로 중단되어 아무 안내 없이 종료 코드 128을 반환했다.
         assert proc.returncode == 1, f"exit={proc.returncode}\n{proc.stdout}{proc.stderr}"
         assert "not in a git repository" in proc.stderr, proc.stdout + proc.stderr
 

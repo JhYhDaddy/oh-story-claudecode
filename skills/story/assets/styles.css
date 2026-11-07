@@ -1,4 +1,4 @@
-/* Colours, fonts, radii and shadows come only from tokens.css (--zs-*). */
+/* 색상·글꼴·모서리 반경·그림자는 tokens.css(--zs-*)에서만 가져온다. */
 
 * {
   box-sizing: border-box;
@@ -102,7 +102,7 @@ kbd {
   background: var(--zs-bg);
 }
 
-/* Top bar */
+/* 상단 막대 */
 .masthead {
   min-width: 0;
   display: grid;
@@ -304,7 +304,7 @@ kbd {
   }
 }
 
-/* Two-pane writing desk */
+/* 두 패널 집필 작업대 */
 .desk {
   min-width: 0;
   min-height: 0;
@@ -322,7 +322,7 @@ kbd {
   border-right: 1px solid var(--zs-line);
 }
 
-/* Tabs follow the stage bar: plain labels, muted count, accent underline. */
+/* 탭은 단계 막대처럼 일반 레이블, 옅은 개수 표시, 강조 밑줄을 사용한다. */
 .archive-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -335,15 +335,16 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
-  padding: 0 10px;
+  padding: 0 4px;
   color: var(--zs-ink-500);
   background: transparent;
   border: 0;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .archive-tabs button::after {
@@ -386,7 +387,7 @@ kbd {
   font-weight: 500;
 }
 
-/* Search field styled as the ⌘K trigger */
+/* ⌘K 실행 버튼 스타일의 검색 필드 */
 .search-field {
   align-self: center;
   height: 36px;
@@ -653,7 +654,7 @@ kbd {
   white-space: nowrap;
 }
 
-/* Editor: the manuscript sits on paper */
+/* 편집기: 종이 위에 놓인 원고 */
 .editor-panel {
   min-width: 0;
   min-height: 0;
@@ -812,7 +813,7 @@ kbd {
   display: none;
 }
 
-/* Segmented control */
+/* 분할 선택 컨트롤 */
 .mode-switch {
   display: flex;
   gap: 2px;
@@ -1153,7 +1154,7 @@ kbd {
   animation: spin 0.7s linear infinite;
 }
 
-/* Primary button: ink on paper */
+/* 기본 버튼: 종이 위의 잉크 */
 .save-button {
   height: 32px;
   display: flex;
@@ -1196,7 +1197,7 @@ kbd {
   opacity: 0.55;
 }
 
-/* Feedback and conflict protection */
+/* 피드백과 충돌 방지 */
 .toast-region {
   position: fixed;
   z-index: 80;

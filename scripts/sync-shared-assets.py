@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check or synchronize intentionally duplicated, skill-local runtime assets.
+"""의도적으로 중복 배치한 스킬 내부 런타임 자산을 검사하거나 동기화한다.
 
-Runtime skills remain self-contained after deployment, while this manifest gives the
-repository a single maintenance source for each duplicated executable.
+런타임 스킬은 배포 후에도 자체 완결성을 유지하며, 이 매니페스트는 중복 실행 파일마다
+저장소에서 유지보수할 단일 원본을 지정한다.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ class ManifestError(ValueError):
     pass
 
 
-# 递归枚举 skills/*/scripts/ 时要跳过的非运行时目录：开发机上的构建缓存
-# （__pycache__、node_modules）不是需要登记的重复脚本。
+# skills/*/scripts/를 재귀 탐색할 때 제외할 비런타임 디렉터리: 개발 머신의 빌드 캐시
+# (__pycache__, node_modules)는 등록해야 할 중복 스크립트가 아니다.
 IGNORED_SCRIPT_DIRS = frozenset({".git", "__pycache__", "node_modules", ".venv"})
 MARKDOWN_SUFFIXES = frozenset({".md", ".mdx"})
 
@@ -130,10 +130,10 @@ def load_groups(root: Path, manifest_path: Path) -> list[Group]:
             target_owners[target] = name
         groups.append(Group(name=name, source=source, targets=targets))
 
-    # Sources are immutable canonical inputs. A path managed as a target may not
-    # become a source in another group: allowing that makes sync results depend on
-    # manifest order and permits copy chains or cycles. Validate after parsing all
-    # groups so the rule is independent of which group appears first.
+    # 원본은 변경하지 않는 기준 입력이다. 대상으로 관리되는 경로를 다른 그룹의
+    # 원본으로 사용하면 동기화 결과가 매니페스트 순서에 의존하고
+    # 복사 사슬이나 순환이 생긴다. 모든 그룹을 파싱한 뒤 검증하여
+    # 어느 그룹이 먼저 나오는지와 관계없이 규칙을 적용한다.
     source_targets = sorted(source_owners.keys() & target_owners.keys())
     if source_targets:
         path = source_targets[0]
@@ -142,9 +142,9 @@ def load_groups(root: Path, manifest_path: Path) -> list[Group]:
             f"{source_owners[path]} and target for {target_owners[path]}"
         )
 
-    # A duplicated runtime basename has exactly one canonical owner. Validate
-    # this after source/target overlap so copy chains and cycles keep the more
-    # actionable order-independence error.
+    # 중복된 런타임 파일명에는 기준 소유자가 정확히 하나 있어야 한다.
+    # 원본/대상 중복 검사 뒤에 검증해 복사 사슬과 순환에 대해서는
+    # 더 조치하기 쉬운 순서 독립성 오류를 유지한다.
     basename_owners: dict[str, str] = {}
     for group in groups:
         previous = basename_owners.get(group.source.name)
@@ -182,8 +182,8 @@ def unmanaged_duplicate_scripts(root: Path, groups: list[Group]) -> list[tuple[s
     scripts_by_name: dict[str, list[Path]] = defaultdict(list)
     skills_dir = root / "skills"
     if skills_dir.is_dir():
-        # 必须递归：共享 helper 常放在 skills/<skill>/scripts/lib/ 这类子目录，
-        # 单层 glob 会让这些更深的重复副本绕过守卫、各自漂移后直接发给用户。
+        # 반드시 재귀 탐색해야 한다. 공유 도우미는 skills/<skill>/scripts/lib/ 같은 하위 디렉터리에 자주 있다.
+        # 한 단계 glob만 쓰면 더 깊은 중복 사본이 검사를 우회해 서로 달라진 채 사용자에게 배포된다.
         for scripts_dir in sorted(skills_dir.glob("*/scripts")):
             if not scripts_dir.is_dir():
                 continue

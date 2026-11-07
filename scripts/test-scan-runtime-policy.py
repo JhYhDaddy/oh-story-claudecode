@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation regressions for the scan/browser static policy guard."""
+"""순위 조사/브라우저 정적 정책 검사기의 변이 회귀 검사."""
 
 from __future__ import annotations
 

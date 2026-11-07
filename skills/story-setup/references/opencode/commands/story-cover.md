@@ -1,7 +1,7 @@
 ---
-description: 网文封面生成。分析书名题材，生成专业封面图。
+description: 웹소설 표지 생성. 제목·장르를 분석하여 전문적인 표지를 만든다.
 ---
 
-请使用 story-cover skill，帮助我分析和生成网文封面图。
+story-cover 스킬로 웹소설 표지 분석과 생성을 도와주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

@@ -1,33 +1,33 @@
-# Agent Note: agents_version 是部署物过期的唯一运行时权威
+# Agent Note: agents_version을 배포물 갱신 필요 여부의 유일한 런타임 기준으로 사용
 
 Status: implemented
 
 ## Problem
 
-story-setup 把 hooks、agents、rules、agent-references 部署进用户项目，skill 包更新后已部署项目会静默落后。需要一个机制让 session-start 判断「该重跑 /story-setup 了」，同时不能因为 skill 文本改动（不影响部署物）就骚扰用户，也不能让旧 skill 包把更新的部署降级覆盖。
+story-setup은 사용자 프로젝트에 hooks·agents·rules·agent-references를 배포한다. 스킬 패키지를 갱신하면 이미 배포한 프로젝트가 조용히 뒤처진다. session-start가 ‘/story-setup을 다시 실행해야 한다’고 판단할 방법이 필요하다. 동시에 배포물에 영향 없는 스킬 텍스트 변경으로 사용자를 방해하거나 옛 스킬 패키지가 더 최신 배포물을 낮춰 덮어써서는 안 된다.
 
 ## Decision
 
-- `.story-deployed` sentinel 含 `agents_version`（整数）、`setup_skill_version`、`target_cli`、`resolver_strategy`、`references_dir`。当前值的单一来源是 `scripts/current-contract.json`。
-- `agents_version` 是唯一的运行时过期权威。`session-start.sh` 与 story-setup Phase 1 只比较它：缺失 / 非整数 / 小于当前 → 待更新，重跑 story-setup 覆盖 agents/hooks/rules/reference bundle；等于 → 已部署，AskUserQuestion 确认是否重部署；大于 → 本地 skill 比项目旧，must 停止、不写任何部署文件、never 降级覆盖。
-- `setup_skill_version` 只做存在性检查，落后不触发重部署（设计如此）。不在运行时逐级兼容历史模板，升级 = 重跑。
-- bump 规则：只在部署物行为变化时 bump；纯文本精简、只在 spawn prompt 内联的变更不 bump。bump 按发布节奏进行：开发期 PR 改了 agent 模板也保持未发布的版本号，发版 PR 统一抬版并更新 UPGRADING「当前版本」。
-- 守卫：`check-story-setup-deployment.sh` 从 `current-contract.json` 读当前值，用 N-1 / N / N+1 三种 sentinel 分别断言 session-start 的 warn / 静默 / 拒绝降级，并断言 `setup_skill_version` 落后时不误报。
+- `.story-deployed` sentinel은 `agents_version`(정수), `setup_skill_version`, `target_cli`, `resolver_strategy`, `references_dir`를 포함한다. 현재 값의 단일 원본은 `scripts/current-contract.json`이다.
+- `agents_version`만 런타임에서 갱신 필요 여부를 결정한다. `session-start.sh`와 story-setup Phase 1은 이것만 비교한다. 누락·비정수·현재보다 작음이면 갱신 대상으로 보아 story-setup을 다시 실행해 agents/hooks/rules/reference bundle을 덮어쓴다. 같으면 배포 완료 상태이며 AskUserQuestion으로 재배포 여부를 확인한다. 더 크면 로컬 스킬이 프로젝트보다 오래된 것이므로 반드시 중단하고 배포 파일을 전혀 쓰지 않으며 다운그레이드 덮어쓰기를 하지 않는다.
+- `setup_skill_version`은 존재만 검사하며 뒤처져도 재배포를 유발하지 않는다(의도된 설계). 런타임에서 과거 템플릿을 단계별로 호환하지 않는다. 업그레이드는 재실행이다.
+- 버전 증가 규칙: 배포물 동작이 바뀔 때만 올린다. 단순 텍스트 경량화나 spawn prompt에만 인라인되는 변경은 올리지 않는다. 증가는 출시 주기에 따른다. 개발 중 PR이 에이전트 템플릿을 바꿔도 미출시 버전은 유지하고 출시 PR에서 일괄 증가시키며 UPGRADING의 ‘현재 버전’을 갱신한다.
+- 검사: `check-story-setup-deployment.sh`가 `current-contract.json`에서 현재 값을 읽고 N-1 / N / N+1 sentinel로 session-start의 경고 / 무응답 / 다운그레이드 거부를 각각 단언한다. `setup_skill_version`이 뒤처져도 잘못 경고하지 않는지도 확인한다.
 
-来源：3442428 (#7)、12a9655 (#240)、6af0529 (#359)、1e2488b (#395)、abe9663 (#416)
+출처: 3442428 (#7), 12a9655 (#240), 6af0529 (#359), 1e2488b (#395), abe9663 (#416)
 
 ## Alternatives considered
 
-- **让 `setup_skill_version` 参与比较**——最强理由：一处版本就够，语义直观。否：内容改动会误报「需要重新部署」，session-start 注释与部署检查都把这一条钉成设计意图。
-- **每个改动 agent 模板的 PR 各自 bump**——最强理由：部署物变了就立刻让用户拿到。否：一个发布周期内多次逼用户重跑；6af0529「keep agent version release-gated」与 590d10e「保持未发布 agent 合同版本」都选择等发版统一抬版。
-- **CI 用 grep 钉死 UPGRADING 必须写到某个版本号**——曾经存在，12a9655 去掉：测的是措辞不是行为，发版是否补 UPGRADING 由发版清单和人把关。
-- **运行时逐级兼容旧模板**——UPGRADING 明确不做；部署器按 owner class 替换受管文件、合并用户文件即可。
+- **`setup_skill_version`도 비교에 포함**: 버전 하나면 되고 의미가 직관적이라는 장점이 있다. 그러나 내용 변경도 ‘재배포 필요’로 오판하게 된다. session-start 주석과 배포 검사는 이를 사용하지 않는 것이 설계 의도임을 고정한다.
+- **에이전트 템플릿을 바꾸는 PR마다 버전 증가**: 배포물이 바뀌자마자 사용자가 받게 할 수 있다. 그러나 한 출시 주기 안에 재실행을 여러 번 강요한다. 6af0529의 ‘keep agent version release-gated’와 590d10e의 ‘미출시 agent 계약 버전 유지’는 모두 출시 시 일괄 증가를 선택했다.
+- **CI grep으로 UPGRADING에 특정 버전이 반드시 있어야 한다고 고정**: 과거에 있었으나 12a9655에서 제거했다. 동작이 아닌 문구를 검사하므로 출시 때 UPGRADING 보완 여부는 출시 목록과 사람이 확인한다.
+- **런타임에서 옛 템플릿을 단계별 호환**: UPGRADING에서 명시적으로 하지 않기로 했다. 배포기는 소유 유형에 따라 관리 파일을 교체하고 사용자 파일을 병합하면 된다.
 
 ## Consequences
 
-- **收益**：用户只在部署物真变时被提醒；旧包不会覆盖新部署；`agents_version` 一处改动即可触发全端刷新提示。
-- **代价与已知上限**：未发版期间 main 上的模板变更对已部署项目不可见，直到发版抬版（v0.7.10 的 UPGRADING 明说开发期用 main v30 的项目也要重跑）；阈值要跨 `session-start.sh`、story-setup `SKILL.md`、UPGRADING、`current-contract.json` 对齐，靠 CI 锚点而非单一引用。
+- **이점**: 배포물이 실제로 바뀔 때만 사용자에게 알리며 옛 패키지가 최신 배포물을 덮어쓰지 않는다. `agents_version` 한 곳을 바꾸면 모든 호스트의 갱신 알림을 유발할 수 있다.
+- **비용과 알려진 한계**: 출시 전 main의 템플릿 변경은 출시 시 버전을 올릴 때까지 기존 배포 프로젝트에 보이지 않는다(v0.7.10 UPGRADING은 개발 중 main v30을 사용한 프로젝트도 재실행해야 한다고 명시). 기준값을 `session-start.sh`, story-setup `SKILL.md`, UPGRADING, `current-contract.json`에 맞춰야 하며 단일 참조가 아닌 CI 검증 지점에 의존한다.
 
-## Verification
+## 검증
 
-`bash scripts/check-story-setup-deployment.sh`（TS10 版本阈值 + N±1 sentinel 场景）；`bash scripts/check-current-skill-contracts.sh` 校验 manifest 与 SKILL.md 的版本一致。
+`bash scripts/check-story-setup-deployment.sh`(TS10 버전 임계값 + N±1 sentinel 상황); `bash scripts/check-current-skill-contracts.sh`가 manifest와 SKILL.md의 버전 일치를 검증한다.

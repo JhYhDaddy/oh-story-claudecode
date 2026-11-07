@@ -1,8 +1,8 @@
 ---
-description: 长篇网文扫榜，分析起点、番茄、晋江等平台趋势。
+description: 장편 웹소설 순위 조사. 치뎬·판체·진장 등 플랫폼 추세를 분석한다.
 skills: story-long-scan
 ---
 
-调用 `$story-long-scan` 执行长篇榜单与市场调研。
+`$story-long-scan`을 호출하여 장편 순위·시장 조사를 수행한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

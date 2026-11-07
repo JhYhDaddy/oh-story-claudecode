@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the repository's current-only skill and artifact contracts.
+"""저장소의 현재 버전 전용 스킬 및 산출물 계약을 검증한다.
 
-The JSON manifest is the single structured inventory for version numbers,
-primary benchmark artifacts, and outline sections.  This module deliberately
-keeps the older path/legacy guards too, but implements them with scoped file
-walks and actionable findings rather than a chain of shell grep calls.
+JSON 매니페스트는 버전 번호, 주요 벤치마크 산출물, 개요 절의 유일한 구조화 목록이다.
+이 모듈은 기존 경로/레거시 검사도 유지하되, 셸 grep 호출의 연결 대신 범위를 제한한 파일 순회와
+조치 가능한 진단으로 구현한다.
 """
 
 from __future__ import annotations
@@ -74,9 +73,9 @@ class AbsentRule:
     label: str
     pattern: str
     relative_roots: Tuple[str, ...]
-    # 「静默才禁」豁免：命中行的本地上下文若带显式容忍标记（不阻塞 / [待补充] / 回退 /
-    # 只核对 / 记录…），说明是有据可查的旧格式容忍而非静默降级，放行。仅用于旧格式大纲容忍
-    # （keep C）；benchmark 回退（drop A/B）的规则不设豁免，静默与显式一律禁。
+    # ‘조용한 대체만 금지’ 예외: 일치한 줄의 주변에 명시적 허용 표식(不阻塞 / [待补充] / 回退 /
+    # 只核对 / 记录 등)이 있으면 기록된 기존 형식 허용으로 보고 통과시킨다. 기존 형식 개요 허용에만 적용한다.
+    # (keep C). 벤치마크 대체(drop A/B) 규칙은 예외 없이 명시적·암묵적 대체를 모두 금지한다.
     exempt_when: Optional[str] = None
 
 
@@ -92,8 +91,8 @@ LEGACY_RULES = (
         "no silent old artifact-format downgrade",
         r"旧拆文库|旧版细纲|旧式薄细纲|旧版内部降级标记|早期拆文库格式|兼容旧结构",
         ("skills",),
-        # keep C：旧格式大纲/细纲容忍是显式、有据可查的（不阻塞日更、回退读取旧字段、未知写
-        # [待补充]、记录到追踪），不是静默降级——带这些标记就放行，只拦无标记的静默兼容措辞。
+        # keep C: 기존 형식 개요/상세 개요 허용은 명시적으로 기록한다(일일 집필을 막지 않음, 기존 필드로 대체 읽기, 알 수 없는 값은
+        # [待补充]로 표시, 추적에 기록). 이러한 표식은 허용하고 표식 없는 조용한 호환 처리만 차단한다.
         exempt_when=r"不阻塞|\[待补充\]|回退|只核对|记录|保留或映射|仍可续写|仍可用|仍要保留",
     ),
     AbsentRule(
@@ -105,7 +104,7 @@ LEGACY_RULES = (
     AbsentRule(
         "obsolete-short-benchmark-path",
         "short writing uses only current benchmark paths",
-        r"\{短篇标题\}/拆文库/\{书名\}",
+        r"\{短篇标题\}/작품분석실/\{书名\}",
         ("skills/story-short-write",),
     ),
     AbsentRule(
@@ -124,7 +123,7 @@ LEGACY_RULES = (
         "duplicate-adapter-reference-fallback",
         "story-setup deploys one canonical reference path per adapter",
         r"同步复制到\s*`skills/[^`]+`\s*作为 fallback",
-        # 入口只留通用流程，各宿主的复制步骤在 references/deploy-*.md，两处都要扫。
+        # 진입점에는 공통 흐름만 남기고 호스트별 복사 절차는 references/deploy-*.md에 둔다. 두 위치를 모두 검사한다.
         ("skills/story-setup/SKILL.md", "skills/story-setup/references"),
     ),
     AbsentRule(
@@ -148,13 +147,13 @@ LEGACY_RULES = (
     AbsentRule(
         "story-import-self-benchmark-copy",
         "story-import keeps imported-work analysis out of benchmark views",
-        r"\{项目\}/对标/\{书名\}|\{标题\}/对标/\{书名\}|对标/\{书名\}/剧情",
+        r"\{项目\}/비교작품/\{书名\}|\{标题\}/비교작품/\{书名\}|비교작품/\{书名\}/플롯",
         ("skills/story-import",),
     ),
     AbsentRule(
         "story-import-import-title-benchmark-target",
         "story-import never copies imported-work analysis into a benchmark target",
-        r"拆文库/\{导入书名\}[^\n]{0,160}(?:复制|同步|迁移)[^\n]{0,120}对标|对标/\{导入书名\}",
+        r"작품분석실/\{导入书名\}[^\n]{0,160}(?:复制|同步|迁移)[^\n]{0,120}(?:对标|비교작품)|비교작품/\{导入书名\}",
         ("skills/story-import",),
         exempt_when=r"不得|禁止|严禁|未被|不复制|不属于|不是对标",
     ),
@@ -167,7 +166,7 @@ LEGACY_RULES = (
     AbsentRule(
         "story-import-self-benchmark-fields",
         "story-import does not map self-benchmark fields into the imported project's settings",
-        r"拆文报告\.md`?\s*的故事核/题材/对标字段",
+        r"작품분석보고서\.md`?\s*的故事核/题材/对标字段",
         ("skills/story-import",),
     ),
     AbsentRule(
@@ -220,15 +219,15 @@ LEGACY_RULES = (
         r"/tmp/style-sample",
         ("skills/story-long-analyze",),
     ),
-    # 文风.md 一旦兼任「书目录是否存在」的探针，缺文风的书就会被判成书不存在：explorer 在
-    # 步骤 3 提前返回 benchmark_book_missing，步骤 6 的 profile_missing 变成不可达，
-    # 调用方 profile_missing + custom_style 的降级续写分支被整条吞掉。目录存在性只能用
-    # 目录下的任意文件探，文风缺失单独归 profile_missing。
+    # 문체.md를 책 디렉터리 존재 여부를 확인하는 탐침으로 겸용하면 문체 파일이 없는 책을 책 자체가 없는 것으로 판단한다. explorer는
+    # 3단계에서 benchmark_book_missing을 조기 반환하고 6단계의 profile_missing은 도달 불가능해진다.
+    # 그러면 호출자의 profile_missing + custom_style 대체 집필 분기 전체가 사라진다. 디렉터리 존재 여부는
+    # 그 안의 임의 파일로 확인하고, 문체 파일 누락은 별도로 profile_missing으로 분류해야 한다.
     AbsentRule(
         "style-profile-as-book-existence-probe",
-        "benchmark book existence is probed by any file under the book dir, never by 文风.md",
-        r"(?:优先探|回退探)[^\n]{0,60}\{书名\}/文风\.md|"
-        r"Glob\s*`?(?:对标|拆文库)/\*/文风\.md",
+        "benchmark book existence is probed by any file under the book dir, never by 문체.md",
+        r"(?:优先探|回退探)[^\n]{0,60}\{书名\}/문체\.md|"
+        r"Glob\s*`?(?:对标|拆文库|비교작품|작품분석실)/\*/문체\.md",
         (
             "skills/story-setup/references/agent-references/benchmark-style-load.md",
             "skills/story-setup/references/templates/agents/story-explorer.md",
@@ -236,7 +235,7 @@ LEGACY_RULES = (
             "skills/story-setup/references/codex/agents/story-explorer.toml",
         ),
     ),
-    # 现行字数口径不把语义情节点换算成固定容量；旧合计/Σ 契约会诱导自动补事件凑字。
+    # 현재 글자 수 기준은 의미상 사건점을 고정 분량으로 환산하지 않는다. 이전 합계/Σ 계약은 분량을 채우려고 사건을 자동 추가하도록 유도한다.
     AbsentRule(
         "forbidden-outline-numeric-capacity",
         "outline beats never use numeric totals or sigma bands to predict prose capacity",
@@ -266,7 +265,7 @@ SPAWN_CAPABLE_SKILLS = (
 )
 
 
-# 细纲结构容量的 canonical 副本与消费方：逐点只写语义义务，不填数字配额。
+# 상세 개요 구조 분량의 기준 사본과 소비자: 각 지점에는 의미상 의무만 쓰고 숫자 할당량은 기입하지 않는다.
 OUTLINE_SEMANTIC_CAPACITY_CONSUMERS = (
     "skills/story-long-write/references/workflow-outline.md",
     "skills/story-setup/references/templates/rules/story-outline.md",
@@ -283,8 +282,8 @@ PRIMARY_GAP_TERMS = (
 )
 MISSING_STATE_RE = r"(?:缺失|不存在|未找到|找不到|为\s*(?:true|真)|:\s*true)"
 SUBSTITUTE_SOURCE_RE = re.compile(
-    r"章节(?:/\*|/第[^\s`，。；;]*)?_?摘要(?:\.md)?|第[^\s`，。；;]*章_摘要(?:\.md)?|"
-    r"拆文报告(?:\.md)?|故事线(?:\.md)?",
+    r"章节(?:/\*|/第[^\s`，。；;]*)?_?摘要(?:\.md)?|第[^\s`，。；;]*章_요약(?:\.md)?|"
+    r"(?:拆文报告|작품분석보고서)(?:\.md)?|(?:故事线|이야기선)(?:\.md)?|장별분석/[^`，。；;]*_요약\.md",
     re.IGNORECASE,
 )
 SUBSTITUTE_ACTION_RE = re.compile(
@@ -299,7 +298,7 @@ PROHIBITION_RE = re.compile(
 
 
 def primary_term_pattern(primary_artifacts: Sequence[str]) -> str:
-    """Build artifact terms from the manifest, including common local shorthand."""
+    """흔히 쓰는 로컬 약칭을 포함해 매니페스트에서 산출물 용어를 구성한다."""
 
     terms = set(PRIMARY_GAP_TERMS)
     for artifact in primary_artifacts:
@@ -454,9 +453,9 @@ def read_text(path: Path) -> Optional[str]:
         return None
 
 
-# 二进制资产读不出文本是正常的（demo 封面图、__pycache__ 字节码），静默跳过即可；其余文件
-# 一律按 UTF-8 文本对待。GBK/cp936 的 Markdown 会让所有内容规则一起失效——regex_hits 拿到
-# None 就当「没命中」，检查照样打 [PASS]——所以文本文件解码失败必须是命名失败，不是跳过。
+# 바이너리 자산(데모 표지, __pycache__ 바이트코드)을 텍스트로 읽을 수 없는 것은 정상이며 건너뛴다. 나머지 파일은
+# 모두 UTF-8 텍스트로 취급한다. GBK/cp936 Markdown은 모든 내용 규칙을 무력화한다. regex_hits가
+# None을 받으면 ‘일치 없음’으로 보고 [PASS]를 출력하기 때문이다. 따라서 텍스트 디코딩 실패는 건너뛰지 말고 명명된 오류로 보고해야 한다.
 BINARY_SUFFIXES = frozenset(
     {
         ".png",
@@ -508,16 +507,16 @@ TEXT_SUFFIXES = frozenset(
 
 
 def is_binary_asset(path: Path) -> bool:
-    """二进制资产（封面图、字节码、.DS_Store 之类）读不出文本是正常的。
+    """바이너리 자산(표지 이미지, 바이트코드, .DS_Store 등)을 텍스트로 읽을 수 없는 것은 정상이다.
 
-    后缀白名单之外再看有没有 NUL 字节：这样 `.DS_Store`、无后缀的二进制不会误报，而
-    GBK/cp936 的 Markdown（没有 NUL）仍会被判成必须修的文本文件。读不到字节就按文本算，
-    宁可报错也不静默放行。
+    확장자 허용 목록에 없으면 NUL 바이트 여부도 확인한다. 그러면 .DS_Store나 확장자 없는 바이너리는
+    오탐하지 않고, NUL이 없는 GBK/cp936 Markdown은 수정해야 하는 텍스트 파일로 분류한다. 바이트를
+    읽지 못하면 텍스트로 취급한다. 조용히 허용하기보다 오류를 보고한다.
     """
     if path.suffix.lower() in BINARY_SUFFIXES:
         return True
-    # UTF-16 文本同样含大量 NUL；已知文本后缀必须先按契约文本处理，让 UTF-8 解码失败成为
-    # 命名错误。NUL sniff 只服务于 .DS_Store / 未知扩展二进制，不能覆盖文件类型事实。
+    # UTF-16 텍스트에도 NUL이 많이 들어 있다. 알려진 텍스트 확장자는 먼저 계약 텍스트로 처리해 UTF-8 디코딩 실패를
+    # 명명된 오류로 만든다. NUL 탐지는 .DS_Store나 알 수 없는 바이너리 확장자에만 적용하며 파일 형식 판단을 덮어쓰지 않는다.
     if path.suffix.lower() in TEXT_SUFFIXES:
         return False
     try:
@@ -527,7 +526,7 @@ def is_binary_asset(path: Path) -> bool:
 
 
 def undecodable_source_findings(roots: Sequence[Path]) -> List[Finding]:
-    """内容规则扫过的文本文件必须能按 UTF-8 读出来，否则整条规则静默放行。"""
+    """내용 규칙으로 검사하는 텍스트는 UTF-8로 읽을 수 있어야 한다. 그렇지 않으면 규칙 전체가 조용히 통과한다."""
     findings: List[Finding] = []
     seen: set[str] = set()
     for root in roots:
@@ -569,8 +568,8 @@ def check_absent_rule(repo_root: Path, rule: AbsentRule) -> List[Finding]:
         for path in iter_files(root):
             for hit in regex_hits(path, compiled):
                 if exempt is not None:
-                    # 只看命中行本身：显式容忍标记须与旧格式措辞同处一行才算「有据可查」，
-                    # 避免相邻的静默降级借上一行的标记蒙混过关
+                    # 일치한 줄 자체만 본다. 명시적 허용 표식이 기존 형식 표현과 같은 줄에 있어야 근거가 있는 것으로 인정한다.
+                    # 인접한 조용한 대체 처리가 앞줄 표식을 빌려 검사를 통과하지 못하게 한다.
                     if exempt.search(hit.excerpt):
                         continue
                 findings.append(
@@ -579,7 +578,7 @@ def check_absent_rule(repo_root: Path, rule: AbsentRule) -> List[Finding]:
     return findings
 
 
-# 列表项与表格行都是「一条独立记录」：条件与动作要在同一条记录（或它的上级）里才算一件事。
+# 목록 항목과 표 행은 각각 독립된 기록이다. 조건과 동작이 같은 기록(또는 그 상위)에 있어야 하나의 규칙으로 본다.
 BLOCK_ITEM_RE = re.compile(r"^(\s*)(?:[-*+]\s+|[0-9]+[.)]\s+|\|)")
 
 
@@ -589,7 +588,7 @@ def _indent_width(line: str) -> int:
 
 
 def _block_item_indent(line: str) -> Optional[int]:
-    """列表项 / 表格行返回其缩进；普通正文行返回 None。"""
+    """목록 항목/표 행은 들여쓰기를, 일반 본문 줄은 None을 반환한다."""
     match = BLOCK_ITEM_RE.match(line)
     if match is None:
         return None
@@ -597,12 +596,13 @@ def _block_item_indent(line: str) -> Optional[int]:
 
 
 def logical_bullet_context(lines: Sequence[str], index: int) -> str:
-    """Return the hit line plus the branch that actually governs it.
+    """일치한 줄과 실제로 해당 줄을 지배하는 분기를 반환한다.
 
-    同一逻辑条目 = 命中行本身 + 它所属条目的续行 + 缩进更浅的上级条目或列表/表格引导句。
-    条件常写在上级（`任一主产物缺失时：` 后跟缩进子项或表格行），必须读得到；但同级兄弟条目
-    彼此是独立契约，相邻的 fail-fast 条目不得把「主产物缺失」借给本行——否则「两个主产物都
-    存在时读取 `拆文报告.md`」这类正确文档会被误判成静默降级。不跨空行与标题。
+    하나의 논리 항목은 일치 줄, 그 항목의 이어지는 줄, 더 얕게 들여쓴 상위 항목 또는 목록/표 도입 문장이다.
+    조건은 상위에 자주 있으므로 읽어야 한다(`任一主产物缺失时：` 뒤의 들여쓴 하위 항목이나 표 행 등).
+    하지만 같은 단계의 형제 항목은 독립 계약이다. 인접한 즉시 실패 항목의 ‘주요 산출물 누락’ 조건을
+    이 줄에 빌려주면 안 된다. 그러면 ‘두 주요 산출물이 모두 있을 때 `작품분석보고서.md`를 읽는다’ 같은 올바른
+    문서를 조용한 대체로 오판한다. 빈 줄과 제목을 넘어가지 않는다.
     """
     parts = [lines[index]]
     own_item_indent = _block_item_indent(lines[index])
@@ -616,8 +616,8 @@ def logical_bullet_context(lines: Sequence[str], index: int) -> str:
             break
         item_indent = _block_item_indent(candidate)
         indent = item_indent if item_indent is not None else _indent_width(candidate)
-        # 上级条目（缩进更浅）或同层引导句/续行：条件对整棵子树生效，收进上下文。
-        # 其余是同级、更深的兄弟条目及其续行，与命中行无关；跳过但继续往上找上级。
+        # 상위 항목(더 얕은 들여쓰기) 또는 같은 단계의 도입 문장/이어지는 줄: 조건이 전체 하위 트리에 적용되므로 문맥에 포함한다.
+        # 나머지는 같은 단계나 더 깊은 형제 항목과 그 연속 줄이다. 일치 줄과 무관하므로 건너뛰되 상위 항목 탐색은 계속한다.
         if indent < threshold or (item_indent is None and indent <= threshold):
             parts.insert(0, candidate)
             threshold = indent
@@ -630,13 +630,11 @@ def semantic_primary_fallback_findings(
     path: Path,
     primary_artifacts: Sequence[str],
 ) -> List[Finding]:
-    """Find positive fallback branches for missing primary benchmark artifacts.
+    """주요 벤치마크 산출물이 없을 때의 긍정형 대체 분기를 찾는다.
 
-    Detection is intentionally local: a substitute source/action must occur in
-    the same line, and the missing-primary condition must be in that line or in
-    the bullet branch that governs it (its own continuation plus shallower
-    parents).  Sibling bullets are independent contracts and never lend their
-    condition.  Explicit negative clauses such as "不得以拆文报告代替" are accepted.
+    탐지는 의도적으로 가까운 문맥으로 제한한다. 대체 출처/동작은 같은 줄에 있어야 하고 주요 산출물
+    누락 조건은 그 줄 또는 해당 줄을 지배하는 목록 분기(자체 연속 줄과 더 얕은 상위 항목)에 있어야 한다.
+    형제 항목은 독립 계약이므로 조건을 공유하지 않는다. ‘不得以拆文报告代替’ 같은 명시적 금지절은 허용한다.
     """
     findings: List[Finding] = []
     lines = text.splitlines()
@@ -651,10 +649,10 @@ def semantic_primary_fallback_findings(
     )
     primary_artifact = re.compile(primary_terms, re.IGNORECASE)
     for index, line in enumerate(lines):
-        # Bind the action to its source within one natural-language clause.
-        # A line may legitimately read a chapter summary and later fall back
-        # from a *deep-dive* to another deep-dive; whole-line co-occurrence
-        # would incorrectly classify that as a primary-artifact fallback.
+        # 자연어 절 하나 안에서 동작과 그 출처를 연결한다.
+        # 한 줄에서 장 요약을 읽은 뒤 심층 분석에서
+        # 다른 심층 분석으로 대체하는 것은 유효할 수 있다. 줄 전체의 동시 출현만 보면
+        # 이를 주요 산출물 대체로 잘못 분류하게 된다.
         substitute_clauses = [
             clause
             for clause in re.split(r"\）、|[，,；;。！？!?]", line)
@@ -692,8 +690,8 @@ def require_pattern(path: Path, pattern: str, code: str, message: str) -> List[F
     return [Finding(code, message, path)]
 
 
-# 拆文写给作者的模板（对话回复、快速预览、拆文报告）里不得出现工程痕迹：作者看不懂
-# 字段名、批次号、脚本名和内部指标，真实运行里它们会被模型照抄进汇报。
+# 작가용 분석 템플릿(대화 응답, 빠른 미리 보기, 분석 보고서)에 개발 내부 표현을 넣지 않는다. 작가는
+# 필드명, 배치 번호, 스크립트명, 내부 지표를 알 수 없고 실제 실행에서는 모델이 이를 보고서에 그대로 복사한다.
 AUTHOR_FACING_FORBIDDEN = (
     (r"\b(?:classification|recommended_path|stage_repairs|final_state|direct_use|current_complete|legacy_complete|batches)\b",
      "runtime field or status name"),
@@ -709,8 +707,8 @@ AUTHOR_FACING_FORBIDDEN = (
 FENCE_RE = re.compile(r"^(`{3,})[^\n]*\n(.*?)^\1\s*$", re.MULTILINE | re.DOTALL)
 
 
-# 拆文按时刻加载：入口的「按时刻读」表是每个时刻读哪几份文件的唯一路由。某个阶段文件从表里
-# 掉出去，那个时刻就只能靠模型猜着整读旧的大文件，35K 的时刻上限随之失效。
+# 분석 자료는 시점별로 로드한다. 진입점의 시점별 읽기 표가 각 시점에 읽을 파일을 정하는 유일한 경로다. 단계 파일이 표에서
+# 빠지면 해당 시점에는 모델이 예전의 큰 파일을 추측해서 통째로 읽어야 하므로 시점별 35K 상한이 무효화된다.
 ANALYZE_MOMENT_ROUTES = (
     (
         "skills/story-long-analyze/SKILL.md",
@@ -754,14 +752,14 @@ def analyze_moment_routing_findings(repo_root: Path) -> List[Finding]:
 
 
 def analyze_dispatch_default_findings(path: Path) -> List[Finding]:
-    """开头三章拆完停下来问时，派发方式替作者定好，不把工程选择丢给作者。"""
+    """첫 세 장을 분석한 뒤 멈춰 물을 때, 배정 방식은 미리 정해 두고 기술적 선택을 작가에게 넘기지 않는다."""
     text = read_text(path)
     if text is None:
         return [Finding("analyze-dispatch-default", "cannot read author-facing templates", path)]
-    match = re.search(r"^### 开头三章拆完、停下来问\n(.*?)(?=^### )", text, re.MULTILINE | re.DOTALL)
+    match = re.search(r"^### (?:开头三章拆完、停下来问|첫 세 장 분석 후 멈추고 확인)\n(.*?)(?=^### )", text, re.MULTILINE | re.DOTALL)
     if match is None:
         return [Finding("analyze-dispatch-default", "missing the stop-after-opening template", path)]
-    if re.search(r"想怎么拆|^\d+\.\s", match.group(1), re.MULTILINE):
+    if re.search(r"想怎么拆|어떤 방식으로 분석|^\d+\.\s", match.group(1), re.MULTILINE):
         return [Finding(
             "analyze-dispatch-default",
             "stop-after-opening must default the dispatch mode instead of asking the author to pick one",
@@ -771,7 +769,7 @@ def analyze_dispatch_default_findings(path: Path) -> List[Finding]:
 
 
 def author_facing_findings(path: Path) -> List[Finding]:
-    """Every fenced block in the author-facing reference is text the author reads verbatim."""
+    """작가용 참조 자료의 모든 코드 블록은 작가가 그대로 읽는 텍스트다."""
     text = read_text(path)
     if text is None:
         return [Finding("author-facing-template-missing", "cannot read author-facing templates", path)]
@@ -796,11 +794,12 @@ def author_facing_findings(path: Path) -> List[Finding]:
 def spawn_preflight_findings(
     text: str, manifest: ContractManifest, path: Path
 ) -> List[Finding]:
-    """Require every spawn-capable Skill to surface a stale/future agent bundle.
+    """에이전트를 실행할 수 있는 모든 스킬은 오래되거나 미래 버전인 에이전트 묶음을 알려야 한다.
 
-    版本不匹配只提示、不阻断：bump 的原因常常是别的部署物变了而 agent 模板根本没动
-    （v23 就只改了 story-explorer），硬闸会让所有人为无关变更付并行代价。真正该降级的
-    信号是当前宿主角色缺失或运行时不暴露调用能力；插件角色不要求项目文件。
+    버전 불일치는 알리기만 하고 차단하지 않는다. 다른 배포 산출물이 바뀌어 버전이 올라가도 에이전트
+    템플릿은 그대로인 경우가 많다(v23은 story-explorer만 변경). 강제 차단하면 모든 사용자가 무관한
+    변경 때문에 병렬 처리 비용을 치른다. 실제 대체 처리 신호는 현재 호스트에 역할이 없거나 런타임이
+    호출 기능을 노출하지 않는 경우다. 플러그인 역할에는 프로젝트 파일이 필요하지 않다.
     """
 
     current = str(manifest.agents_version)
@@ -842,8 +841,8 @@ def spawn_preflight_findings(
     ]
 
 
-# 作者可见文本只说白话：这些 Skill 的降级与版本提示原文只进汇报最后一行「技术备注：」，
-# 不再写成「报告 `Fallback: …`」「同时报告 `Notice: …`」让模型原样念给作者（v0.8.2）。
+# 작가에게 보이는 텍스트는 평이하게 쓴다. 이 스킬들의 대체 처리와 버전 알림 원문은 보고 마지막 ‘技术备注：’ 줄에만 넣는다.
+# ‘보고 `Fallback: …`’, ‘함께 보고 `Notice: …`’처럼 모델이 원문을 작가에게 그대로 읽도록 쓰지 않는다(v0.8.2).
 AUTHOR_NOTE_PREFLIGHT_SKILLS = (
     "skills/story-long-write/SKILL.md",
     "skills/story-short-write/SKILL.md",
@@ -858,9 +857,9 @@ SENTENCE_SPLIT_RE = re.compile(r"[。；！？\n]")
 
 
 def author_note_preflight_findings(text: str, path: Path) -> List[Finding]:
-    """Fallback / Notice 原文必须改走技术备注行，给作者的是一句白话。
+    """Fallback / Notice 원문은 기술 참고 줄로 보내고 작가에게는 평이한 한 문장을 보여 준다.
 
-    只认「同一句话里写明进技术备注」：换个动词（报、说出、报告：）绕开固定句式都拦得住。"""
+    같은 문장 안에서 기술 참고로 보낸다고 명시해야 한다. 동사만 바꿔 고정 문형을 피하는 경우도 차단한다."""
 
     problems = []
     if BARE_ENGINE_REPORT_RE.search(text):
@@ -883,7 +882,7 @@ def author_note_preflight_findings(text: str, path: Path) -> List[Finding]:
 
 
 def rubric_dimension_names(repo_root: Path) -> Tuple[List[str], List[str]]:
-    """取 quality-rubric.md「核心维度」表与 SKILL.md 内置 fallback 的维度名。"""
+    """quality-rubric.md의 ‘核心维度’ 표와 SKILL.md 내장 대체 기준에서 평가 항목명을 추출한다."""
 
     table: List[str] = []
     rubric_text = read_text(repo_root / "skills/story-review/references/quality-rubric.md") or ""
@@ -914,11 +913,11 @@ def rubric_dimension_names(repo_root: Path) -> Tuple[List[str], List[str]]:
 
 
 def rubric_parity_findings(repo_root: Path) -> List[Finding]:
-    """内置 fallback rubric 与 quality-rubric.md 必须是同一套维度。
+    """내장 대체 평가 기준과 quality-rubric.md는 같은 평가 항목을 사용해야 한다.
 
-    两者是同一套标准的两个副本：文件可读时用文件，不可读时用内置。漂移过一次
-    （文件版独有「任务卡点」，内置版独有「标点节奏」「具体字数表达校验」），
-    结果是审查口径取决于路径可读性。手工对齐只管一次，这条断言管以后。
+    두 자료는 같은 기준의 사본이다. 파일을 읽을 수 있으면 파일을, 없으면 내장 기준을 쓴다. 과거에는
+    파일에만 ‘任务卡点’, 내장 기준에만 ‘标点节奏’와 ‘具体字数表达校验’이 있어 경로 접근 가능성에 따라
+    평가 기준이 달라졌다. 수동 정렬은 한 번만 해결하지만 이 검증은 이후에도 일치를 보장한다.
     """
 
     table, embedded = rubric_dimension_names(repo_root)
@@ -966,7 +965,7 @@ def parse_frontmatter_version(path: Path) -> Optional[str]:
 
 
 def extract_current_version_fields(text: str) -> dict[str, str]:
-    """Parse version bullets from the `## 当前版本` section only."""
+    """`## 当前版本` 절에서만 버전 목록 항목을 파싱한다."""
     lines = text.splitlines()
     start: Optional[int] = None
     for index, line in enumerate(lines):
@@ -1014,8 +1013,8 @@ def upgrading_version_findings(
                     path,
                 )
             )
-    # 「升级步骤」里让用户核对的版本号是操作指令，bump 时最容易漏（它不在当前版本 bullet
-    # 里，也不被部署检查的 TS10 锚点覆盖）。任何写成 `agents_version: N` 的行都必须是当前值。
+    # 업그레이드 절차에서 사용자에게 확인하도록 하는 버전은 실행 지침이며 버전 갱신 시 빠지기 쉽다(현재 버전 목록에도 없고
+    # 배포 검사 TS10 앵커에도 포함되지 않는다). `agents_version: N` 형식의 모든 줄은 현재 값이어야 한다.
     for raw in text.splitlines():
         match = re.search(r"`agents_version:\s*(\d+)`", raw)
         if match and match.group(1) != str(manifest.agents_version):
@@ -1032,11 +1031,10 @@ def upgrading_version_findings(
 
 
 def extract_sentinel_fields(text: str) -> Optional[dict[str, str]]:
-    """Parse the generated `.story-deployed` YAML example from its Step section.
+    """해당 Step 절에서 생성된 `.story-deployed` YAML 예제를 파싱한다.
 
-    This intentionally ignores version strings in surrounding explanatory
-    prose.  The deployment contract is the fenced block following the
-    "写入以下字段" instruction inside "创建部署标记".
+    주변 설명에 있는 버전 문자열은 의도적으로 무시한다. 배포 계약은 ‘创建部署标记’ 안의
+    ‘写入以下字段’ 지침 다음에 오는 코드 블록이다.
     """
     lines = text.splitlines()
     section_start: Optional[int] = None
@@ -1151,7 +1149,7 @@ def _normalize_rule_field(label: str) -> str:
 
 
 def extract_outline_rule_fields(text: str) -> set[str]:
-    """Return structured field labels from Rules item 2 (细纲必填项)."""
+    """Rules 2번 항목(细纲必填项)에서 구조화 필드 레이블을 반환한다."""
     lines = text.splitlines()
     start: Optional[int] = None
     for index, line in enumerate(lines):
@@ -1193,7 +1191,7 @@ def outline_rule_contract_findings(
 
 
 def extract_demo_outline_fields(text: str) -> set[str]:
-    """Return labels declared as headings or `- field: value` entries."""
+    """제목 또는 `- field: value` 항목으로 선언된 레이블을 반환한다."""
     fields: set[str] = set()
     for line in text.splitlines():
         heading = re.match(r"^#{2,6}\s+(.+?)\s*$", line)
@@ -1210,21 +1208,21 @@ SCHEMA_VERSION_PIN_RE = re.compile(r"schema_version:\s*([0-9]+)")
 
 
 def progress_schema_pin_findings(repo_root: Path, expected: int) -> List[Finding]:
-    """每个字面 `schema_version: N` 锚点都必须是当前续跑契约版本。
+    """모든 리터럴 `schema_version: N` 앵커는 현재 이어 실행하기 계약 버전이어야 한다.
 
-    续跑契约同时写在 analyze 的写入/恢复段、import 的当前拆文契约、UPGRADING 当前契约段和
-    demo 基准进度文件里。只核对 pipeline-ops.md 会让 bump 之后其余文件静默留在旧版本——技能
-    包自相矛盾、续跑拒收自己写出的 `_progress.md`，而 CI 全绿。参照 `agents_version` 的做法
-    （见 upgrading_version_findings）：任何写成 `schema_version: N` 的行都必须是当前值。
-    仓库根的 CHANGELOG.md 是历史记录，故意不在扫描范围内；版本说明表的 `| 2 | 当前契约… |`
-    不写成锚点形式，本规则也不会误伤。
+    이 계약은 analyze의 쓰기/복구 절, import의 현재 분석 계약, UPGRADING 현재 계약 절, 데모 기준
+    진행 파일에도 들어 있다. pipeline-ops.md만 검사하면 갱신 후 다른 파일이 이전 버전으로 남아
+    스킬 묶음이 자기모순에 빠지고 자신이 쓴 `_progress.md`도 거부하지만 CI는 통과할 수 있다.
+    `agents_version`과 같은 방식(upgrading_version_findings 참고)으로 `schema_version: N` 형식의
+    모든 줄이 현재 값인지 확인한다. 루트 CHANGELOG.md는 과거 기록이므로 의도적으로 제외한다.
+    버전 설명 표의 `| 2 | 当前契约… |`는 앵커 형식이 아니므로 이 규칙의 영향을 받지 않는다.
     """
     findings: List[Finding] = []
     paths: List[Path] = []
     for root in (repo_root / "skills", repo_root / "demo"):
         paths.extend(path for path in iter_files(root) if path.suffix.lower() == ".md")
-    # iter_files 按名字跳过 UPGRADING.md（历史章节不该被当前值约束），但 `## v21 当前契约`
-    # 段里的续跑契约陈述与 agents_version 同理，bump 时必须跟着改。
+    # iter_files는 UPGRADING.md를 이름으로 제외한다(과거 절은 현재 값으로 제한하면 안 됨). 다만 `## v21 当前契约`
+    # 절의 이어 실행하기 계약 설명은 agents_version과 마찬가지로 버전 갱신 시 함께 바꿔야 한다.
     paths.append(repo_root / "skills/story-setup/UPGRADING.md")
     for path in paths:
         text = read_text(path)
@@ -1311,7 +1309,7 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
 
     topic_file = repo_root / "skills/story-long-scan/references/topic-decision.md"
     topic_text = read_text(topic_file) or ""
-    topic_match = re.search(r"Phase\s+([0-9]+)[^\n]*产出\s*`选题决策\.md`", topic_text)
+    topic_match = re.search(r"Phase\s+([0-9]+)[^\n]*(?:产出\s*`소재선정\.md`|`소재선정\.md`를 만든다)", topic_text)
     if not topic_match or int(topic_match.group(1)) != manifest.topic_decision_phase:
         findings.append(
             Finding(
@@ -1337,10 +1335,10 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
             continue
         text = read_text(path) or ""
         for line_number, line_text in enumerate(text.splitlines(), start=1):
-            if "选题决策" not in line_text:
+            if "选题决策" not in line_text and "소재선정" not in line_text:
                 continue
-            # 技能名在本包的房子风格是反引号包裹（`story-long-scan` Phase 5），裸 token 匹配
-            # 跨不过反引号，会漏掉一半引用；两种写法都要拦。
+            # 이 패키지에서는 스킬명을 백틱으로 감싼다(`story-long-scan` Phase 5). 일반 토큰 일치는
+            # 백틱을 넘지 못해 참조 절반을 놓치므로 두 표기를 모두 검사해야 한다.
             for match in re.finditer(
                 r"`?story-long-scan`?[\s`]*Phase\s+([0-9]+)", line_text
             ):
@@ -1368,15 +1366,15 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     findings.extend(require_pattern(long_analyze, r"references/author-facing\.md", "author-facing-routed",
                                     "story-long-analyze must route every author-visible message through author-facing.md"))
     findings.extend(require_pattern(long_analyze, r"invalid_topic_decision_contract", "invalid-topic-contract", "invalid topic-decision artifacts must fail explicitly"))
-    # 目录块剔除由 build_chapter_index.py 执行，test-long-analyze-runtime-refactor.py 用带目录原文覆盖；
-    # 章号连续性校验目前没有运行时回归，暂留 Stage 0 的文字锚点。
+    # 목차 블록 제거는 build_chapter_index.py가 수행하며 test-long-analyze-runtime-refactor.py에서 목차가 있는 원문으로 검증한다.
+    # 장 번호 연속성 검사에는 아직 런타임 회귀 검사가 없으므로 Stage 0의 텍스트 앵커를 남긴다.
     findings.extend(require_pattern(long_analyze, r"落表前校验章号连续", "stage0-chapter-table-validation", "Stage 0 must validate chapter numbers before writing the boundary table"))
-    # 对标召回流程在 story-explorer 的按需参考里（query_type=benchmark_style_load 才读）。
+    # 벤치마크 회수 흐름은 story-explorer의 필요 시 참조 자료에 있다(query_type=benchmark_style_load일 때만 읽음).
     explorer = repo_root / "skills/story-setup/references/agent-references/benchmark-style-load.md"
     findings.extend(require_pattern(explorer, r"missing_primary_contract", "explorer-primary-failure", "story-explorer must fail closed on missing current benchmark artifacts"))
     findings.extend(require_pattern(explorer, r"repair_action", "explorer-repair-action", "story-explorer must return an explicit repair action"))
 
-    # 主产物的读取与缺失即停在写前召回里定义（v0.8.2 起 SKILL.md 只留对标路径查找一行）。
+    # 주요 산출물 읽기와 누락 시 중단은 집필 전 회수 단계에서 정의한다(v0.8.2부터 SKILL.md에는 벤치마크 경로 조회 한 줄만 남김).
     long_write = repo_root / "skills/story-long-write/references/benchmark-recall.md"
     for artifact in manifest.primary_benchmark_artifacts:
         findings.extend(
@@ -1411,8 +1409,8 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
             )
         )
 
-    # 长篇的「对标发现」随 Phase 1-3 从 SKILL.md 搬进 workflow-setup.md（#269 减无条件加载），
-    # 断言跟着内容走；短篇对标发现位于独立的 benchmark-recall.md。
+    # 장편의 벤치마크 탐색은 Phase 1-3과 함께 SKILL.md에서 workflow-setup.md로 이동했다(#269, 무조건 로드 축소).
+    # 검증도 내용의 위치를 따른다. 단편 벤치마크 탐색은 별도의 benchmark-recall.md에 있다.
     for relative in (
         "skills/story-long-write/references/workflow-setup.md",
         "skills/story-short-write/references/benchmark-recall.md",
@@ -1423,7 +1421,7 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
         findings.extend(
             require_pattern(
                 benchmark_discovery,
-                r"排除[^\n]*当前[^\n]*(?:拆文库|作品|正文)",
+                r"(?:排除[^\n]*当前[^\n]*(?:拆文库|作品|正文)|현재 작품을 식별하고[^\n]*현재 본문인[^\n]*제외|현재 작품을 식별한다[^\n]*현재 본문을 가리키는[^\n]*제외한다|같은 이름이거나 출처가 현재 (?:`본문\.md`|본문)[^\n]*가리키는[^\n]*`비교작품/\{当前书\}/`는 제외한다)",
                 "benchmark-discovery-excludes-current-work",
                 "benchmark discovery must exclude the current imported work",
             )
@@ -1438,20 +1436,20 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
             "story-explorer must report and ignore self-benchmark candidates",
         )
     )
-    # 「书在但缺文风」必须落到 profile_missing，不能被 benchmark_book_missing 吞掉——
-    # 前者调用方可按 custom_style 降级续写，后者是硬停。两者混用是功能回退，不是措辞问题。
+    # 책은 있지만 문체가 없으면 반드시 profile_missing이어야 하며 benchmark_book_missing에 흡수되어서는 안 된다.
+    # 전자는 호출자가 custom_style로 대체 집필할 수 있고 후자는 반드시 중단한다. 둘의 혼동은 표현 문제가 아닌 기능 회귀다.
     findings.extend(
         require_pattern(
             explorer_template,
-            r"对标/\{书名\}/\*\*/\*",
+            r"비교작품/\{书名\}/\*\*/\*",
             "explorer-book-dir-probe",
-            "story-explorer must probe book-dir validity with any file under it, not 文风.md",
+            "story-explorer must probe book-dir validity with any file under it, not 문체.md",
         )
     )
     findings.extend(
         require_pattern(
             explorer_template,
-            r"不得改填\s*`?benchmark_book_missing",
+            r"(?:不得改填\s*`?benchmark_book_missing|`benchmark_book_missing`으로 바꾸지 않는다)",
             "explorer-profile-missing-distinct",
             "story-explorer must keep profile_missing distinct from benchmark_book_missing",
         )
@@ -1459,21 +1457,21 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     findings.extend(
         require_pattern(
             repo_root / "skills/story-long-write/references/agent-calls.md",
-            r"profile_missing[^\n]{0,60}custom_style[^\n]{0,40}继续",
+            r"profile_missing[^\n]{0,60}custom_style[^\n]{0,40}(?:继续|계속)",
             "daily-profile-missing-custom-style",
             "the story-explorer recall gaps (agent-calls.md) must keep the profile_missing + custom_style continuation branch",
         )
     )
 
-    # 三层灵感库管道：复用 EM 卡、裸 ID 引用、可选轴不阻塞——三条红线各有一个可机检锚点。
+    # 3계층 영감 라이브러리 파이프라인: EM 카드 재사용, 레이블 없는 ID 참조, 선택 축이 진행을 막지 않음. 세 금지선마다 기계 검사 가능한 앵커가 있다.
     inspiration_library = repo_root / "skills/story-long-analyze/references/inspiration-library.md"
     for pattern, code, message in (
-        (r"原子灵感", "inspiration-atom-layer", "inspiration library must define the atom layer"),
+        (r"原子灵感|원자 영감", "inspiration-atom-layer", "inspiration library must define the atom layer"),
         (r"单小说灵感合并", "inspiration-novel-merge-layer", "inspiration library must define the single-novel merge layer"),
         (r"跨书灵感聚合", "inspiration-cross-book-layer", "inspiration library must define the cross-book aggregation layer"),
-        (r"只是索引行，没有文件", "inspiration-atom-is-index-row", "inspiration atoms must stay index rows without card files"),
-        (r"禁止在卡里堆路径链接|卡内无路径引用", "inspiration-no-path-in-card", "NM/CBA cards must reference sources by bare id, not paths"),
-        (r"单书拆文不自动入库", "inspiration-no-auto-ingest", "single-book analysis must not auto-ingest into the library"),
+        (r"只是索引行，没有文件|색인 행만 있고 파일은 없다", "inspiration-atom-is-index-row", "inspiration atoms must stay index rows without card files"),
+        (r"禁止在卡里堆路径链接|卡内无路径引用|카드 내 경로 참조 금지", "inspiration-no-path-in-card", "NM/CBA cards must reference sources by bare id, not paths"),
+        (r"单书拆文不自动入库|개별 작품 분석 결과는 자동으로 등록하지 않는다", "inspiration-no-auto-ingest", "single-book analysis must not auto-ingest into the library"),
     ):
         findings.extend(require_pattern(inspiration_library, pattern, code, message))
     findings.extend(
@@ -1495,12 +1493,12 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     findings.extend(
         require_pattern(
             repo_root / "skills/story-long-write/references/project-files.md",
-            r"Top 3[–-]8[^\n]*CBA[^\n]*不传 IA/NM",
+            r"Top 3[–-]8[^\n]*CBA[^\n]*不传 IA/NM|CBA 상위 3[–-]8개[^\n]*IA/NM을 전달하지 않고",
             "long-write-cba-budget",
             "long writing must bound public inspiration retrieval to Top 3-8 CBA cards without IA/NM",
         )
     )
-    # 开书按时刻拆成三份文件（v0.8.2），三个灵感召回锚点各在自己的时刻文件里。
+    # 새 작품 시작은 시점별 세 파일로 나뉜다(v0.8.2). 세 영감 회수 앵커는 각각 해당 시점 파일에 있다.
     references_dir = repo_root / "skills/story-long-write/references"
     for filename, pattern, code, message in (
         ("workflow-setup.md", r"适用阶段=设定", "inspiration-hook-setup", "book setup must offer optional inspiration recall"),
@@ -1511,18 +1509,18 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     findings.extend(
         require_pattern(
             repo_root / "skills/story-long-write/references/cross-book-recall.md",
-            r"独立于[^\n]*多对标触发条件",
+            r"独立于[^\n]*多对标触发条件|다중 벤치마크 조건과 독립적이다",
             "inspiration-decoupled-from-multi-benchmark",
             "inspiration channel must not depend on the >=2 benchmark trigger",
         )
     )
 
-    # 三处消费方都必须明确取消逐点字数，避免旧 Σ 契约从任一部署面回流。
+    # 세 소비자 모두 지점별 글자 수를 명시적으로 폐지해야 이전 Σ 계약이 배포 경로를 통해 되돌아오지 않는다.
     for relative in OUTLINE_SEMANTIC_CAPACITY_CONSUMERS:
         findings.extend(
             require_pattern(
                 repo_root / relative,
-                r"不(?:填写|含)逐点字数",
+                r"(?:不(?:填写|含)逐点字数|항목별 글자 수를 쓰지 않으며)",
                 "outline-semantic-capacity-parity",
                 "outline beats must remain semantic and must not carry per-beat word quotas",
             )
@@ -1536,7 +1534,7 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
 
     demo_root = repo_root / "demo/拆文库/盘龙"
     for artifact in manifest.primary_benchmark_artifacts:
-        artifact_path = demo_root / artifact
+        artifact_path = demo_root / artifact.replace("플롯/", "剧情/").replace("감정모듈.md", "情绪模块.md").replace("리듬.md", "节奏.md")
         try:
             has_content = artifact_path.is_file() and artifact_path.stat().st_size > 0
         except OSError:
@@ -1549,7 +1547,7 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     outline_dir = repo_root / "demo/长篇/让你管账号，你高燃混剪炸全网/大纲"
     outlines = sorted(outline_dir.glob("细纲_第*.md"))
     if not outlines:
-        # 目录改名或清空时下面的逐章检查会空转，至少要有一份细纲。
+        # 디렉터리 이름을 바꾸거나 비우면 아래 장별 검사가 빈 상태로 통과하므로 상세 개요가 최소 하나 있어야 한다.
         findings.append(Finding("demo-outline-section", "no demo chapter outlines found", outline_dir))
     for outline in outlines:
         text = read_text(outline) or ""

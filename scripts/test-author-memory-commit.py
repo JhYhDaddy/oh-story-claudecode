@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior regression for the two-level author-memory transaction tool."""
+"""2계층 작가 기억 트랜잭션 도구의 동작 회귀 검사."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def snapshot(root: Path) -> dict[str, bytes]:
 
 
 def memory_dir(root: Path) -> Path:
-    return root / ".story" / "作者记忆"
+    return root / ".story" / "작가기억"
 
 
 def state(root: Path) -> dict[str, Any]:
@@ -132,7 +132,7 @@ def query(workspace: Path, *args: str, expect: int = 0) -> dict[str, Any]:
 
 
 def load_tool_module() -> Any:
-    """就地加载被测脚本。下面几项不变式要在函数级别穷举，走子进程太慢。"""
+    """테스트 대상 스크립트를 제자리에서 로드한다. 아래 불변식은 함수 수준에서 전수 검사해야 하며 하위 프로세스는 너무 느리다."""
     spec = importlib.util.spec_from_file_location("author_memory_commit", TOOL)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -140,7 +140,7 @@ def load_tool_module() -> Any:
 
 
 def synthetic_state(generator: random.Random, module: Any, *, book: str | None, books: list[str], genres: list[str], workflows: list[str]) -> dict[str, Any]:
-    """合成一份 store：book=None 是项目级（含存量 book 条目），否则是该书的书级 store。"""
+    """store를 합성한다. book=None이면 프로젝트 수준(기존 book 항목 포함), 아니면 해당 책 수준 store다."""
     values = {"book": books, "genre": genres, "workflow": workflows}
     prefix = "BP" if book is not None else "AP"
     items = {}
@@ -167,23 +167,23 @@ def synthetic_state(generator: random.Random, module: Any, *, book: str | None, 
 
 
 def assert_no_false_negatives() -> None:
-    """核心不变式：写入回执没给提醒 ⟹ 任何真实 query 都不会漏条。
+    """핵심 불변식: 쓰기 확인 응답에 알림이 없음 ⟹ 모든 실제 query에서 항목 누락이 없음.
 
-    这是整套「写入即预警」机制成立的前提。估算与真实查询是两段代码，任何一处
-    口径漂移（scope 切片不按 casefold 归并、切片轻重不算 JSON 分隔符、状态过滤
-    不一致、项目级存量 book 条目被误算或误返回）都会让作者拿到回执却丢条目——
-    正是本机制要消灭的失败模式。固定种子的随机库穷举比任何手工 fixture 都难绕过。
-    两级 store 下分别穷举「带书目录」与「不带书目录」两种真实查询。
+    이는 쓰기 시 사전 알림 체계의 전제다. 추정과 실제 조회는 별도 코드이므로 scope 분할의 casefold
+    병합 누락, JSON 구분자를 제외한 분할 크기 계산, 상태 필터 불일치, 프로젝트 수준의 기존 book
+    항목 오계산/오반환 중 하나만 있어도 작가가 확인 응답을 받고 항목을 잃는다. 이 체계가 없애려는
+    실패 유형이다. 고정 시드 무작위 저장소 전수 검사는 수동 fixture보다 우회하기 어렵다.
+    2계층 store에서 책 디렉터리를 지정한 조회와 지정하지 않은 실제 조회를 각각 전수 검사한다.
     """
     module = load_tool_module()
     books = ["甲", "Lucky", "lucky", "LUCKY", "乙"]
     genres = ["悬疑", "Urban", "urban"]
-    workflows = ["长篇", "short", "SHORT"]
+    workflows = ["장편", "short", "SHORT"]
     generator = random.Random(4290918)
 
     def real_query_omitted(project_state, book_state, kinds, requested):
-        # oracle 就是 command_query 走的那条纯函数路径（merged_query），不是在测试里
-        # 再实现一遍查询——否则估算与「真实查询」同源，信封少算一个字段也测不出。
+        # 기준값은 command_query가 사용하는 순수 함수 경로(merged_query) 자체다. 테스트에서 조회를
+        # 다시 구현하면 추정과 ‘실제 조회’가 같은 근거를 공유해 결과 구조의 필드 하나를 빼먹어도 검출하지 못한다.
         return module.merged_query(project_state, book_state, set(kinds), requested)[1]
 
     warned_libraries = 0
@@ -208,11 +208,11 @@ def assert_no_false_negatives() -> None:
 
 
 def assert_slice_weight_uses_rendered_lines() -> None:
-    """挑「最重切片」必须按执行者读到的行算，与装填同一把尺。
+    """가장 큰 분할은 실행자가 읽는 줄을 기준으로 선택해 채우기와 같은 척도를 사용해야 한다.
 
-    按 JSON 字节挑会挑错：scope 取值很长、断言很短的切片 JSON 更重，渲染成
-    「- 断言（编号）」后却更轻，于是估算判「装得下」而真实查询溢出——warnings
-    假阴性。下面的 fixture 两把尺子挑的切片不同，且只有乙会溢出。
+    JSON 바이트로 고르면 잘못 선택할 수 있다. scope 값이 길고 단언이 짧은 분할은 JSON으로는
+    더 크지만 ‘- 단언(번호)’으로 렌더링하면 더 작다. 그러면 추정은 들어간다고 판단해도 실제 조회는
+    초과하여 warnings가 거짓 음성이 된다. 아래 fixture는 두 척도가 다른 분할을 고르게 하며 乙만 초과한다.
     """
     module = load_tool_module()
 
@@ -242,7 +242,7 @@ def assert_slice_weight_uses_rendered_lines() -> None:
     warnings = module.query_budget_warnings({"items": items, "state_revision": 700, "journal": []}, None)
     assert any("最坏查询" in warning for warning in warnings), "挑错切片会让超编的乙被漏报——切片轻重必须按渲染后的行算"
 
-    # 少而长 对 多而短：只比断言字节会挑「甲」，可每行还有 14 字节固定开销，「乙」渲染后更重。
+    # 적고 긴 항목과 많고 짧은 항목 비교: 단언 바이트만 보면 ‘甲’를 고르지만 줄당 고정 비용 14바이트를 포함하면 ‘乙’의 렌더링 결과가 더 크다.
     def entry(number: int, level: str, value: str | None, chars: int) -> dict[str, Any]:
         return {**item(number, value or "", "文" * chars), "scope": {"level": level, "value": value}}
 
@@ -264,10 +264,10 @@ def assert_slice_weight_uses_rendered_lines() -> None:
 
 
 def assert_omitted_follow_priority_and_lines_fit() -> None:
-    """装填只量执行者读到的行；漏项全数列出、按候选优先级排序、附断言首句。
+    """채울 분량은 실행자가 읽는 줄만 측정한다. 누락 항목은 후보 우선순위대로 전부 나열하고 단언의 첫 문장을 붙인다.
 
-    漏项清单不进执行者 prompt，所以不封顶——作者要知道的是哪几条没带上，
-    清单截断会让排在后面的条目永远不被提起。
+    누락 목록은 실행자 프롬프트에 넣지 않으므로 상한을 두지 않는다. 작가는 어떤 항목이 빠졌는지
+    알아야 하며 목록을 자르면 뒤의 항목은 영원히 언급되지 않는다.
     """
     module = load_tool_module()
     items = [{
@@ -292,25 +292,25 @@ def assert_omitted_follow_priority_and_lines_fit() -> None:
     assert used <= module.QUERY_MAX_BYTES, "lines 必须装在注入预算内"
     first_dropped = next(item for item in items if item["id"] == omitted[0])
     assert used + module.line_bytes(first_dropped) > module.QUERY_MAX_BYTES, "第一个漏项确实装不下，不是被提前放弃"
-    # 写手读到的文字计 2048：40 个字（120 字节）的断言能装 15 条，旧的 JSON 外壳口径只装得下 8 条。
+    # 집필자가 읽는 텍스트 한도는 2048이다. 40자(120바이트) 단언은 15개 들어가지만 이전 JSON 외곽 기준으로는 8개만 들어갔다.
     full = [{**item, "assertion": "文" * 40} for item in items[:15]]
     assert not module.fit_items(full, 500)[1], "按行计量时 15 条 40 字断言必须全部装下"
     assert set(result["omitted_importance"]) == set(omitted), "合并多次查询时要靠重要度重排漏项"
-    # 边界：lines 正好 2048 字节全部装下，多 1 字节最后一条就进漏项
+    # 경계: lines가 정확히 2048바이트면 모두 포함하고 1바이트 초과하면 마지막 항목이 누락 목록으로 이동한다.
     exact = full + [{**items[15], "assertion": "文" * 8}]
     assert sum(module.line_bytes(item) for item in exact) == module.QUERY_MAX_BYTES
     assert not module.fit_items(exact, 500)[1], "正好 2048 字节必须全部装下"
     over = full + [{**items[15], "assertion": "文" * 8 + "x"}]
     assert module.fit_items(over, 500)[1] == [items[15]["id"]], "多 1 字节最后一条进漏项"
-    # 跳过不中断：装不下的长条不挡后面装得下的短条
+    # 건너뛰되 중단하지 않는다. 들어가지 않는 긴 항목이 뒤의 짧은 항목을 막지 않는다.
     queue = full[:14] + [{**items[20], "assertion": "长" * 250}, {**items[21], "assertion": "短"}]
     skipped_result, skipped = module.fit_items(queue, 500)
     assert skipped == [items[20]["id"]] and skipped_result["items"][-1]["id"] == items[21]["id"], "装不下的跳过，后面的短条照装"
 
 
 def assert_single_root_layout(temporary: Path, input_path: Path) -> None:
-    """单书布局（书根就是工作区）：两级 store 的默认落点重合，书级改住 书级/ 子目录。"""
-    # ---- 全新工作区：项目级、书级各写一条，query 两条都在 ----
+    """단일 책 배치(책 루트가 작업 공간): 두 store의 기본 저장 위치가 겹치므로 책 store를 书级/ 하위 디렉터리로 옮긴다."""
+    # ---- 새 작업 공간: 프로젝트 수준과 책 수준에 하나씩 쓰고 query에 둘 다 나오는지 확인 ----
     fresh = temporary / "单书"
     fresh.mkdir()
     root_args = ("--book-root", str(fresh))
@@ -323,7 +323,7 @@ def assert_single_root_layout(temporary: Path, input_path: Path) -> None:
     assert Path(booked["root"]) == book_dir.resolve(), "书级 store 必须落在子目录，不与项目级共用 state"
     assert "book" not in state(fresh) and list(state(fresh)["items"]) == ["AP001"]
     assert json.loads((book_dir / "_author-memory-state.json").read_text(encoding="utf-8"))["book"] == "单书"
-    # 书级写入之后，项目级写入与查询照常可用（修复前这里恒报 state.book）
+    # 책 수준 쓰기 후에도 프로젝트 수준 쓰기와 조회가 정상 동작한다(수정 전에는 항상 state.book 오류).
     second = json.loads(record(fresh, input_path, remember("sr-global-2", preference("全局：段尾不抒情", "记住：段尾不抒情。")), *root_args).stdout)
     assert second["item_ids"] == ["AP002"] and second["warnings"] == []
     assert [item["id"] for item in query(fresh, "--kind", "prose_style", *root_args)["items"]] == ["BP001", "AP002", "AP001"]
@@ -332,8 +332,8 @@ def assert_single_root_layout(temporary: Path, input_path: Path) -> None:
     assert forgot["store"] == "book" and forgot["item_ids"] == ["BP001"]
     run("check", "--workspace", str(fresh), *root_args)
 
-    # ---- v0.7.10 单根存量库：query / 书级 record / migrate 都可用，书名取存量条目 ----
-    legacy = temporary / "novel-root"  # 目录名不是书名
+    # ---- v0.7.10 단일 루트 기존 저장소: query / 책 수준 record / migrate가 모두 가능하며 책 제목은 기존 항목에서 가져옴 ----
+    legacy = temporary / "novel-root"  # 디렉터리 이름은 책 제목이 아니다.
     legacy.mkdir()
     legacy_args = ("--book-root", str(legacy))
     record(legacy, input_path, remember("v710-global", preference("全局：少用感叹号", "记住：少用感叹号。")))
@@ -359,9 +359,9 @@ def assert_single_root_layout(temporary: Path, input_path: Path) -> None:
     assert json.loads(run("migrate", "--workspace", str(legacy), *legacy_args).stdout)["migrated"] == []
     run("check", "--workspace", str(legacy), *legacy_args)
 
-    # ---- 已被旧版写坏的工作区：项目级位置上是一份书级 state，带书根运行即自愈 ----
+    # ---- 이전 버전이 손상한 작업 공간: 프로젝트 위치에 책 수준 state가 있으면 책 루트를 지정해 실행할 때 자동 복구 ----
     donor = temporary / "供体工作区"
-    donor_root = donor / "长篇" / "雾港来信"
+    donor_root = donor / "장편" / "雾港来信"
     donor_root.mkdir(parents=True)
     record(donor, input_path, remember("donor-book", preference(
         "雾港来信：对话短句", "这本书对话短一点。", scope_level="book", scope_value="雾港来信",
@@ -384,13 +384,13 @@ def assert_single_root_layout(temporary: Path, input_path: Path) -> None:
         "雾港来信：少用比喻", "这本书少用比喻。", scope_level="book", scope_value="雾港来信",
     )), *broken_args).stdout)
     assert booked_again["item_ids"] == ["BP002"]
-    # 两处都是书级 state 时不猜，报错点名两份文件
+    # 두 위치 모두 책 수준 state라면 추측하지 않고 두 파일을 명시해 오류를 낸다.
     shutil.copy(memory_dir(donor_root) / "_author-memory-state.json", memory_dir(broken) / "_author-memory-state.json")
     assert "无法自动归位" in query(broken, "--kind", "prose_style", *broken_args, expect=2)["stderr"]
 
 
 def error_text(stderr: str) -> str:
-    """报错走 JSON（ensure_ascii），Windows 路径的反斜杠会被转义；按字段取出原文再比。"""
+    """오류는 JSON(ensure_ascii)으로 출력해 Windows 경로의 백슬래시가 이스케이프된다. 필드별 원문을 추출한 뒤 비교한다."""
     try:
         return str(json.loads(stderr)["error"])
     except (ValueError, KeyError, TypeError):
@@ -398,10 +398,10 @@ def error_text(stderr: str) -> str:
 
 
 def assert_book_dir_is_not_single_root(temporary: Path, input_path: Path) -> None:
-    """多书工作区里的书目录被误传成 --workspace（书目录自己也含 .story/作者记忆/）：
-    不得当单书布局挪动书级 state，报错、零写入；正确调用照常可用。"""
+    """여러 책이 있는 작업 공간의 책 디렉터리가 --workspace로 잘못 전달됨(책 자체에도 .story/작가기억/가 있음):
+    단일 책 배치로 취급해 책 state를 옮기면 안 된다. 오류를 내고 아무것도 쓰지 않으며 올바른 호출은 정상 동작한다."""
     workspace = temporary / "多书工作区"
-    book_root = workspace / "长篇" / "甲书"
+    book_root = workspace / "장편" / "甲书"
     book_root.mkdir(parents=True)
     book_args = ("--book-root", str(book_root))
     record(workspace, input_path, remember("mb-global", preference("全局：动词承重", "记住：动词承重。")))
@@ -418,14 +418,14 @@ def assert_book_dir_is_not_single_root(temporary: Path, input_path: Path) -> Non
     )), *book_args, expect=2)
     assert snapshot(workspace) == before, "误传书目录为工作区时不得改动任何文件"
     assert not (memory_dir(book_root) / "书级").exists()
-    # 误传不带 --book-root 时，报错提示不得只引导「带 --book-root {工作区} 重跑」
+    # --book-root 없이 잘못 호출했을 때 오류가 ‘--book-root {작업 공간}을 붙여 재실행’만 안내해서는 안 된다.
     hint = query(book_root, "--kind", "prose_style", expect=2)["stderr"]
     assert "改传创作工作区根" in hint and "单书布局" in hint, hint
-    # 正确调用照常可用
+    # 올바른 호출은 계속 정상 동작한다.
     assert [item["id"] for item in query(workspace, "--kind", "prose_style", *book_args)["items"]] == ["BP001", "AP001"]
     run("check", "--workspace", str(workspace), *book_args)
 
-    # 其余两种迹象：祖先有 .active-book，或祖先有项目级 store（书目录不在 长篇/ 短篇/ 下）
+    # 나머지 두 징후: 상위에 .active-book가 있거나 프로젝트 수준 store가 있다(책 디렉터리가 장편/ 단편/ 밖에 있음).
     marked = temporary / "标记工作区"
     (marked / "书稿" / "乙书").mkdir(parents=True)
     (marked / ".active-book").write_text("书稿/乙书\n", encoding="utf-8")
@@ -440,11 +440,11 @@ def assert_book_dir_is_not_single_root(temporary: Path, input_path: Path) -> Non
 
 
 def assert_single_root_case_insensitive_path(temporary: Path, input_path: Path) -> None:
-    """大小写不敏感的文件系统（macOS APFS 默认）上，只差大小写的书根仍是同一目录。"""
+    """대소문자를 구분하지 않는 파일 시스템(macOS APFS 기본값)에서 대소문자만 다른 책 루트는 같은 디렉터리다."""
     probe = temporary / "CaseProbe"
     probe.mkdir()
     if not (temporary / "caseprobe").exists():
-        return  # 大小写敏感的文件系统上没有这种别名
+        return  # 대소문자를 구분하는 파일 시스템에는 이런 별칭이 없다.
     workspace = temporary / "Book"
     workspace.mkdir()
     alias = ("--book-root", str(temporary / "book"))
@@ -458,12 +458,12 @@ def assert_single_root_case_insensitive_path(temporary: Path, input_path: Path) 
 
 
 def assert_other_store_failure_is_nonfatal(temporary: Path, input_path: Path) -> None:
-    """写入已落盘后，读另一级 store 失败只降级为提醒：报错会让 agent 告诉作者「没记住」，
-    换个 event_id 重试就派生重复条目。"""
+    """쓰기가 저장된 뒤 다른 수준의 store 읽기에 실패하면 알림으로만 처리한다. 오류를 내면 에이전트가 작가에게
+    기억하지 못했다고 알리고 다른 event_id로 재시도할 때 중복 항목을 만들게 된다."""
     workspace = temporary / "读取失败工作区"
-    book_root = workspace / "长篇" / "甲"
+    book_root = workspace / "장편" / "甲"
     book_root.mkdir(parents=True)
-    missing = ("--book-root", str(workspace / "长篇" / "不存在"))
+    missing = ("--book-root", str(workspace / "장편" / "不存在"))
     global_event = remember("nf-global", preference("全局：动词承重", "记住：动词承重。"))
     written = json.loads(record(workspace, input_path, global_event, *missing).stdout)
     assert written["ok"] and written["receipt"] == "Author Memory Receipt: r1 · AP001"
@@ -506,9 +506,9 @@ def main() -> None:
         assert init_result["revision"] == 0 and init_result["store"] == "project"
         assert {path.name for path in memory.iterdir()} == {
             "_author-memory-state.json",
-            "作者画像.md",
-            "待确认.md",
-            "变更记录.md",
+            "작가프로필.md",
+            "확인대기.md",
+            "변경기록.md",
         }
         run("check", "--workspace", str(workspace))
 
@@ -524,7 +524,7 @@ def main() -> None:
         current = state(workspace)
         assert current["state_revision"] == 1
         assert current["items"]["AP001"]["status"] == "active"
-        assert "AP001" in (memory / "作者画像.md").read_text(encoding="utf-8")
+        assert "AP001" in (memory / "작가프로필.md").read_text(encoding="utf-8")
 
         replay = commit(workspace, input_path, first)
         assert json.loads(replay.stdout)["replayed"] is True
@@ -537,7 +537,7 @@ def main() -> None:
         assert "different content" in error.stderr
         assert snapshot(memory) == before_failure
 
-        # ---- #436：pending 只剩一种来源——作者原话范围含糊；推断管道不再写入 ----
+        # ---- #436: pending의 출처는 작가 원문 범위의 모호함 하나만 남으며 추론 파이프라인은 더 이상 쓰지 않음 ----
         pending = transaction(
             "tx-pending",
             1,
@@ -549,7 +549,7 @@ def main() -> None:
         )
         commit(workspace, input_path, pending)
         assert state(workspace)["items"]["AP002"]["status"] == "pending"
-        assert "AP002" in (memory / "待确认.md").read_text(encoding="utf-8")
+        assert "AP002" in (memory / "확인대기.md").read_text(encoding="utf-8")
 
         for inferred_source in ("inferred_pattern", "repeated_correction"):
             inferred = transaction(
@@ -581,7 +581,7 @@ def main() -> None:
         commit(workspace, input_path, decide)
         assert state(workspace)["items"]["AP002"]["status"] == "active"
 
-        # 同 store 内的冲突候选：全局新说法与 AP001 矛盾，先记 conflict
+        # 같은 store 안의 충돌 후보: 새 전역 표현이 AP001과 모순되면 먼저 conflict로 기록한다.
         conflict = transaction(
             "tx-conflict",
             3,
@@ -693,7 +693,7 @@ def main() -> None:
         assert "unsupported fields" in error.stderr
         assert snapshot(memory) == before_failure
 
-        profile = memory / "作者画像.md"
+        profile = memory / "작가프로필.md"
         profile.write_text(profile.read_text(encoding="utf-8") + "手工污染\n", encoding="utf-8")
         check_error = run("check", "--workspace", str(workspace), expect=2)
         assert "stale or edited" in check_error.stderr
@@ -736,7 +736,7 @@ def main() -> None:
         }
         assert all(record["item_ids"] for record in final["applied_transactions"].values())
 
-        # ---- #436：存量 state 里的推断来源条目仍可读、可 decide/forget ----
+        # ---- #436: 기존 state의 추론 출처 항목은 계속 읽고 decide/forget할 수 있음 ----
         legacy_source = state(workspace)
         legacy_source["items"]["AP002"]["source"] = "repeated_correction"
         legacy_source["items"]["AP004"]["source"] = "inferred_pattern"
@@ -748,8 +748,8 @@ def main() -> None:
         })).stdout)
         assert legacy_forget["item_ids"] == ["AP004"]
 
-        # ================= #435：项目级 / 书级两级 store =================
-        book_root = workspace / "长篇" / "雾港来信"
+        # ================= #435: 프로젝트 수준 / 책 수준의 2계층 store =================
+        book_root = workspace / "장편" / "雾港来信"
         book_root.mkdir(parents=True)
         book_memory = memory_dir(book_root)
         book_pref = preference(
@@ -758,34 +758,34 @@ def main() -> None:
             scope_level="book", scope_value="雾港来信",
         )
 
-        # book 条目没传 --book-root：拒写并指路，项目级 store 零写入
+        # book 항목에 --book-root가 없으면 쓰기를 거부하고 경로를 안내한다. 프로젝트 store에는 아무것도 쓰지 않는다.
         before_failure = snapshot(memory)
         routed = record(workspace, input_path, remember("book-without-root", book_pref), expect=2)
         assert "--book-root" in routed.stderr and "随书" in routed.stderr
         assert snapshot(memory) == before_failure
         assert not book_memory.exists()
 
-        # 传了 --book-root：落进书目录，BP 编号，书名默认取目录名
+        # --book-root가 있으면 책 디렉터리에 BP 번호로 저장하고 책 제목 기본값은 디렉터리 이름이다.
         book_recorded = json.loads(record(workspace, input_path, remember("book-with-root", book_pref), "--book-root", str(book_root)).stdout)
         assert book_recorded["receipt"] == "Author Memory Receipt: r1 · BP001"
         assert book_recorded["store"] == "book" and book_recorded["book"] == "雾港来信"
-        assert {path.name for path in book_memory.iterdir()} == {"_author-memory-state.json", "作者画像.md", "待确认.md", "变更记录.md"}
+        assert {path.name for path in book_memory.iterdir()} == {"_author-memory-state.json", "작가프로필.md", "확인대기.md", "변경기록.md"}
         book_state = state(book_root)
         assert book_state["book"] == "雾港来信" and book_state["items"]["BP001"]["scope"] == {"level": "book", "value": "雾港来信"}
-        assert "BP001" in (book_memory / "作者画像.md").read_text(encoding="utf-8")
-        assert "雾港来信" in (book_memory / "作者画像.md").read_text(encoding="utf-8"), "书级画像要标明是哪本书"
-        assert "BP001" not in (memory / "作者画像.md").read_text(encoding="utf-8"), "书级条目不进项目级画像"
+        assert "BP001" in (book_memory / "작가프로필.md").read_text(encoding="utf-8")
+        assert "雾港来信" in (book_memory / "작가프로필.md").read_text(encoding="utf-8"), "书级画像要标明是哪本书"
+        assert "BP001" not in (memory / "작가프로필.md").read_text(encoding="utf-8"), "书级条目不进项目级画像"
         assert state(workspace)["state_revision"] == 10, "写书级 store 不推进项目级修订"
 
-        # 别的书的条目不能塞进这个书目录
+        # 다른 책 항목을 이 책 디렉터리에 넣을 수 없다.
         wrong_book = preference("乙书偏好", "乙书原话。", scope_level="book", scope_value="乙")
         error = record(workspace, input_path, remember("wrong-book", wrong_book), "--book-root", str(book_root), expect=2)
         assert "不一致" in error.stderr
-        # --book 与 store 记录的书名不一致也拒
+        # --book이 store에 기록된 책 제목과 달라도 거부한다.
         error = record(workspace, input_path, remember("wrong-name", book_pref), "--book-root", str(book_root), "--book", "别的书", expect=2)
         assert "不一致" in error.stderr
 
-        # 同断言、只差大小写的 scope.value 走强化，不派生第二条
+        # 단언이 같고 scope.value의 대소문자만 다르면 강화하며 두 번째 항목을 만들지 않는다.
         for value in ("Urban", "urban"):
             genre_result = json.loads(record(workspace, input_path, remember(f"genre-{value}", preference(
                 "都市文多用短句", "都市文短句。", scope_level="genre", scope_value=value,
@@ -793,25 +793,25 @@ def main() -> None:
         assert genre_result["item_ids"] == ["AP006"] and "强化" in genre_result["summaries"][0], "scope.value 按 casefold 归并"
         assert state(workspace)["items"]["AP006"]["confirmation_count"] == 2
         record(workspace, input_path, event("genre-forget", {"action": "forget", "item_id": "AP006", "quote": "x", "reason": "x"}))
-        # 全局条目即使传了 --book-root 也路由到项目级
+        # 전역 항목은 --book-root가 있어도 프로젝트 수준으로 보낸다.
         global_via_book = json.loads(record(workspace, input_path, remember("global-with-book-root", preference(
             "段尾不落抒情句", "记住：段尾别落抒情句。",
         )), "--book-root", str(book_root)).stdout)
         assert global_via_book["store"] == "project" and global_via_book["item_ids"] == ["AP007"]
 
-        # 合并查询：项目级 + 书级，本书例外在同重要度下排前
+        # 통합 조회: 프로젝트 수준 + 책 수준. 중요도가 같으면 이 책의 예외를 앞에 둔다.
         merged = query(workspace, "--kind", "prose_style", "--book-root", str(book_root))
         assert [item["id"] for item in merged["items"]] == ["BP001", "AP007"]
         assert merged["book_revision"] == 1 and merged["revision"] == 14
-        # 没传书目录拿不到书级条目——书级 store 只能从书目录读
+        # 책 디렉터리를 주지 않으면 책 수준 항목을 얻을 수 없다. 책 store는 책 디렉터리에서만 읽는다.
         assert [item["id"] for item in query(workspace, "--kind", "prose_style")["items"]] == ["AP007"]
-        # 书目录存在但还没有书级 store：照常只返回项目级
-        other_root = workspace / "长篇" / "无记忆之书"
+        # 책 디렉터리는 있지만 책 store가 아직 없으면 정상적으로 프로젝트 항목만 반환한다.
+        other_root = workspace / "장편" / "无记忆之书"
         other_root.mkdir()
         assert [item["id"] for item in query(workspace, "--kind", "prose_style", "--book-root", str(other_root))["items"]] == ["AP007"]
         assert not memory_dir(other_root).exists(), "只读查询不得初始化书级 store"
 
-        # 一份事务只写一个 store；replace 不能跨 store；conflicts_with 不能跨 store
+        # 트랜잭션 하나는 store 하나만 쓴다. replace와 conflicts_with는 store를 넘을 수 없다.
         run("init", "--workspace", str(workspace), "--book-root", str(book_root))
         mixed = transaction("tx-mixed-stores", 1, [
             {"action": "forget", "item_id": "BP001", "quote": "x", "reason": "x"},
@@ -832,7 +832,7 @@ def main() -> None:
         assert "同一 store" in error.stderr and "本书例外" in error.stderr
         assert state(book_root)["state_revision"] == 1 and state(workspace)["state_revision"] == 14
 
-        # decide / forget 按编号前缀路由：BP 没传 --book-root 拒，传了就进书级
+        # decide / forget은 번호 접두사로 분기한다. BP에 --book-root가 없으면 거부하고 있으면 책 수준으로 보낸다.
         error = record(workspace, input_path, event("bp-forget-no-root", {
             "action": "forget", "item_id": "BP001", "quote": "x", "reason": "x",
         }), expect=2)
@@ -844,10 +844,10 @@ def main() -> None:
         assert book_commit["store"] == "book" and book_commit["item_ids"] == ["BP001", "BP002"]
         assert state(book_root)["items"]["BP001"]["superseded_by"] == "BP002"
 
-        # check 同时核对两级；书级画像被手改能查出
+        # check는 두 수준을 함께 확인하며 책 프로필을 수동 수정한 경우도 찾아낸다.
         checked = json.loads(run("check", "--workspace", str(workspace), "--book-root", str(book_root)).stdout)
         assert checked["project"]["revision"] == 14 and checked["book"]["revision"] == 2 and checked["book"]["name"] == "雾港来信"
-        book_profile = book_memory / "作者画像.md"
+        book_profile = book_memory / "작가프로필.md"
         book_profile.write_text(book_profile.read_text(encoding="utf-8") + "手工污染\n", encoding="utf-8")
         assert "stale or edited" in run("check", "--workspace", str(workspace), "--book-root", str(book_root), expect=2).stderr
         assert json.loads(commit(workspace, input_path, transaction("tx-book-replace", 1, [{
@@ -857,23 +857,23 @@ def main() -> None:
         assert len(state(book_root)["items"]) == 2, "重放不得派生条目"
         run("check", "--workspace", str(workspace), "--book-root", str(book_root))
 
-        # 书目录改名后书名以 state 为准，不受目录名影响
-        renamed_root = workspace / "长篇" / "雾港来信（改名）"
+        # 책 디렉터리 이름이 바뀌어도 책 제목은 state를 기준으로 하므로 영향을 받지 않는다.
+        renamed_root = workspace / "장편" / "雾港来信（改名）"
         book_root.rename(renamed_root)
         renamed = query(workspace, "--kind", "prose_style", "--book-root", str(renamed_root))
         assert [item["id"] for item in renamed["items"]] == ["BP002", "AP007"]
         renamed_root.rename(book_root)
 
-        # ---- 存量迁移：升级前写进项目级的 book 条目不再参与查询与估算，migrate 搬进书目录后才回来 ----
+        # ---- 기존 데이터 이전: 업그레이드 전 프로젝트 store에 쓴 book 항목은 조회/추정에서 제외하고 migrate로 책 디렉터리에 옮긴 뒤 다시 포함 ----
         legacy_workspace = Path(temporary) / "存量工作区"
         legacy_workspace.mkdir()
-        legacy_root = legacy_workspace / "长篇" / "甲"
+        legacy_root = legacy_workspace / "장편" / "甲"
         legacy_root.mkdir(parents=True)
         record(legacy_workspace, input_path, remember("seed-global", preference("全局：动词承重", "记住：动词承重。")))
         record(legacy_workspace, input_path, remember("seed-pending", preference("甲书候选：章末留钩子", "这本书章末……留个钩子吧。", status="pending")))
         legacy_state = state(legacy_workspace)
-        # 直改 state 模拟升级前的库：AP002 是甲书 active，AP003 是甲书 conflict（冲突对象是全局 AP001），
-        # AP004 是甲书 pending，AP005 是乙书 active。
+        # state를 직접 바꿔 업그레이드 전 저장소를 재현한다. AP002는 甲 책 active, AP003은 甲 책 conflict(충돌 상대는 전역 AP001),
+        # AP004는 甲 책 pending, AP005는 乙 책 active다.
         template = legacy_state["items"]["AP001"]
 
         def legacy_item(number: int, value: str, status: str, assertion: str, **fields: Any) -> dict[str, Any]:
@@ -888,7 +888,7 @@ def main() -> None:
         legacy_state["items"]["AP005"] = legacy_item(5, "乙", "active", "乙书：多用长句")
         legacy_state["next_item_number"] = 6
         save_state(legacy_workspace, legacy_state)
-        run("init", "--workspace", str(legacy_workspace))  # 直改 state 后重建派生视图
+        run("init", "--workspace", str(legacy_workspace))  # state를 직접 바꾼 뒤 파생 뷰를 재생성한다.
         run("check", "--workspace", str(legacy_workspace))
 
         assert [item["id"] for item in query(legacy_workspace, "--kind", "prose_style")["items"]] == ["AP001"], "存量 book 条目不参与查询"
@@ -920,21 +920,21 @@ def main() -> None:
         again = json.loads(run("migrate", "--workspace", str(legacy_workspace), "--book-root", str(legacy_root)).stdout)
         assert again["migrated"] == [] and again["warnings"] == [] and again["revision"] == 3, "没有存量时输出形状不变"
         assert state(legacy_workspace)["state_revision"] == after["state_revision"], "重复 migrate 项目级零写入"
-        book_profile_a = memory_dir(legacy_root) / "作者画像.md"
+        book_profile_a = memory_dir(legacy_root) / "작가프로필.md"
         book_profile_a.write_text(book_profile_a.read_text(encoding="utf-8") + "手工污染\n", encoding="utf-8")
         run("migrate", "--workspace", str(legacy_workspace), "--book-root", str(legacy_root))
         assert "手工污染" not in book_profile_a.read_text(encoding="utf-8"), "重跑 migrate 也要修复派生视图"
-        # 没有项目级 store 的工作区：migrate 是空操作而不是报错
+        # 프로젝트 store가 없는 작업 공간에서 migrate는 오류가 아닌 무작업이다.
         fresh = Path(temporary) / "无项目级"
-        (fresh / "长篇" / "书").mkdir(parents=True)
-        assert json.loads(run("migrate", "--workspace", str(fresh), "--book-root", str(fresh / "长篇" / "书")).stdout)["migrated"] == []
-        assert not memory_dir(fresh / "长篇" / "书").exists()
+        (fresh / "장편" / "书").mkdir(parents=True)
+        assert json.loads(run("migrate", "--workspace", str(fresh), "--book-root", str(fresh / "장편" / "书")).stdout)["migrated"] == []
+        assert not memory_dir(fresh / "장편" / "书").exists()
 
-        # 中途失败重跑：书级已写、项目级没写 → 只补项目级，不重复建 BP。
-        # 失败窗口里作者还可能 decide 存量条目，重跑不能因摘要变化锁死。
-        b_root = legacy_workspace / "长篇" / "乙"
+        # 도중 실패 후 재실행: 책 store만 썼다면 프로젝트 store만 보완하고 BP를 중복 생성하지 않는다.
+        # 실패 구간에서 작가가 기존 항목을 decide할 수 있으므로 재실행이 요약 변화 때문에 막히면 안 된다.
+        b_root = legacy_workspace / "장편" / "乙"
         b_root.mkdir()
-        seeded = state(legacy_workspace)  # 直改 state 模拟升级前写入的乙书条目
+        seeded = state(legacy_workspace)  # state를 직접 바꿔 업그레이드 전에 저장한 乙 책 항목을 재현한다.
         seeded["items"]["AP007"] = legacy_item(7, "乙", "pending", "乙书补充：章末留白")
         seeded["items"]["AP008"] = legacy_item(8, "乙", "active", "乙书补充：少用感叹号")
         seeded["next_item_number"] = 9
@@ -943,7 +943,7 @@ def main() -> None:
         before_project = state(legacy_workspace)
         run("migrate", "--workspace", str(legacy_workspace), "--book-root", str(b_root))
         assert [item["id"] for item in state(b_root)["items"].values()] == ["BP001", "BP002", "BP003"]
-        # 回滚项目级到迁移前，模拟第二步写入失败；窗口里作者确认了 AP007、退役了 AP008
+        # 프로젝트 store를 이전 전으로 롤백해 두 번째 쓰기 실패를 재현한다. 그 사이 작가는 AP007을 확인하고 AP008을 폐기했다.
         save_state(legacy_workspace, before_project)
         run("init", "--workspace", str(legacy_workspace))
         record(legacy_workspace, input_path, event("window-decide", {"action": "decide", "item_id": "AP007", "decision": "activate", "quote": "对。", "reason": "窗口内确认"}))
@@ -956,13 +956,13 @@ def main() -> None:
         run("check", "--workspace", str(legacy_workspace), "--book-root", str(b_root))
         assert [item["id"] for item in query(legacy_workspace, "--kind", "prose_style", "--book-root", str(b_root))["items"]][:2] == ["BP003", "BP001"]
 
-        # ---- 预算提醒在两级 store 下的口径 ----
+        # ---- 2계층 store에서의 예산 알림 기준 ----
         auto_workspace = Path(temporary) / "自动初始化工作区"
         auto_workspace.mkdir()
         auto_result = json.loads(record(auto_workspace, input_path, remember("first-explicit-memory", preference("偏好短标题", "记住：标题短一点。"))).stdout)
         assert auto_result["receipt"] == "Author Memory Receipt: r1 · AP001"
         assert state(auto_workspace)["state_revision"] == 1
-        # 预算内的一组照常入库，回执不带提醒
+        # 예산 안의 묶음은 정상 저장하며 확인 응답에 알림을 붙이지 않는다.
         fitting = transaction(
             "tx-query-budget-fit",
             1,
@@ -993,7 +993,7 @@ def main() -> None:
         assert query(auto_workspace, "--kind", "story_design", "--genre", "甜宠")["items"] == []
         run("check", "--workspace", str(auto_workspace))
 
-        # 断言限一句话：新建条目超 120 字节直接拒（存量条目的强化不受此限，见下方用例）
+        # 단언은 한 문장으로 제한한다. 새 항목이 120바이트를 넘으면 즉시 거부한다(기존 항목 강화는 이 제한에서 제외, 아래 사례 참고).
         long_assertion = transaction(
             "tx-assertion-too-long",
             state(auto_workspace)["state_revision"],
@@ -1003,7 +1003,7 @@ def main() -> None:
         assert "超出 120 字节上限" in error.stderr
         assert "强化" in error.stderr, "报错要告诉 agent 重申老条目该怎么走"
 
-        # 提醒制：把「正文初稿/续写」组合撑到超编的写入照常成功，回执带 warnings
+        # 알림 방식: ‘본문 초안/이어쓰기’ 조합을 예산 초과로 만드는 쓰기도 성공하며 확인 응답에 warnings를 넣는다.
         before_revision = state(auto_workspace)["state_revision"]
         crowding = transaction(
             "tx-query-budget-crowding",
@@ -1024,7 +1024,7 @@ def main() -> None:
         assert any("整理作者记忆" in warning for warning in crowded["warnings"])
         assert state(auto_workspace)["state_revision"] == before_revision + 1
 
-        # 减量清理：超编工作区逐条忘记必须照常成功（拒写制在这里会死锁）
+        # 감량 정리: 예산 초과 작업 공간에서도 항목별 삭제는 성공해야 한다(쓰기 거부 방식이면 여기서 교착된다).
         cleaned = json.loads(record(auto_workspace, input_path, event("cleanup-step-1", {
             "action": "forget",
             "item_id": crowded["item_ids"][0],
@@ -1034,22 +1034,22 @@ def main() -> None:
         assert cleaned["replayed"] is False
         assert cleaned["warnings"], "仍超编时提醒应继续存在，但写入不失败"
 
-        # kind-less 查询直接报错，不再默认返回全部类型
+        # kind 없는 조회는 즉시 오류를 내며 더 이상 모든 유형을 기본 반환하지 않는다.
         assert "--kind" in query(auto_workspace, expect=2)["stderr"]
 
-        # 查询排序含 recency：同重要度下最近写入的条目排最前，被略过的是旧条目
+        # 조회 정렬은 최신성을 포함한다. 중요도가 같으면 최근 항목이 앞에 오고 오래된 항목이 제외된다.
         recency_query = query(auto_workspace, "--kind", "prose_style")
         assert len(recency_query["items"]) > 0
         assert recency_query["items"][0]["id"] == crowded["item_ids"][1], "最近写入应排最前（首条已退役）"
         assert recency_query["omitted_ids"], "超编查询必须报漏项"
         assert recency_query["omitted"] == len(recency_query["omitted_ids"])
 
-        # 书级精确计算：写书级条目时提醒按「全局＋本书 store」算，别的书不掺进来；
-        # 写项目级条目而传了 --book-root 时同样把这本书算进去。
+        # 책 수준 정확한 계산: 책 항목을 쓸 때 알림은 ‘전역 + 이 책 store’로 계산하며 다른 책을 섞지 않는다.
+        # 프로젝트 항목을 쓸 때 --book-root가 주어져도 이 책을 함께 계산한다.
         ruler_workspace = Path(temporary) / "两书工作区"
         ruler_workspace.mkdir()
-        root_a = ruler_workspace / "长篇" / "甲"
-        root_b = ruler_workspace / "长篇" / "乙"
+        root_a = ruler_workspace / "장편" / "甲"
+        root_b = ruler_workspace / "장편" / "乙"
         root_a.mkdir(parents=True)
         root_b.mkdir(parents=True)
         for index in range(3):
@@ -1073,14 +1073,14 @@ def main() -> None:
         assert book_a["omitted_ids"] == [] and {item["id"][:2] for item in book_a["items"]} == {"AP", "BP"}, "不同书的记忆不得加在一起算"
         book_b = query(ruler_workspace, "--kind", "prose_style", "--kind", "story_design", "--book-root", str(root_b))
         assert book_b["omitted_ids"], "书乙自身切片超编必须体现在查询漏项"
-        # 写项目级条目：不传书目录看不到任何书级 store → 不报；传了乙就把乙算进来
+        # 프로젝트 항목 쓰기: 책 디렉터리가 없으면 책 store를 볼 수 없어 알리지 않으며 乙를 지정하면 乙를 포함한다.
         blind = json.loads(record(ruler_workspace, input_path, remember("global-blind", preference("全局：标题短", "记住：标题短。"))).stdout)
         assert blind["warnings"] == [], "看不到书级 store 时不该凭空报警"
         sighted = json.loads(record(ruler_workspace, input_path, remember("global-sighted", preference("全局：少用感叹号", "记住：少用感叹号。")), "--book-root", str(root_b)).stdout)
         assert sighted["store"] == "project" and any("正文初稿" in warning for warning in sighted["warnings"]), "传了 --book-root 的项目级写入要把这本书算进提醒"
 
-        # 极端超编（直改 state 模拟老库长断言）：漏项全数列出并附首句，注入的行恒 ≤2048、
-        # 绝不整包报错；768B 存量断言仍可校验通过
+        # 극단적 예산 초과(state를 직접 바꿔 기존 긴 단언 재현): 모든 누락 항목과 첫 문장을 나열한다. 주입 줄은 항상 ≤2048이며
+        # 전체 묶음을 오류 처리하지 않는다. 768B 기존 단언도 검증을 통과할 수 있다.
         flood = state(ruler_workspace)
         base_item = json.loads(json.dumps(flood["items"]["AP001"], ensure_ascii=False))
         for number in range(100, 140):
@@ -1098,9 +1098,9 @@ def main() -> None:
         assert set(flooded_document["omitted_summaries"]) == set(flooded_document["omitted_ids"])
         assert sum(len((line + "\n").encode("utf-8")) for line in flooded_document["lines"]) <= 2048
 
-        # ---- 重要度优先：high 全局铁律不得被 low 本书琐事挤出注入预算（本书条目在书级 store） ----
+        # ---- 중요도 우선: high 전역 원칙이 low 책별 사소한 항목 때문에 주입 예산에서 밀려나면 안 됨(책 항목은 책 store에 있음) ----
         priority_workspace = Path(temporary) / "重要度工作区"
-        priority_root = priority_workspace / "长篇" / "雾港来信"
+        priority_root = priority_workspace / "장편" / "雾港来信"
         priority_root.mkdir(parents=True)
         for index, rule in enumerate((
             "铁律一：绝不写第二人称叙述，任何情况都不破例。",
@@ -1122,18 +1122,18 @@ def main() -> None:
         assert crowd_out["warnings"], "超编写入必须携带提醒"
         assert any("「" in warning for warning in crowd_out["warnings"]), "提醒要带断言首句，只给编号作者无从判断"
 
-        # ---- 注入载荷是契约：执行者只读 lines（断言原文＋编号），items 只带四个字段给主会话判断 ----
+        # ---- 주입 데이터는 계약: 실행자는 lines(단언 원문 + 번호)만 읽고 items는 주 세션 판단용 네 필드만 제공 ----
         assert all(set(item) == {"id", "kind", "scope", "assertion"} for item in priority_query["items"]), \
             "query items 只带 id/kind/scope/assertion；reason、evidence 等一律不出 store"
         assert priority_query["lines"] == [f"- {item['assertion']}（{item['id']}）" for item in priority_query["items"]], \
             "lines 与 items 一一对应，就是交给执行者的原文"
 
-        # ---- 作者画像.md 必须显示 importance：它是「整理作者记忆」的去留依据 ----
-        priority_profile = (memory_dir(priority_workspace) / "作者画像.md").read_text(encoding="utf-8")
+        # ---- 작가프로필.md는 importance를 표시해야 함: 작가 기억 정리에서 유지/삭제 판단의 근거 ----
+        priority_profile = (memory_dir(priority_workspace) / "작가프로필.md").read_text(encoding="utf-8")
         assert "重要 high" in priority_profile, "画像要显示重要度，否则整理时无从判断该退役哪条"
-        assert "重要 low" in (memory_dir(priority_root) / "作者画像.md").read_text(encoding="utf-8")
+        assert "重要 low" in (memory_dir(priority_root) / "작가프로필.md").read_text(encoding="utf-8")
 
-        # ---- 存量长断言：原样重申走强化，不因新上限被拒、也不派生重复条目 ----
+        # ---- 기존 긴 단언: 그대로 재확인하면 강화하며 새 상한으로 거부하거나 중복 항목을 만들지 않음 ----
         legacy_long_workspace = Path(temporary) / "存量长断言工作区"
         legacy_long_workspace.mkdir()
         legacy_assertion = "存量长断言：" + "以后写对话时别用破折号表示打断改用省略号但叙述里的插入语破折号保留" * 2
@@ -1159,19 +1159,19 @@ def main() -> None:
         assert_omitted_follow_priority_and_lines_fit()
         assert_slice_weight_uses_rendered_lines()
 
-    # 只锚 prompt 与运行时 CLI / 槽位的对接片段，不钉措辞
+    # 표현을 고정하지 않고 프롬프트와 런타임 CLI / 슬롯의 연결 구간만 앵커로 삼는다.
     injection_contracts = {
-        # 写一章的填槽说明随「只在交给写手时才用」迁到 agent-calls.md（v0.8.2）。
+        # 한 장 집필의 슬롯 설명은 집필자에게 전달할 때만 쓰도록 agent-calls.md로 이동했다(v0.8.2).
         REPO / "skills/story-long-write/references/agent-calls.md": (
             "`author_preferences`",
         ),
-        # 查到的偏好要进子代理 prompt 的槽位，否则 query 照跑、结果到不了写手。
-        # 短篇派写手的 prompt 同样随「只在交给写手时才用」迁到 agent-calls.md（v0.8.2）。
+        # 조회한 선호가 하위 에이전트 프롬프트 슬롯에 들어가야 한다. 그렇지 않으면 query는 실행되어도 결과가 집필자에게 도달하지 않는다.
+        # 단편 집필자 배정 프롬프트도 전달 시점에만 쓰도록 agent-calls.md로 이동했다(v0.8.2).
         REPO / "skills/story-short-write/references/agent-calls.md": (
             "作者偏好 query",
             "\n作者偏好：{",
         ),
-        # 去味交给写手的 prompt 随「只在交给写手时才用」迁到 agent-calls.md（v0.8.3）。
+        # AI 문체 제거를 집필자에게 맡기는 프롬프트도 전달 시점에만 쓰도록 agent-calls.md로 이동했다(v0.8.3).
         REPO / "skills/story-deslop/references/agent-calls.md": (
             "\n作者偏好：{",
         ),
@@ -1179,16 +1179,18 @@ def main() -> None:
             "query --workspace {工作区} --book-root {项目目录} --kind prose_style --kind story_design",
             "没装下的",
         ),
-        # 装不下的习惯要用原话告诉作者（dsh#61）：组装脚本拼好那句话，单章与日更批末汇报模板各有一行接住。
+        # 포함하지 못한 습관은 원문으로 작가에게 알려야 한다(dsh#61). 조립 스크립트가 문장을 만들고 단일 장/일일 배치 종료 보고 템플릿이 각각 한 줄로 받는다.
         REPO / "skills/story-long-write/references/workflow-chapter.md": ("习惯没带上",),
         REPO / "skills/story-long-write/references/workflow-daily.md": ("习惯没带上",),
     }
     for path, required_fragments in injection_contracts.items():
-        # 单行转义 prompt 与 fenced 多行 prompt 都必须实际传递同一字段。
+        # 한 줄 이스케이프 프롬프트와 여러 줄 코드 블록 프롬프트는 실제로 같은 필드를 전달해야 한다.
         content = path.read_text(encoding="utf-8").replace("\\n", "\n")
         for fragment in required_fragments:
-            assert fragment in content, f"missing author-memory injection contract in {path}: {fragment}"
-    # 只有写作 skill 拥有记忆协议和工具；其他 skill 通过调用方接收裁决。
+            equivalents = {"作者偏好 query": ("작가 선호 query",), "没装下的": ("담지 못한 항목",),
+                           "习惯没带上": ("반영 못 한 습관은 작가 원문으로 안내", "반영하지 못한 습관은 작가의 원문 표현으로 한 번에 안내")}
+            assert fragment in content or any(value in content for value in equivalents.get(fragment, ())), f"missing author-memory injection contract in {path}: {fragment}"
+    # 기억 규약과 도구는 집필 스킬만 소유하고 다른 스킬은 호출자를 통해 결정 결과를 받는다.
     owners = ("story-long-write", "story-short-write")
     expected_protocols = {REPO / "skills" / owner / "references" / name
                           for owner in owners
@@ -1196,24 +1198,35 @@ def main() -> None:
     assert set((REPO / "skills").glob("*/references/author-memory*.md")) == expected_protocols
     assert set((REPO / "skills").glob("*/scripts/author_memory_commit.py")) == {
         REPO / "skills" / owner / "scripts/author_memory_commit.py" for owner in owners}
-    # #436：写作入口和协议不再引导推断写入。
+    # #436: 집필 진입점과 규약은 더 이상 추론 결과 저장을 유도하지 않는다.
     for path in sorted(expected_protocols) + [REPO / "skills" / owner / "SKILL.md" for owner in owners]:
         content = path.read_text(encoding="utf-8")
         assert "repeated_correction" not in content and "inferred_pattern" not in content, f"{path} 仍在引导推断写入"
-    # v0.8.2：协议按作者时刻拆分——记一条偏好的时刻只读 author-memory.md，少见时刻的规则在维护文件。
-    # 只锚小节与指路，防止规则被悄悄删掉或挪回常读文件。
+    # v0.8.2: 작가의 작업 시점별로 규약을 분리했다. 선호 하나를 기록할 때는 author-memory.md만 읽고 드문 작업 규칙은 유지관리 파일에 둔다.
+    # 절과 경로 안내만 고정해 규칙이 조용히 삭제되거나 상시 읽는 파일로 돌아가지 않게 한다.
     moment_anchors = {
         "author-memory.md": ("author-memory-maintenance.md", "## 回执怎么告诉作者", "## 记不记、记成什么", "record --workspace", "query  --workspace"),
         "author-memory-maintenance.md": ("## 整理作者记忆", "## 任务映射表", "## 单书布局", "## 存量迁移", "## 冲突候选", "12288", "migrate --workspace", "commit  --workspace", "check   --workspace"),
+    }
+    moment_equivalents = {
+        "## 回执怎么告诉作者": "## 작가에게 영수증 전달하기",
+        "## 记不记、记成什么": "## 무엇을 어떻게 기억할 것인가",
+        "## 整理作者记忆": "## 작가 기억 정리",
+        "## 任务映射表": "## 작업 매핑 표",
+        "## 单书布局": "## 단일 작품 배치",
+        "## 存量迁移": "## 기존 항목 마이그레이션",
+        "## 冲突候选": "## 충돌 후보",
     }
     for name, fragments in moment_anchors.items():
         for path in sorted(path for path in expected_protocols if path.name == name):
             content = path.read_text(encoding="utf-8")
             for fragment in fragments:
-                assert fragment in content, f"{path} 缺少作者记忆时刻锚点：{fragment}"
+                assert fragment in content or (fragment in moment_equivalents and moment_equivalents[fragment] in content), f"{path} 缺少作者记忆时刻锚点：{fragment}"
     hot = (REPO / "skills/story-long-write/references/author-memory.md").read_text(encoding="utf-8")
     for rare in ("## 整理作者记忆", "12288", "migrate --workspace", "commit  --workspace"):
         assert rare not in hot, f"少见时刻规则回流到 author-memory.md：{rare}"
+        if rare in moment_equivalents:
+            assert moment_equivalents[rare] not in hot, f"유지관리 규칙이 author-memory.md에 들어옴: {rare}"
 
     print("OK: author-memory transaction behavior")
 

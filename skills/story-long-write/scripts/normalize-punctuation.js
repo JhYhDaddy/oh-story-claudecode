@@ -120,8 +120,8 @@ function normalizeDocument(input, quoteMode, whitelist) {
     let line = lines[index];
     const trimmed = line.trim();
 
-    // 未闭合的 `<!--` 不能把余下整篇伪装成注释。确认 EOF 前已无 `-->` 时，
-    // 在起始位置具名报错，并从当前行恢复正文扫描；起始符所在行仍原样保护。
+    // 닫히지 않은 `<!--`로 나머지 전체가 주석처럼 처리되면 안 된다. EOF 전에 `-->`가 없음을 확인하면
+    // 시작 위치를 명시해 오류를 보고하고 현재 행부터 본문 검사를 재개한다. 시작 기호가 있는 행은 그대로 보호한다.
     if (commentOpen && !commentCloseAhead[index]) {
       findings.push({
         line: commentStart?.line || lineNo,
@@ -152,7 +152,7 @@ function normalizeDocument(input, quoteMode, whitelist) {
       continue;
     }
 
-    // 跨行 HTML 注释里的 `---` 是注释内容，不是正文分隔线。
+    // 다중 행 HTML 주석 안의 `---`는 주석 내용이며 본문 구분선이 아니다.
     if (trimmed === '---' && !commentOpen) {
       findings.push({
         line: lineNo,
@@ -197,9 +197,9 @@ function normalizeDocument(input, quoteMode, whitelist) {
   };
 }
 
-// 逐行记住原始行尾。整篇按「文件里出现过 \r\n」统一行尾会让一个孤立 CRLF 把全文
-// 行尾都翻成 CRLF——那是一次没人要求的全文件 diff，而 --check 对行尾一个 finding
-// 都不报，只改标点的这一步不该动它。
+// 원래 행 끝을 행별로 기억한다. 파일에 \r\n이 한 번 있었다는 이유로 전체를 통일하면 고립 CRLF 하나가
+// 모든 행을 CRLF로 바꿔 요청하지 않은 전체 파일 diff를 만든다. --check는 행 끝에 대해 발견 사항을
+// 보고하지 않으므로 문장부호만 바꾸는 이 단계에서 줄바꿈을 건드리면 안 된다.
 function splitLinesKeepingEndings(input) {
   const lines = [];
   const endings = [];
@@ -238,10 +238,10 @@ function isClosingFence(line, fence) {
   return Boolean(match && match[1].length >= fence.minimumLength);
 }
 
-// 删空停顿符会把两侧的半角点/连字符粘成新的 `...`/`--`（`他.……..说` → `他...说`），
-// 一遍归一化留不干净，再跑一遍还会改已定稿的正文；所以反复归一化到不动点。
-// 每遍至少把一个 `…/./—/-` 换成非停顿字符，字符数严格递减，必然收敛。
-// findings 只留第一遍：同一处不重复计数，column 也仍然是原行的偏移。
+// 쉼표현 기호를 없애면 양쪽 반각 점·하이픈이 새 `...`/`--`로 붙을 수 있다(`他.……..说` → `他...说`).
+// 한 번 정규화로 끝나지 않으면 재실행 때 확정된 본문이 다시 바뀌므로 고정점까지 반복 정규화한다.
+// 매번 적어도 하나의 `…/./—/-`가 쉼표현이 아닌 문자로 바뀌며 문자 수가 엄격히 감소하므로 반드시 수렴한다.
+// findings는 첫 회차만 남겨 같은 위치를 중복 계산하지 않고 column도 원래 행의 오프셋을 유지한다.
 function normalizePausePunctuation(line, lineNo, commentOpen, whitelist) {
   let current = line;
   let findings = null;
@@ -269,8 +269,8 @@ function normalizePausePunctuationPass(line, lineNo, commentSpans) {
 
   while ((match = pattern.exec(original)) !== null) {
     const token = match[0];
-    // HTML 注释是正文里的元信息（如 `<!-- 去味:跳过 -->` 豁免标记）：`<!--`/`-->` 里的
-    // `--` 不是停顿标点，改掉它注释就散了，标记会变成读者看得见的正文。
+    // HTML 주석은 본문의 메타정보다(예: `<!-- 去味:跳过 -->` 면제 표식). `<!--`/`-->` 속
+    // `--`는 쉼표현 문장부호가 아니다. 바꾸면 주석이 깨져 표식이 독자에게 보이는 본문이 된다.
     if (insideSpans(match.index, match.index + token.length, commentSpans)) continue;
     output += original.slice(lastIndex, match.index);
     const replacement = choosePauseReplacement(original, match.index, token.length);
@@ -288,7 +288,7 @@ function normalizePausePunctuationPass(line, lineNo, commentSpans) {
   return { line: output, findings };
 }
 
-// 行内 HTML 注释区间（含 `<!--`、`-->` 本身）；注释可跨行，未闭合时把状态交给下一行。
+// 행 내부 HTML 주석 구간은 `<!--`, `-->` 자체를 포함한다. 여러 행에 걸칠 수 있으며 닫히지 않으면 상태를 다음 행으로 넘긴다.
 function htmlCommentSpans(line, openBefore) {
   const spans = [];
   let open = openBefore;
@@ -342,9 +342,9 @@ function choosePauseReplacement(text, start, length) {
   const after = nextNonSpace(text, start + length);
   const rest = text.slice(start + length).trimStart();
 
-  // 正文产物不保留 `……`、`——`、`—` 或 `--`；对话打断和数字区间不设例外。
+  // 본문 산출물에는 `……`, `——`, `—`, `--`를 남기지 않는다. 대화 중단과 숫자 범위도 예외가 아니다.
   if (before === '') return '';
-  // 紧跟开引号/开括号的停顿符号属于句首边界，删空即可，避免产出 `「，…」` 或 `「。」`。
+  // 여는 따옴표·괄호 바로 뒤의 쉼표현 기호는 문장 시작 경계이므로 삭제해 `「，…」`나 `「。」`가 생기지 않게 한다.
   if (isOpeningDelimiter(before)) return '';
   if (/\d/.test(before) && /\d/.test(after)) return '到';
   if (isClosingQuote(after)) return isSentencePunctuation(before) ? '' : '。';

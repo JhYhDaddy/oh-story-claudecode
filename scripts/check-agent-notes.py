@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""check-agent-notes.py — 校验 .agents/notes/ 决策笔记的目录布局与正文结构。
+"""check-agent-notes.py — .agents/notes/ 결정 기록의 디렉터리 배치와 본문 구조를 검증한다.
 
-规则来自仓库根 AGENTS.md「重要改动必须留笔记」：
-  路径   .agents/notes/{proposed,implemented,rejected}/{feature,bug-fix,simplification,architecture,process,testing}/yyyy-mm-dd-topic.md
-  首行   "# Agent Note: <标题>"
-  状态   "Status: <目录名>"，且与所在目录一致
-  小节   ## Problem；## Decision（implemented / rejected）或 ## Proposal（proposed）；## Alternatives considered；## Consequences
-  禁止   INDEX.md 之类的手工索引（目录位置就是状态）
+규칙은 저장소 루트 AGENTS.md의 중요 변경 기록 지침을 따른다.
+  경로   .agents/notes/{proposed,implemented,rejected}/{feature,bug-fix,simplification,architecture,process,testing}/yyyy-mm-dd-topic.md
+  첫 줄  "# Agent Note: <제목>"
+  상태   "Status: <디렉터리 이름>"이며 실제 디렉터리와 일치해야 한다.
+  절     ## Problem; ## Decision(implemented / rejected) 또는 ## Proposal(proposed); ## Alternatives considered; ## Consequences
+  금지   INDEX.md 같은 수동 색인(디렉터리 위치가 곧 상태다)
 
-用法：python3 scripts/check-agent-notes.py [--root <dir>]   退出码 0 通过 / 1 失败
+사용법: python3 scripts/check-agent-notes.py [--root <dir>]   종료 코드: 0 통과 / 1 실패
 """
 import argparse
 import pathlib

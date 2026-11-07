@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Inspect reusable long-analysis assets without changing user files.
-
-Only the upstream directory contract is recognized: ``章节/第N章_摘要.md``,
-golden-three-chapter analyses, and the aggregate files. Missing chapters are
-reported exactly so a run only fills gaps.
+"""사용자 파일을 변경하지 않고 재사용 가능한 장편 분석 자산을 검사한다.
+``장별분석/제N장_요약.md``, 황금 3장 분석, 집계 파일이라는 원래 디렉터리 계약만 인식한다.
+누락 장을 정확히 보고해 빠진 부분만 채우게 한다.
 """
 
 from __future__ import annotations
@@ -18,8 +16,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-SUMMARY_RE = re.compile(r"^第0*(\d+)章_摘要\.md$")
-GOLDEN_RE = re.compile(r"^第0*(\d+)章_深度拆解\.md$")
+SUMMARY_RE = re.compile(r"^제0*(\d+)장_요약\.md$")
+GOLDEN_RE = re.compile(r"^제0*(\d+)장_심층분석\.md$")
 SCHEMA_RE = re.compile(r"schema_version\s*[：:]\s*v?(\d+)", re.IGNORECASE)
 TOTAL_RE = re.compile(r"总章数\s*(?:[：:]|\|)\s*(\d+)")
 TOTAL_FALLBACK_RE = re.compile(r"总章数\s+(\d+)\s*章?")
@@ -37,7 +35,7 @@ PROJECTION_RE = re.compile(
 )
 STATE_START = "<!-- story-long-analyze:runtime-state:start -->"
 STATE_END = "<!-- story-long-analyze:runtime-state:end -->"
-# v0.7.x wrote a 「章节边界」 table (章号 | 标题 | 起始行 | 字数) into _progress.md.
+# v0.7.x는 _progress.md에 ‘章节边界’ 표(章号 | 标题 | 起始行 | 字数)를 기록했다.
 BOUNDARY_HEADING_RE = re.compile(r"^#{1,6}\s*章节边界")
 TITLE_LABEL_RE = re.compile(
     r"^\s*(?:第(?P<number>[〇零一二三四五六七八九十百千万两0-9]+)章|第[〇零一二三四五六七八九十百千万两0-9]+[卷回节]"
@@ -45,7 +43,7 @@ TITLE_LABEL_RE = re.compile(
     r"|(?P<special>楔子|序章|引子|前言|后记|尾声|番外[〇零一二三四五六七八九十百千万两0-9]*))",
     re.IGNORECASE,
 )
-# Author notes appended to a heading, e.g. 「（求收藏）」「【二合一】」.
+# 제목에 붙인 작가 메모. 예: ‘（求收藏）’, ‘【二合一】’.
 TITLE_NOTE_RE = re.compile(r"[(\[【〔〖][^()\[\]【】〔〕〖〗]*[)\]】〕〗]\s*$")
 TITLE_NOISE_RE = re.compile(r"[\s\-—:：、.,;!?\"“”'‘’《》「」『』()\[\]【】〔〕〖〗]+")
 
@@ -117,19 +115,19 @@ def read_index_chapters(path: Path) -> tuple[list[int], list[str]]:
             required = {"chapter", "char_count", "source_locator", "status", "source_sha256"}
             missing = required - set(reader.fieldnames or [])
             if missing:
-                return [], ["chapter_index.csv 缺列：" + ", ".join(sorted(missing))]
+                return [], ["chapter_index.csv에 필요한 열이 없습니다: " + ", ".join(sorted(missing))]
             for row_number, row in enumerate(reader, start=2):
                 try:
                     chapters.append(int(row["chapter"]))
                 except (TypeError, ValueError):
-                    errors.append(f"chapter_index.csv 第 {row_number} 行章号无效")
+                    errors.append(f"chapter_index.csv의 {row_number}행 장 번호가 유효하지 않습니다")
     except (OSError, UnicodeError, csv.Error) as exc:
-        return [], [f"chapter_index.csv 不可读：{exc}"]
+        return [], [f"chapter_index.csv를 읽을 수 없습니다: {exc}"]
     if len(chapters) != len(set(chapters)):
-        errors.append("chapter_index.csv 存在重复章号")
+        errors.append("chapter_index.csv에 중복 장 번호가 있습니다")
     unique = sorted(set(chapters))
     if unique and unique != list(range(1, max(unique) + 1)):
-        errors.append("chapter_index.csv 章号不连续")
+        errors.append("chapter_index.csv의 장 번호가 연속적이지 않습니다")
     return unique, errors
 
 
@@ -180,7 +178,7 @@ def collect_numbered_files(
             continue
         chapter = int(match.group(1))
         if chapter in sources:
-            duplicates.append(f"第{chapter}章：{sources[chapter].as_posix()} / {path.as_posix()}")
+            duplicates.append(f"제{chapter}장: {sources[chapter].as_posix()} / {path.as_posix()}")
             continue
         chapters.append(chapter)
         sources[chapter] = path
@@ -216,7 +214,7 @@ def summary_kind(path: Path) -> str:
 
 
 def read_legacy_boundaries(text: str | None) -> list[dict[str, object]]:
-    """Rows of the v0.7.x 「章节边界」 table: old chapter number, title, start line."""
+    """v0.7.x ‘章节边界’ 표 행: 이전 장 번호, 제목, 시작 행."""
     if not text:
         return []
     rows: list[dict[str, object]] = []
@@ -253,7 +251,7 @@ def read_legacy_boundaries(text: str | None) -> list[dict[str, object]]:
 
 
 def title_parts(title: str) -> tuple[str, str, str]:
-    """(label, strict key, loose key) of a heading; loose drops trailing author notes."""
+    """제목의 (레이블, 엄격한 키, 느슨한 키). 느슨한 키는 뒤쪽 작가 메모를 제외한다."""
     text = unicodedata.normalize("NFKC", str(title or "")).strip()
     label = ""
     for _ in range(3):
@@ -285,7 +283,7 @@ def label_matches(label: str, row: dict[str, object]) -> bool:
 
 
 def title_candidates(title: str, index_rows: list[dict[str, object]]) -> list[dict[str, object]]:
-    """Index rows whose title agrees with an old table title, best tier first."""
+    """이전 표 제목과 일치하는 색인 행을 가장 적합한 단계부터 반환한다."""
     label, strict, loose = title_parts(title)
     if strict:
         keys = [(row, title_parts(str(row.get("title", "")))) for row in index_rows]
@@ -296,16 +294,14 @@ def title_candidates(title: str, index_rows: list[dict[str, object]]) -> list[di
         ):
             if tier:
                 return tier
-    # Retitled or title-less headings still carry their chapter number.
+    # 제목이 바뀌거나 없어도 장 번호는 남아 있다.
     return [row for row in index_rows if label_matches(label, row)]
 
 
 def map_legacy_row(old: dict[str, object], index_rows: list[dict[str, object]]) -> int | None:
-    """Index chapter an old boundary row points at.
-
-    A start line that is exactly a chapter's heading line decides on its own.
-    Otherwise the title picks the chapter (nearest to the old start line when
-    several match); a title-less row falls back to the chapter holding the line.
+    """이전 경계 행이 가리키는 색인 장.
+    시작 행이 정확히 장 제목 행이면 그것만으로 결정한다. 아니면 제목으로 고르며 여럿이면 이전 시작 행에 가장 가까운 장을 택한다.
+    제목 없는 행은 해당 행을 포함하는 장으로 돌아간다.
     """
     start = old.get("start_line")
     if isinstance(start, int):
@@ -329,7 +325,7 @@ def map_legacy_row(old: dict[str, object], index_rows: list[dict[str, object]]) 
 
 
 def leading_special_labels(index_rows: list[dict[str, object]]) -> list[str]:
-    """Prologue-like chapters (楔子、序章、第0章…) before the first numbered chapter."""
+    """첫 번호 장 앞의 프롤로그형 장(楔子、序章、第0章 등)."""
     labels: list[str] = []
     for row in index_rows:
         source = str(row.get("source_chapter", "")).strip()
@@ -340,47 +336,43 @@ def leading_special_labels(index_rows: list[dict[str, object]]) -> list[str]:
 
 
 def mapping_author_message(detail: str, labels: list[str], done: str) -> str:
-    """One plain-language stop message with the author's choices (no field names)."""
+    """필드 이름 없이 작가의 선택지를 포함한 쉬운 중단 메시지 하나."""
     if labels:
         prologue = "、".join("「%s」" % label for label in labels)
         return (
-            "先停一下：%s。这次重新识别章节时，开头的%s被算成了单独一章，"
-            "照这样续拆，旧文件会整体错开一章——%s没人拆、有的章被拆两遍。请选一种："
-            "① 按旧章号继续（推荐，旧拆文当时没把%s算作一章时选这个）：%s并进第一章，"
-            "已拆好的%s原样复用，%s不单独拆；"
-            "② %s单独算一章：这本书已有的拆文结果全部挪进备份目录（不删除），按新章号重拆；"
-            "③ 换一个新目录，整本重新拆。"
+            "잠시 멈춰야 합니다: %s. 이번 장 구분에서는 도입부의 %s를 별도 장으로 계산했습니다. "
+            "이대로 분석을 계속하면 기존 파일의 장 번호가 한 장씩 어긋나 %s의 분석이 빠지거나 중복됩니다. 다음 중 하나를 선택하세요: "
+            "① 기존 장 번호로 계속(권장. 기존 분석에서 %s를 별도 장으로 세지 않았다면 선택): %s를 첫 장에 합치고, "
+            "이미 분석한 %s는 그대로 재사용하며 %s를 따로 분석하지 않습니다. "
+            "② %s를 별도 장으로 계산: 기존 분석 결과를 모두 백업 폴더로 옮기고(삭제하지 않음) 새 장 번호로 다시 분석합니다. "
+            "③ 새 폴더에서 작품 전체를 다시 분석합니다."
             % (detail, prologue, prologue, prologue, prologue, done, prologue, prologue)
         )
     return (
-        "先停一下：%s，没法确认已拆好的%s各对应哪一章。请选一种："
-        "① 换一个新目录，整本重新拆（推荐）；② 如果原文换过版本或被改过，换回拆文时用的那份原文再续拆。"
+        "잠시 멈춰야 합니다: %s. 기존 분석 %s가 어느 장에 해당하는지 확인할 수 없습니다. 다음 중 하나를 선택하세요: "
+        "① 새 폴더에서 작품 전체를 다시 분석(권장). ② 원문 버전이 바뀌었거나 수정됐다면 기존 분석에 사용한 원문으로 되돌린 뒤 계속합니다."
         % (detail, done)
     )
 
 
 def legacy_mapping_check(root: Path, index_rows: list[dict[str, object]]) -> dict[str, object] | None:
-    """Stop when files numbered by an older run no longer match the chapter index.
-
-    Old summaries always predate the index. Golden-chapter analyses count as old
-    when ``_progress.md`` comes from v0.7.x (a 「章节边界」 table or no runtime
-    block); this run's Stage 1 writes them against the index. The old boundary
-    table, when present, decides; otherwise a source that does not start at
-    chapter one is ambiguous.
+    """이전 실행의 번호 파일이 장 색인과 맞지 않으면 중단한다.
+    이전 요약은 항상 색인보다 먼저 만들어졌다. _progress.md가 v0.7.x의 경계 표를 갖거나 런타임 블록이 없으면 황금 3장 분석도 이전 결과다.
+    이번 Stage 1은 색인 기준으로 이를 쓴다. 이전 경계 표가 있으면 그것으로 결정하며, 없는데 원문이 1장부터 시작하지 않으면 모호하다.
     """
     if not index_rows:
         return None
     progress_text = read_text(root / "_progress.md")
     boundaries = read_legacy_boundaries(progress_text)
     legacy_progress = progress_text is not None and (bool(boundaries) or STATE_START not in progress_text)
-    _, summary_sources, _ = collect_numbered_files(root / "章节", SUMMARY_RE)
+    _, summary_sources, _ = collect_numbered_files(root / "장별분석", SUMMARY_RE)
     old_chapters = {chapter for chapter, path in summary_sources.items() if summary_kind(path) == "upstream_summary"}
-    old_kinds = ["逐章摘要"] if old_chapters else []
+    old_kinds = ["장별 요약"] if old_chapters else []
     if legacy_progress:
-        golden, _, _ = collect_numbered_files(root / "章节", GOLDEN_RE)
+        golden, _, _ = collect_numbered_files(root / "장별분석", GOLDEN_RE)
         if golden:
             old_chapters.update(golden)
-            old_kinds.insert(0, "开头三章拆解")
+            old_kinds.insert(0, "도입부 세 장 분석")
     if not old_chapters:
         return None
     rows = sorted(index_rows, key=lambda row: int(row["chapter"]))
@@ -388,8 +380,8 @@ def legacy_mapping_check(root: Path, index_rows: list[dict[str, object]]) -> dic
     done = "、".join(old_kinds)
     if boundaries:
         by_old = {int(row["chapter"]): row for row in boundaries}
-        # Chapters the old run appended after its table stay on the same numbering
-        # as long as every chapter the table does cover lines up.
+        # 이전 실행이 표 이후에 추가한 장도 표가 포함하는 모든 장이 일치한다면
+        # 같은 번호 체계를 유지한다.
         checked = sorted(chapter for chapter in old_chapters if chapter <= max(by_old)) or sorted(old_chapters)
         shifted = []
         unknown = []
@@ -405,19 +397,19 @@ def legacy_mapping_check(root: Path, index_rows: list[dict[str, object]]) -> dic
         if shifted:
             old_number, new_number = shifted[0]
             title = next((str(row.get("title", "")) for row in rows if int(row["chapter"]) == new_number), "")
-            detail = "旧拆文的第%s章「%s」，在这次的章节表里是第%s章" % (old_number, title, new_number)
+            detail = "기존 분석의 제%s장 ‘%s’가 이번 장 목록에서는 제%s장입니다" % (old_number, title, new_number)
         else:
-            detail = "旧进度里的章节表和原文对不上（第%s章找不到）" % compact_ranges(unknown)[0]
+            detail = "기존 진행 기록의 장 목록이 원문과 맞지 않습니다(제%s장을 찾을 수 없음)" % compact_ranges(unknown)[0]
         code = "legacy_boundary_shift" if shifted else "legacy_boundary_unmatched"
     else:
         first_source = str(rows[0].get("source_chapter", "")).strip()
         if first_source.isdigit() and int(first_source) == 1:
             return None
-        detail = "原文开头是「%s」，而旧拆文没有留下能核对章号的章节表" % (first_source or "未知")
+        detail = "원문은 ‘%s’로 시작하지만 기존 분석에 장 번호를 대조할 목록이 없습니다" % (first_source or "알 수 없음")
         code = "legacy_identity_unverifiable"
     return {
         "code": code,
-        "conflict": "旧拆文章号与当前索引不一致：" + detail,
+        "conflict": "기존 분석의 장 번호가 현재 색인과 다릅니다: " + detail,
         "author_message": mapping_author_message(detail, labels, done),
         "fold_prologue_available": bool(labels),
         "legacy_chapters": sorted(old_chapters),
@@ -432,8 +424,8 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
     index_identities = read_index_identities(root / "chapter_index.csv")
     managed_state_present, managed_stages = read_managed_stages(progress_text)
 
-    summaries, summary_sources, duplicate_summaries = collect_numbered_files(root / "章节", SUMMARY_RE)
-    golden, golden_sources, duplicate_golden = collect_numbered_files(root / "章节", GOLDEN_RE)
+    summaries, summary_sources, duplicate_summaries = collect_numbered_files(root / "장별분석", SUMMARY_RE)
+    golden, golden_sources, duplicate_golden = collect_numbered_files(root / "장별분석", GOLDEN_RE)
 
     preferred_paths: dict[int, str] = {}
     preferred_kinds: dict[int, str] = {}
@@ -454,7 +446,7 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
         expected = progress_total
         expected_source = "_progress.md"
     if expected is None:
-        expected, source = read_declared_total((root / "拆文报告.md", root / "概要.md", root / "快速预览.md"))
+        expected, source = read_declared_total((root / "작품분석보고서.md", root / "개요요약.md", root / "빠른미리보기.md"))
         expected_source = Path(source).name if source else None
     if expected is None and progress_total is not None:
         expected = progress_total
@@ -468,25 +460,25 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
     out_of_range_summaries = sorted(set(summaries) - expected_set) if expected else []
 
     primary = {
-        "emotion_module": nonempty(root / "剧情" / "情绪模块.md"),
-        "rhythm": nonempty(root / "剧情" / "节奏.md"),
+        "emotion_module": nonempty(root / "플롯" / "감정모듈.md"),
+        "rhythm": nonempty(root / "플롯" / "리듬.md"),
     }
-    plot_dir = root / "剧情"
+    plot_dir = root / "플롯"
     assets = {
-        "report": nonempty(root / "拆文报告.md"),
-        "style": nonempty(root / "文风.md"),
-        "storyline": nonempty(plot_dir / "故事线.md"),
+        "report": nonempty(root / "작품분석보고서.md"),
+        "style": nonempty(root / "문체.md"),
+        "storyline": nonempty(plot_dir / "이야기선.md"),
         "plot_units": any_nonempty(
             path
             for path in plot_dir.glob("*.md")
-            if path.name not in {"README.md", "故事线.md", "节奏.md", "情绪模块.md", "散落情节.md"}
+            if path.name not in {"README.md", "이야기선.md", "리듬.md", "감정모듈.md", "분산사건.md"}
         )
         if plot_dir.is_dir()
         else False,
-        "characters": any_nonempty(path for path in (root / "角色").glob("*.md") if path.name != "角色关系.md")
-        if (root / "角色").is_dir()
+        "characters": any_nonempty(path for path in (root / "인물").glob("*.md") if path.name != "인물관계.md")
+        if (root / "인물").is_dir()
         else False,
-        "settings": any_nonempty((root / "设定").rglob("*.md")) if (root / "设定").is_dir() else False,
+        "settings": any_nonempty((root / "설정").rglob("*.md")) if (root / "설정").is_dir() else False,
         "batch_cache": any_nonempty((root / "_analysis_cache").glob("批次-*.md"))
         if (root / "_analysis_cache").is_dir()
         else False,
@@ -528,8 +520,8 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
     full_result_available = usable_upstream_complete or legacy_core
     mixed_sources = len(set(preferred_kinds.values())) > 1
 
-    # Files numbered by an older run can drift from the index; this run's golden
-    # analyses and projections are written against it.
+    # 이전 실행에서 번호를 붙인 파일은 색인과 어긋날 수 있지만 이번 실행의 황금 3장
+    # 분석과 투영은 색인을 기준으로 작성한다.
     mapping_conflicts: list[str] = []
     mapping_blocked_chapters: list[int] = []
     mapping = legacy_mapping_check(root, index_identities) if index_identities else None
@@ -555,8 +547,8 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
             if row and row.get("status") != "completed" and stage not in stage_repairs:
                 stage_repairs.append(stage)
             elif managed_state_present and not legacy_completed and row is None:
-                # New three-script runs require a completed stage row even when
-                # a file was manually placed before the interruption.
+                # 새 3스크립트 실행에서는 중단 전에 파일을 수동으로 놓았더라도
+                # 완료된 단계 행이 필요하다.
                 if stage not in stage_repairs and not any(item.startswith(stage + "_") for item in stage_repairs):
                     stage_repairs.append(stage)
 
@@ -577,15 +569,15 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
         recommended_path = "continue_partial" if expected and missing_semantic else "enhance_existing"
 
     conflicts = list(index_errors)
-    conflicts.extend(f"重复摘要：{item}" for item in duplicate_summaries)
-    conflicts.extend(f"重复黄金三章：{item}" for item in duplicate_golden)
+    conflicts.extend(f"중복 요약: {item}" for item in duplicate_summaries)
+    conflicts.extend(f"중복 도입부 세 장 분석: {item}" for item in duplicate_golden)
     conflicts.extend(mapping_conflicts)
     if final_state == "completed" and not usable_upstream_complete:
-        conflicts.append("进度标记 completed，但当前主产物或上游逐章覆盖不完整")
+        conflicts.append("진행 상태는 completed지만 현재 주요 산출물 또는 선행 장별 분석이 불완전합니다")
     if final_state == "completed_with_errors" and not semantic_coverage_complete:
-        conflicts.append("进度标记 completed_with_errors，需按失败与待核记录确认可用范围")
+        conflicts.append("진행 상태가 completed_with_errors입니다. 실패·확인 대기 기록으로 사용 가능한 범위를 확인하세요")
     if index_chapters and expected and max(index_chapters) != expected:
-        conflicts.append("机械索引章数与期望章数不一致")
+        conflicts.append("자동 색인의 장 수가 예상 장 수와 다릅니다")
 
     source_hash, source_hash_path = read_source_hash((root / "_progress.md",))
 
@@ -597,11 +589,11 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
         "final_state": final_state,
         "expected_chapters": expected,
         "expected_chapters_source": expected_source,
-        # Original keys remain for callers that need the upstream interface itself.
+        # 원래 인터페이스가 필요한 호출자를 위해 원래 키를 남긴다.
         "completed_summary_chapters": summaries,
         "missing_summary_chapters": missing_summaries,
         "out_of_range_summary_chapters": out_of_range_summaries,
-        # Runtime routing must use the selected semantic family below, never summary filenames alone.
+        # 런타임 라우팅은 요약 파일명만 쓰지 않고 아래에서 선택한 의미 계열을 사용해야 한다.
         "completed_semantic_chapters": sorted(semantic_set),
         "missing_semantic_chapters": missing_semantic,
         "out_of_range_semantic_chapters": out_of_range_semantic,
@@ -637,16 +629,16 @@ def inspect(root: Path, expected_override: int | None) -> dict[str, object]:
         "provenance_requires_review": mixed_sources or (has_any and schema is None),
         "conflicts": conflicts,
         "notes": [
-            "本检查只扫描传入书目目录中的上游标准路径，不扫描其他项目或磁盘。",
-            "运行路由必须使用 completed_semantic_chapters；缺少逐章摘要文件不等于缺少语义成果。",
-            "direct_use 表示默认直接复用；只有用户明确要求增强时才二次提取已有成果。",
-            "整本重拆换一个新目录；本检查不提供就地重拆入口。",
+            "이 검사는 지정한 작품 폴더의 선행 산출물 표준 경로만 조사합니다. 다른 프로젝트나 디스크는 검색하지 않습니다.",
+            "실행 경로를 결정할 때는 completed_semantic_chapters를 사용해야 합니다. 장별 요약 파일이 없다고 분석 결과도 없는 것은 아닙니다.",
+            "direct_use는 기본적으로 바로 재사용한다는 뜻입니다. 사용자가 보강을 명시적으로 요청한 경우에만 기존 결과에서 다시 추출합니다.",
+            "작품 전체를 다시 분석하려면 새 폴더를 사용하세요. 이 검사는 현재 폴더를 덮어쓰는 재분석을 제공하지 않습니다.",
         ],
     }
 
 
 def compact_payload(payload: dict[str, object]) -> dict[str, object]:
-    """Remove per-chapter arrays from the human/model-facing inspection view."""
+    """사람·모델용 검사 뷰에서 장별 배열을 제거한다."""
     result = dict(payload)
     semantic = result.pop("completed_semantic_chapters")
     missing = result.pop("missing_semantic_chapters")
@@ -676,19 +668,19 @@ def main() -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, required=True, help="拆文库/{书名} 目录")
-    parser.add_argument("--expected-chapters", type=int, help="已知总章数；省略时按标准路径优先推断")
-    parser.add_argument("--compact", action="store_true", help="省略逐章数组，输出适合运行路由读取的范围摘要")
+    parser.add_argument("--root", type=Path, required=True, help="작품분석실/{작품명} 폴더")
+    parser.add_argument("--expected-chapters", type=int, help="알고 있는 전체 장 수. 생략하면 표준 경로를 우선해 추정")
+    parser.add_argument("--compact", action="store_true", help="장별 배열을 생략하고 실행 경로 판단에 필요한 범위 요약을 출력")
     args = parser.parse_args()
     if args.expected_chapters is not None and args.expected_chapters < 1:
-        parser.error("--expected-chapters 必须大于 0")
+        parser.error("--expected-chapters는 0보다 커야 합니다")
     try:
         if not args.root.exists():
             raise ValueError("root_not_found:%s" % args.root)
         if not args.root.is_dir():
             raise ValueError("root_is_not_directory:%s" % args.root)
-        # Force a directory read here so an unreadable path fails before it can
-        # be mistaken for an empty new-analysis project.
+        # 여기서 디렉터리를 실제로 읽어 읽을 수 없는 경로를 빈 신규 분석 프로젝트로
+        # 오인하기 전에 실패하게 한다.
         next(args.root.iterdir(), None)
         payload = inspect(args.root, args.expected_chapters)
         if args.compact:

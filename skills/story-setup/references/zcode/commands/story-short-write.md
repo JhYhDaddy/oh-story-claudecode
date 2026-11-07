@@ -1,8 +1,8 @@
 ---
-description: 短篇网文写作，从目标情绪、反转和小节大纲到正文。
+description: 단편 웹소설 집필. 목표 감정·반전·절 개요부터 본문까지 수행한다.
 skills: story-short-write
 ---
 
-调用 `$story-short-write` 执行短篇写作任务。
+`$story-short-write`를 호출하여 단편 집필을 수행한다.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

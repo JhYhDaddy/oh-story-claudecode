@@ -1,50 +1,50 @@
-# ZCode 部署
+# ZCode 배포
 
-`target_cli` 含 `zcode` 时，由 SKILL.md Phase 2 完整读取并依次执行本文件。路径检查、幂等重跑、残留清理、部署标记、模板占位符、项目指令合并和报告遵循 SKILL.md 的公共规则。`references/zcode/` 提供 AGENTS、14 Commands、插件角色、workspace config patch 与严格 JSON Hook runner。
+`target_cli`에 `zcode`가 있으면 SKILL.md Phase 2에서 이 파일을 전부 읽고 순서대로 실행한다. 경로 검사·멱등 재실행·잔여물 정리·배포 표식·템플릿 자리표시자·프로젝트 지침 병합·보고는 SKILL.md의 공통 규칙을 따른다. `references/zcode/`는 AGENTS·Commands 14개·플러그인 역할·workspace config patch·엄격한 JSON Hook runner를 제공한다.
 
-## 部署清单（机械可检查）
+## 배포 목록(기계적 검사 가능)
 
 | Source path | Target path | Owner class | Merge mode | Validation check |
 |-------------|-------------|-------------|------------|------------------|
-| `skills/story-setup/references/zcode/AGENTS.md.tmpl` | `AGENTS.md` | user+managed | managed block merge | contains ZCode `$story-*` routing and capability-based fallback |
-| `skills/story-setup/references/zcode/agents/*.md` | plugin manifest `agents` 注册（不复制到 workspace） | plugin managed | plugin update | 7 个同名专业角色已注册；仅有文件不代表可调用 |
-| repository `skills/{browser-cdp,story*}/` | `.zcode/skills/{browser-cdp,story*}/` | story-setup managed for known skill names | replace known skill dirs only | 14 `SKILL.md` files exist and satisfy ZCode frontmatter limits |
-| `skills/story-setup/references/zcode/commands/` | `.zcode/commands/` | story-setup managed for known command names | replace known command files only | 14 commands have valid names/frontmatter |
-| `skills/story-setup/references/zcode/hooks/story_zcode_hook.js` | `.zcode/hooks/story_zcode_hook.js` | story-setup managed | replace | Node syntax valid; hook contract tests pass |
-| `skills/story-setup/references/zcode/hooks/story_hook_core.js` | `.zcode/hooks/story_hook_core.js` | story-setup managed | replace | Node syntax valid; hook contract tests pass |
-| `skills/story-setup/references/zcode/config.json.patch` | merge into `.zcode/config.json` | user+managed | merge by event+matcher+process args | JSON valid; 按下方「ZCode 部署算法」第 4 步 hooks 互斥分支校验——未装 oh-story 插件时 `hooks.enabled=true`、only supported events；已装插件时校验 `.zcode/config.json` 不含（或已移除）这批 oh-story hooks 注册 |
+| `skills/story-setup/references/zcode/AGENTS.md.tmpl` | `AGENTS.md` | user+managed | 관리 블록 병합 | ZCode `$story-*` 라우팅·기능 기반 fallback 포함 |
+| `skills/story-setup/references/zcode/agents/*.md` | 플러그인 manifest의 `agents` 등록(workspace에 복사하지 않음) | plugin managed | 플러그인 갱신 | 같은 이름의 전문 역할 7개 등록. 파일 존재만으로 호출 가능하지 않음 |
+| 저장소 `skills/{browser-cdp,story*}/` | `.zcode/skills/{browser-cdp,story*}/` | 알려진 스킬명은 story-setup 관리 | 알려진 디렉터리만 교체 | `SKILL.md` 14개 존재, ZCode frontmatter 제한 충족 |
+| `skills/story-setup/references/zcode/commands/` | `.zcode/commands/` | 알려진 명령명은 story-setup 관리 | 알려진 명령 파일만 교체 | 명령 14개의 이름/frontmatter 유효 |
+| `skills/story-setup/references/zcode/hooks/story_zcode_hook.js` | `.zcode/hooks/story_zcode_hook.js` | story-setup 관리 | 교체 | Node 구문·훅 계약 테스트 통과 |
+| `skills/story-setup/references/zcode/hooks/story_hook_core.js` | `.zcode/hooks/story_hook_core.js` | story-setup 관리 | 교체 | Node 구문·훅 계약 테스트 통과 |
+| `skills/story-setup/references/zcode/config.json.patch` | `.zcode/config.json`에 병합 | user+managed | event+matcher+process args로 병합 | JSON 유효. 아래 알고리즘 4단계 상호 배타 분기에 따라 미설치 시 `hooks.enabled=true`·지원 이벤트만, 설치 시 이번 oh-story 훅 등록 없음/제거됨 확인 |
 
-## Agent 边界
+## 에이전트 경계
 
-**ZCode 支持子代理与插件角色**：oh-story 插件通过 manifest 的 `agents` 注册七个专业角色；使用当前运行时的 `Agent` 工具，参数以其 schema 为准。不要创建 `.zcode/agents/` 或修改用户 home：官方用户级定义与插件注册不是 workspace 目录发现。独立 Skills 安装不会自动注册插件角色，缺角色时提示启用/更新 oh-story 插件，仍不可用才 solo/direct。依据：[插件](https://zcode.z.ai/en/docs/plugin)、[子代理](https://zcode.z.ai/en/docs/subagents)。
+**ZCode는 하위 에이전트와 플러그인 역할을 지원한다.** oh-story 플러그인이 manifest의 `agents`로 전문 역할 7개를 등록한다. 현재 실행 환경의 `Agent` 도구와 실제 schema를 사용한다. `.zcode/agents/`를 만들거나 사용자 home을 수정하지 않는다. 공식 사용자 수준 정의·플러그인 등록은 workspace 디렉터리 탐색과 다르다. 독립 Skills 설치는 플러그인 역할을 자동 등록하지 않으므로 역할이 없으면 oh-story 플러그인 활성화/갱신을 안내하고 그래도 사용할 수 없을 때 solo/direct로 전환한다. 근거: [플러그인](https://zcode.z.ai/en/docs/plugin), [하위 에이전트](https://zcode.z.ai/en/docs/subagents).
 
-## ZCode 部署算法
+## ZCode 배포 알고리즘
 
-项目部署 Skills、Commands、AGENTS.md 与 Hooks；不部署 `.zcode/agents` 或 `.zcode/rules`，插件角色随插件安装/更新注册。
+프로젝트에는 Skills·Commands·AGENTS.md·Hooks를 배포한다. `.zcode/agents`나 `.zcode/rules`는 배포하지 않으며 플러그인 역할은 플러그인 설치/갱신으로 등록한다.
 
-1. 复制仓库当前 `skills/` 下 14 个包含 `SKILL.md` 的目录到 `.zcode/skills/{skill-name}/`；仅替换这些已知目录，保留用户其他 Skills。ZCode 只使用当前规范前缀 `.zcode/skills/` 查找 agent references，不在运行时遍历历史备选路径。
-2. 复制 `references/zcode/commands/*.md` 到 `.zcode/commands/`；仅替换 14 个同名命令，保留用户其他 Commands。
-3. 复制 `references/zcode/hooks/story_zcode_hook.js` 和 `references/zcode/hooks/story_hook_core.js` 到 `.zcode/hooks/`。
-4. 读取 `references/zcode/config.json.patch` 和现有 `.zcode/config.json`（如只有根 `zcode.json`，仍创建 `.zcode/config.json` 承载 oh-story 项目 Hooks，不改写根文件）：
-   - 保留用户所有未知字段、MCP、plugins、skills/commands disable overrides；
-   - **hooks 互斥（避免双触发）**：若本项目经已安装的 oh-story 插件运行（marketplace 安装，仓库根 `.zcode-plugin/plugin.json` 的 `hooks.json` 已全局注册 SessionStart/PreToolUse/PostToolUse），则先从 `.zcode/config.json` 移除这批已知 oh-story hooks 注册、保留用户 hooks，再**跳过**下面的 `config.json.patch` hooks 合并——插件 manifest 已注册这批 hooks，再合并会让同一事件跑两遍（PreToolUse 拦两次、PostToolUse 注入两次）。只有未装插件（直接克隆 / 手动导入 references）时才合并 hooks。不确定时以「ZCode 是否已通过本插件注册这套 hooks」为准；skills/commands/hook 文件/AGENTS 与 config 的非 hook 字段两条路径都照常部署。
-   - 合并 hooks（仅未装插件时）：设置 `hooks.enabled: true`；用户已有更大的 `timeoutMs` 时保留，否则取模板值；对 `hooks.events` 的 SessionStart、PreToolUse、PostToolUse 按 `event + matcher + process command + args` 去重追加；不复制 ZCode 不支持的 PreCompact、PostCompact、SessionEnd、SubagentStop、Notification。
-5. 将 `references/zcode/AGENTS.md.tmpl` 按 SKILL.md「项目指令合并」写入根 `AGENTS.md`（`--host zcode`）。
-6. `.story-deployed` 的 `target_cli` 写入 `zcode` 或多端组合，`references_dir` 写 `.zcode/skills/story-setup/references/agent-references`。不创建 Claude 的 `.claude/.agents-pending-restart`。
-7. 检查当前插件注册角色并如实报告：可用时按同名角色派发；缺角色时提示启用/更新插件后新开会话，不用重复部署 workspace 代替。Hook 需要 PATH 中可用的 `node`。
+1. 저장소 현재 `skills/`에서 `SKILL.md`가 있는 디렉터리 14개를 `.zcode/skills/{skill-name}/`로 복사한다. 알려진 디렉터리만 교체하고 다른 사용자 Skills는 보존한다. 에이전트 참조는 현재 표준 접두사 `.zcode/skills/`에서만 찾고 실행 중 과거 대체 경로를 순회하지 않는다.
+2. `references/zcode/commands/*.md`를 `.zcode/commands/`에 복사한다. 같은 이름 명령 14개만 교체하고 다른 사용자 Commands는 보존한다.
+3. `references/zcode/hooks/story_zcode_hook.js`와 `references/zcode/hooks/story_hook_core.js`를 `.zcode/hooks/`에 복사한다.
+4. `references/zcode/config.json.patch`와 기존 `.zcode/config.json`을 읽는다. 루트 `zcode.json`만 있더라도 oh-story 프로젝트 훅용 `.zcode/config.json`을 만들며 루트 파일은 바꾸지 않는다.
+   - 사용자 미지 필드·MCP·plugins·skills/commands disable overrides를 모두 유지한다.
+   - **훅 상호 배타(이중 실행 방지)**: 설치된 oh-story 플러그인으로 실행하는 프로젝트라면(marketplace 설치, 루트 `.zcode-plugin/plugin.json`의 `hooks.json`이 SessionStart/PreToolUse/PostToolUse를 전역 등록) `.zcode/config.json`에서 이번 알려진 oh-story 훅 등록을 제거하고 사용자 훅을 유지한 뒤 아래 `config.json.patch` 훅 병합을 **건너뛴다**. manifest가 이미 등록했으므로 다시 병합하면 같은 이벤트가 두 번 실행된다(PreToolUse 이중 차단·PostToolUse 이중 주입). 플러그인 미설치(직접 clone/수동 references 가져오기)일 때만 병합한다. 불확실하면 ‘ZCode가 이 플러그인을 통해 이 훅 묶음을 이미 등록했는가’로 판단한다. 두 경로 모두 스킬·명령·훅 파일·AGENTS·config의 훅 외 필드는 정상 배포한다.
+   - 훅 병합(미설치 때만): `hooks.enabled: true`. 사용자의 기존 `timeoutMs`가 더 크면 유지하고 아니면 템플릿값을 쓴다. `hooks.events`의 SessionStart·PreToolUse·PostToolUse를 `event + matcher + process command + args`로 중복 제거하여 추가한다. 지원하지 않는 PreCompact·PostCompact·SessionEnd·SubagentStop·Notification은 복사하지 않는다.
+5. `references/zcode/AGENTS.md.tmpl`을 SKILL.md의 프로젝트 지침 병합에 따라 루트 `AGENTS.md`에 쓴다(`--host zcode`).
+6. `.story-deployed`의 `target_cli`는 `zcode` 또는 여러 호스트 조합, `references_dir`는 `.zcode/skills/story-setup/references/agent-references`로 쓴다. Claude의 `.claude/.agents-pending-restart`는 만들지 않는다.
+7. 실제 플러그인 등록 역할을 확인하고 사실대로 보고한다. 사용할 수 있으면 같은 이름 역할로 배정하고, 없으면 플러그인 활성화/갱신 후 새 세션을 안내한다. workspace 재배포로 대신하지 않는다. 훅은 PATH의 실행 가능한 `node`가 필요하다.
 
-Plugin 安装不经过本算法：`.zcode-plugin/plugin.json` 暴露 Skills/Commands/Hooks 与七个角色。Plugin Skills 优先级低于 workspace `.zcode/skills`；升级后须从**更新后的插件副本**运行 story-setup，覆盖旧项目快照与 AGENTS 受管块；旧 setup 遮蔽插件时按 [升级指南](../UPGRADING.md) 留备份移出再部署。**Hooks 只能注册一份**：插件在场时，以 manifest 为注册源；workspace 同批注册按第 4 步清理。
+플러그인 설치는 이 알고리즘을 거치지 않는다. `.zcode-plugin/plugin.json`이 Skills·Commands·Hooks·역할 7개를 노출한다. 플러그인 Skills는 workspace `.zcode/skills`보다 우선순위가 낮다. 업그레이드 뒤 **갱신된 플러그인 사본**에서 story-setup을 실행하여 오래된 프로젝트 스냅샷과 AGENTS 관리 블록을 덮어써야 한다. 이전 setup이 플러그인을 가리면 [업그레이드 가이드](../UPGRADING.md)에 따라 백업 후 밖으로 옮기고 다시 배포한다. **훅 등록은 하나뿐이어야 한다.** 플러그인이 있으면 manifest가 등록 기준이며 workspace의 같은 등록은 4단계로 정리한다.
 
-## 验证
+## 검증
 
-- 检查根 `AGENTS.md` 含 ZCode `$story-*` 路由、大纲守卫与按能力降级，不含固定 solo 指令
-- 插件在场时检查七个专业角色的实际注册；只有独立 Skills 时允许缺角色并明确报告。角色资料从 workspace `.zcode/skills/story-setup/references/agent-references/` 读取；不创建项目 agent 目录或用户级定义
-- 检查 `.zcode/skills/` 下 14 个 Skills 与 `.zcode/commands/` 下 14 个 Commands，验证 frontmatter 和命名
-- 检查 `.zcode/hooks/story_zcode_hook.js`、`.zcode/hooks/story_hook_core.js` 存在且 `node --check` 通过
-- 校验 `.zcode/config.json` JSON 与第 4 步互斥分支：未装插件时 enabled、事件和 process 路径符合模板；插件在场时没有这批 workspace 注册，保留用户 hooks。不得为通过校验把模板 hooks 再合回
-- 检查 `.zcode/skills/story-setup/references/agent-references/` 完整且所有 reference 路径可解析
-- 用 fixture 调用 SessionStart、PreToolUse deny/allow、PostToolUse，确认无发现时 stdout 为空、有输出时符合 ZCode 严格 JSON
+- 루트 `AGENTS.md`에 ZCode `$story-*` 라우팅·개요 가드·기능 기반 fallback이 있고 고정 solo 지시가 없는지 확인한다.
+- 플러그인이 있으면 전문 역할 7개의 실제 등록을 확인한다. 독립 Skills만 있으면 역할 누락을 허용하되 명시한다. 역할 자료는 workspace `.zcode/skills/story-setup/references/agent-references/`에서 읽으며 프로젝트 에이전트 디렉터리나 사용자 수준 정의를 만들지 않는다.
+- `.zcode/skills/`의 Skills 14개·`.zcode/commands/`의 Commands 14개, frontmatter와 명명을 확인한다.
+- `.zcode/hooks/story_zcode_hook.js`·`.zcode/hooks/story_hook_core.js`가 있고 `node --check`가 통과하는지 확인한다.
+- `.zcode/config.json` JSON과 4단계 분기를 확인한다. 미설치 시 enabled·이벤트·process 경로가 템플릿과 맞아야 하며 설치 시 해당 workspace 등록 없이 사용자 훅을 유지해야 한다. 검증 통과를 위해 템플릿 훅을 다시 병합하지 않는다.
+- `.zcode/skills/story-setup/references/agent-references/`가 완전하고 모든 참조 경로를 해석할 수 있는지 확인한다.
+- fixture로 SessionStart·PreToolUse deny/allow·PostToolUse를 호출한다. 발견 사항이 없으면 stdout이 비고, 출력이 있으면 ZCode의 엄격한 JSON 형식인지 확인한다.
 
-## 安装报告必须提示
+## 설치 보고 필수 안내
 
-说明实际角色注册情况：可用时 full/lean 按所需角色派发，缺角色或工具才降级；Hook 依赖 PATH 中的 `node`。部署后新开会话刷新项目资料；插件角色模型继承主会话，不移植 Claude 的单角色 inline hooks，拆文助手的单文件写入范围由角色正文约束，不承诺路径强隔离。
+실제 역할 등록을 설명한다. 사용 가능하면 full/lean에서 필요한 역할로 배정하고 역할·도구가 없을 때만 전환한다. 훅은 PATH의 `node`에 의존한다. 배포 뒤 새 세션으로 프로젝트 자료를 새로 읽는다. 플러그인 역할의 모델은 주 세션을 상속하며 Claude의 역할별 inline hooks를 이식하지 않는다. 분석 보조자의 단일 파일 쓰기 범위는 역할 본문이 제약하며 강제 경로 격리를 보장하지 않는다.

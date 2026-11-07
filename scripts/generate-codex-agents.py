@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate Codex custom-agent TOML templates from Claude agent markdown.
+"""Claude 에이전트 Markdown에서 Codex 사용자 지정 에이전트 TOML 템플릿을 생성한다.
 
-The Claude/OpenCode agent markdown remains the source of truth for role text.
-Codex expects standalone TOML files with at least name, description, and
-`developer_instructions`; this script performs a deterministic conversion.
+역할 텍스트의 기준 원본은 Claude/OpenCode 에이전트 Markdown이다.
+Codex는 최소한 name, description, `developer_instructions`를 포함한 독립 TOML 파일을 요구한다.
+이 스크립트는 결정론적으로 변환한다.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
 
 
 def toml_basic_string(value: str) -> str:
-    # Use a multi-line basic string so Chinese instructions and Markdown remain readable.
+    # 지침과 Markdown의 가독성을 유지하기 위해 여러 줄 기본 문자열을 사용한다.
     escaped = value.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
     return f'"""\n{escaped.rstrip()}\n"""'
 
@@ -84,7 +84,7 @@ def toml_list(values: list[str]) -> str:
 
 
 def parse_tool_list(value: str, field: str) -> set[str]:
-    """Parse the supported inline capability-list subset or reject it."""
+    """지원하는 인라인 기능 목록 부분집합을 파싱하고 나머지는 거부한다."""
     if not value:
         raise ValueError(
             f"{field}: empty or block-style capability declarations are unsupported"
@@ -116,7 +116,7 @@ def parse_tool_list(value: str, field: str) -> set[str]:
 
 
 def is_read_only(meta: dict[str, str]) -> bool:
-    """Derive filesystem confinement from effective canonical capabilities."""
+    """유효한 기준 기능 집합에서 파일 시스템 제한 범위를 도출한다."""
     declared = (
         parse_tool_list(meta["tools"], "tools") if "tools" in meta else set()
     )
@@ -126,7 +126,7 @@ def is_read_only(meta: dict[str, str]) -> bool:
         else set()
     )
     if "tools" not in meta:
-        # Inherited tools can include MCP and other capabilities not listed here.
+        # 상속된 도구에는 여기에 나열되지 않은 MCP 및 기타 기능이 포함될 수 있다.
         return False
     effective = declared - denied
     if not effective:
@@ -135,7 +135,7 @@ def is_read_only(meta: dict[str, str]) -> bool:
 
 
 def adapt_body_for_codex(body: str, name: str) -> str:
-    """Translate Claude/OpenCode caller terminology to Codex custom-agent wording."""
+    """Claude/OpenCode 호출자 용어를 Codex 사용자 지정 에이전트 표현으로 바꾼다."""
     adapted = body.replace("subagent_type", "agent_type")
     adapted = adapted.replace(
         ".claude/skills/story-setup/references/agent-references/",
@@ -151,17 +151,17 @@ def adapt_body_for_codex(body: str, name: str) -> str:
     return (
         adapted.rstrip()
         + "\n\n---\n\n"
-        + "Codex adaptation notes:\n"
-        + f'- Codex callers should request this custom agent with `agent_type: "{name}"` when the current runtime exposes project-local custom agents.\n'
-        + "- If Codex reports `unknown agent_type` or the custom-agent registry is unavailable, the parent workflow must fall back to solo/direct execution and report the fallback instead of failing.\n"
-        + "- Stay within this agent's role boundary; escalate adjacent work back to the parent agent.\n"
-        + "- Use the deployed Codex reference path only: `.codex/skills/story-setup/references/agent-references/`. If it is missing, report the missing deployment instead of probing other CLI directories.\n"
-        + "- Do not assume Claude-only tool names or frontmatter fields exist in Codex.\n"
+        + "Codex 어댑터 참고 사항:\n"
+        + f'- 현재 런타임이 프로젝트별 사용자 정의 에이전트를 제공하면 `agent_type: "{name}"`으로 이 에이전트를 요청합니다.\n'
+        + "- Codex가 `unknown agent_type`을 반환하거나 사용자 정의 에이전트 등록부를 사용할 수 없으면, 상위 워크플로는 실패로 끝내지 않고 단독·직접 실행으로 전환하여 그 사실을 보고해야 합니다.\n"
+        + "- 이 에이전트의 역할 범위를 지키고, 인접 역할의 작업은 상위 에이전트에 돌려보냅니다.\n"
+        + "- 배포된 Codex 참조 경로 `.codex/skills/story-setup/references/agent-references/`만 사용합니다. 없으면 다른 CLI 디렉터리를 탐색하지 말고 배포 누락을 보고합니다.\n"
+        + "- Claude 전용 도구 이름이나 프런트매터 필드가 Codex에도 있다고 가정하지 않습니다.\n"
     )
 
 
 def render_file(src: Path) -> tuple[str, str]:
-    """Validate and render one source without touching the destination."""
+    """대상을 건드리지 않고 원본 하나를 검증하고 렌더링한다."""
     text = src.read_text(encoding="utf-8")
     meta, body = parse_frontmatter(text)
     name = meta.get("name") or src.stem
@@ -187,7 +187,7 @@ def render_file(src: Path) -> tuple[str, str]:
 def publish_rendered(
     rendered: dict[str, str], dst_dir: Path, *, pattern: str = "*.toml"
 ) -> list[Path]:
-    """Publish generated files with rollback while leaving the directory present."""
+    """디렉터리를 유지한 채 롤백을 지원하며 생성 파일을 반영한다."""
     if dst_dir.is_symlink():
         raise ValueError(f"destination directory must not be a symlink: {dst_dir}")
     if dst_dir.exists() and not dst_dir.is_dir():
@@ -221,10 +221,10 @@ def publish_rendered(
                 if stale.name not in rendered:
                     stale.unlink()
         except BaseException:
-            # Best-effort rollback: a single un-removable file (immutable flag,
-            # lock, read-only mount) must not abort the restore and strand a
-            # partial commit. Files present in the backup are overwritten in
-            # place; only outputs that were absent before the commit are removed.
+            # 가능한 범위에서 롤백한다. 삭제할 수 없는 파일 하나(불변 플래그,
+            # 잠금, 읽기 전용 마운트) 때문에 복구를 중단해
+            # 일부만 반영된 상태를 남기지 않는다. 백업에 있는 파일은 제자리에서 덮어쓰고
+            # 반영 전에 없었던 출력 파일만 삭제한다.
             restore_names = {path.name for path in backup.iterdir()}
             for current in list(dst_dir.glob(pattern)):
                 if current.is_dir() and not current.is_symlink():
@@ -243,9 +243,9 @@ def publish_rendered(
                             target.unlink()
                         target.symlink_to(os.readlink(original))
                     else:
-                        # target is provably a regular file (a commit only
-                        # os.replace's regular staged outputs), so copy2 safely
-                        # overwrites it in place.
+                        # 대상이 일반 파일임을 보장한다(반영은 준비된 일반 파일을
+                        # os.replace로 교체하기만 함). 따라서 copy2로
+                        # 제자리에서 안전하게 덮어쓸 수 있다.
                         shutil.copy2(original, target)
                 except OSError:
                     pass
@@ -278,8 +278,8 @@ def main() -> int:
     sources = sorted(src_dir.glob("*.md"))
     if not sources:
         parser.error(f"source directory contains no agent markdown files: {src_dir}")
-    # Render every source before the first destination write. A malformed later
-    # template must not leave a half-updated generated directory.
+    # 첫 대상에 쓰기 전에 모든 원본을 렌더링한다. 뒤에 나오는 잘못된
+    # 템플릿 때문에 생성 디렉터리가 반만 갱신된 상태로 남으면 안 된다.
     rendered: dict[str, str] = {}
     for path in sources:
         filename, output = render_file(path)

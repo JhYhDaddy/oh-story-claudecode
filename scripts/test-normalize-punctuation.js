@@ -66,8 +66,8 @@ try {
   assert.match(second.stdout, /Changed files: 0/);
   assert.strictEqual(fs.readFileSync(prose, "utf8"), normalized, "normalization must be idempotent");
 
-  // 混合行尾：一处孤立 CRLF 不得把全文行尾翻成 CRLF；没有标点问题就必须一个字节都不动，
-  // 否则 --check 报零问题、写入模式却改出整篇 diff，两种模式对不上。
+  // 혼합 줄바꿈: 고립된 CRLF 하나 때문에 전체 줄바꿈을 CRLF로 바꾸면 안 된다. 문장부호 문제가 없으면 바이트 하나도 바꾸지 않아야 한다.
+  // 그렇지 않으면 --check는 문제 0개를 보고하지만 쓰기 모드는 전문 diff를 만들어 두 모드가 불일치한다.
   const mixedEol = path.join(tmpDir, "mixed-eol.md");
   const mixedOriginal = "他站在原地。\r\n风很大。\n雨停了。\n";
   fs.writeFileSync(mixedEol, mixedOriginal, "utf8");
@@ -82,7 +82,7 @@ try {
     "mixed line endings must survive a clean pass byte-for-byte"
   );
 
-  // 混合行尾 + 真标点问题：只改标点，逐行行尾保持原样。
+  // 혼합 줄바꿈 + 실제 문장부호 문제: 문장부호만 고치고 각 줄의 줄바꿈은 그대로 유지한다.
   const mixedDirty = path.join(tmpDir, "mixed-eol-dirty.md");
   fs.writeFileSync(mixedDirty, "他说……真的。\r\n风很大——雨停了。\n", "utf8");
   assert.strictEqual(run([mixedDirty]).status, 0);
@@ -92,8 +92,8 @@ try {
     "per-line endings must be preserved while punctuation is normalized"
   );
 
-  // HTML 注释里的 `--` 不是停顿标点：`<!-- 去味:跳过 -->` 豁免标记必须原样留在正文里，
-  // 被改成 `<! 去味:跳过 ，>` 就不再是注释，会当可见文本泄进成稿。
+  // HTML 주석의 `--`는 멈춤 문장부호가 아니다. `<!-- 去味:跳过 -->` 예외 표식은 본문에 그대로 남아야 한다.
+  // `<! 去味:跳过 ，>`로 바뀌면 주석이 아니게 되어 완성 원고에 보이는 텍스트로 유출된다.
   const marker = path.join(tmpDir, "marker.md");
   const markerOriginal = [
     "# 第12章 雨夜",
@@ -117,8 +117,8 @@ try {
   assert(markerNormalized.includes("<!-- 行内备注 -->"), "行内注释必须原样保留");
   assert(markerNormalized.includes("正文，继续。"), "注释外的正文仍要归一化");
 
-  // 未闭合注释不是“从这里到 EOF 都合法豁免”：必须具名报错，后续正文仍参与检查/归一化。
-  // 否则一个误写的 `<!--` 会让整篇的 `……` / `---` 在 --check 下静默 exit 0。
+  // 닫히지 않은 주석은 그 지점부터 EOF까지 유효한 예외라는 뜻이 아니다. 명명된 오류를 내고 뒤의 본문도 계속 검사/정규화해야 한다.
+  // 그렇지 않으면 잘못 쓴 `<!--` 하나가 전체 `……` / `---`를 --check에서 조용히 exit 0으로 통과시킨다.
   const unclosedComment = path.join(tmpDir, "unclosed-comment.md");
   fs.writeFileSync(
     unclosedComment,
@@ -135,8 +135,8 @@ try {
   assert(unclosedNormalized.includes("正文，继续。"), "未闭合注释后的正文仍须归一化");
   assert(!unclosedNormalized.includes("\n---\n"), "未闭合注释后的正文分隔线仍须移除");
 
-  // 删空停顿符会把两侧的半角点/连字符粘成新的 `...`/`--`；一遍必须清干净，
-  // 否则成稿留着本该删掉的 ASCII 省略号，事后重跑同一步又会改动已定稿的正文。
+  // 멈춤 기호를 지우면 양쪽 반각 마침표/하이픈이 붙어 새 `...`/`--`가 될 수 있다. 한 번에 모두 정리해야 한다.
+  // 그렇지 않으면 지워야 할 ASCII 말줄임표가 원고에 남고 나중에 같은 단계를 다시 실행할 때 확정된 본문이 또 바뀐다.
   const merge = path.join(tmpDir, "merge.md");
   fs.writeFileSync(merge, "他.……..说\n-…...……-2.（！）\n", "utf8");
   assert.strictEqual(run([merge]).status, 0);

@@ -1,15 +1,15 @@
 #!/bin/bash
-# check-python-invocation.sh — 守卫：技能文档里禁止裸调 `python3`
+# check-python-invocation.sh — 스킬 문서에서 `python3` 직접 호출을 금지하는 보호 검사.
 #
-# Windows 上 python.org 安装后 `python3` 会落到 Microsoft Store 占位程序、以 exit 49
-# 静默失败（见 issue #121）。所有调用必须先按 python3 -> python -> py 探测可用解释器：
+# Windows에서 python.org로 설치해도 `python3`가 Microsoft Store 자리표시자 프로그램을 실행해 종료 코드 49로
+# 조용히 실패할 수 있다(이슈 #121). 모든 호출은 먼저 python3 -> python -> py 순으로 사용 가능한 인터프리터를 탐색해야 한다.
 #   for PYBIN in python3 python py; do "$PYBIN" -c "" 2>/dev/null && break; done
 #   "$PYBIN" -c "..."
 #
-# 本守卫拦截一切「裸调用」形态：python3 紧跟空白再接任意参数（-c / -m / <<  /
-# 脚本路径 / 引号等），以及不带空白的重定向形态（python3<<'PY' / python3<脚本）——
-# 后者是合法 shell、同样会落到 Store 占位程序上。探测列表 `python3 python py` 与
-# 说明文字（python3 后紧跟反斜杠引号、破折号、箭头等，无空白）不受影响。
+# python3 다음 공백과 임의의 인수(-c / -m / << / 스크립트 경로 / 따옴표 등)가 오는 모든 직접 호출과
+# 공백 없는 리디렉션(python3<<'PY' / python3<스크립트)도 차단한다.
+# 후자도 유효한 셸 구문이며 Store 자리표시자를 실행한다. 탐색 목록 `python3 python py`와
+# 설명 문구(python3 뒤에 공백 없이 역슬래시 따옴표, 대시, 화살표 등이 오는 경우)는 영향받지 않는다.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -18,17 +18,17 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 
-# 裸调用形态：python3 + 空白 + 任意非空白参数（覆盖 -c / -m / << / 脚本路径 / 引号），
-# 或 python3 紧跟 `<`（heredoc `python3<<'PY'` 与输入重定向 `python3<脚本`，无空白也照跑）。
-# `<` 之外的紧跟形态（反斜杠引号 / 破折号 / 箭头 / 斜杠）仍是说明文字，继续豁免。
+# 직접 호출 형식: python3 + 공백 + 비공백 인수(-c / -m / << / 스크립트 경로 / 따옴표 포함),
+# 또는 python3 바로 뒤의 `<`(heredoc `python3<<'PY'`나 입력 리디렉션 `python3<스크립트`는 공백 없이도 실행됨).
+# `<` 이외에 바로 붙는 형태(역슬래시 따옴표/대시/화살표/슬래시)는 설명 문구이므로 계속 제외한다.
 PATTERN='python3([[:space:]]+[^[:space:]]|<)'
-# 探测列表 `... in python3 python py ...` 是允许写法，从命中里剔除（兼容 PYBIN/c 等变量名）
+# 탐색 목록 `... in python3 python py ...`는 허용하므로 검색 결과에서 제외한다(PYBIN/c 등 변수명 지원).
 ALLOW='python3 python py'
 
 echo "Python Invocation Guard"
 echo "======================="
 
-# skills/ 文档 + 部署模板 hook（CI scripts 自身允许用任意写法，不扫）
+# skills/ 문서와 배포 템플릿 훅을 검사한다(CI scripts 자체는 어떤 호출 형식도 허용하므로 제외).
 hits="$(grep -rnE "$PATTERN" "$REPO_ROOT/skills" 2>/dev/null | grep -vF "$ALLOW" || true)"
 
 if [ -n "$hits" ]; then

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-opencode-adapter.sh — deterministic checks for the OpenCode adapter surface.
+# check-opencode-adapter.sh — OpenCode 어댑터 인터페이스의 결정론적 검사.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -28,8 +28,8 @@ assert_dir "$ROOT/agents"
 assert_dir "$ROOT/commands"
 assert_file "scripts/sync-opencode.py"
 
-# Snapshot the generated surface so --check itself is held to its read-only contract,
-# including when a developer already has unrelated worktree changes.
+# 생성 영역의 스냅샷으로 --check 자체의 읽기 전용 계약도 검증한다.
+# 개발자의 작업 트리에 관련 없는 변경이 이미 있는 경우도 포함한다.
 cp -R "$ROOT" "$TMP_DIR/opencode-before"
 if ! python3 scripts/sync-opencode.py --check >"$SYNC_LOG" 2>&1; then
   cat "$SYNC_LOG" >&2 || true
@@ -133,8 +133,8 @@ def run_normal(root: Path) -> None:
         sys.argv = old_argv
 
 
-# Cross-phase failure: valid agents followed by a missing CLAUDE.md.tmpl must
-# leave the entire OpenCode adapter tree byte-for-byte unchanged.
+# 단계 간 실패: 유효한 에이전트 뒤에 CLAUDE.md.tmpl 누락이 발견돼도 OpenCode 어댑터 트리 전체는
+# 바이트 단위로 변경되지 않아야 한다.
 missing_root = tmp / "opencode-missing-agents-template"
 missing_src = missing_root / "skills/story-setup/references/templates/agents"
 missing_dst = missing_root / "skills/story-setup/references/opencode"
@@ -154,9 +154,9 @@ if snapshot(missing_dst) != before:
     raise SystemExit("sync-opencode partially updated agents before CLAUDE.md.tmpl validation")
 
 
-# Publication failure: b.md is deliberately a directory in the destination.
-# The failed second agent output must not expose the earlier a.md update or
-# mutate AGENTS.md.tmpl/manual OpenCode assets.
+# 게시 실패: 대상의 b.md를 의도적으로 디렉터리로 둔다.
+# 두 번째 에이전트 출력 실패가 앞의 a.md 갱신을 노출하거나
+# AGENTS.md.tmpl/수동 OpenCode 자산을 변경하면 안 된다.
 write_root = tmp / "opencode-write-failure"
 write_src_root = write_root / "skills/story-setup/references/templates"
 write_src = write_src_root / "agents"
@@ -180,8 +180,8 @@ if snapshot(write_dst) != before:
     raise SystemExit("sync-opencode exposed a partial adapter update after a write failure")
 
 
-# Fail the second os.replace after the first agent was committed. The normal
-# exception path must restore agents, AGENTS.md.tmpl, and manual assets.
+# 첫 에이전트 커밋 뒤 두 번째 os.replace를 실패시킨다. 일반 예외 경로가
+# 에이전트, AGENTS.md.tmpl, 수동 자산을 복원해야 한다.
 commit_dst = tmp / "opencode-commit-failure"
 (commit_dst / "agents").mkdir(parents=True)
 (commit_dst / "agents/a.md").write_text("old a\n", encoding="utf-8")
@@ -216,8 +216,8 @@ if snapshot(commit_dst) != before:
     raise SystemExit("sync-opencode failed to roll back an interrupted commit")
 
 
-# A copied symlink at opencode/agents must never redirect staging writes into an
-# external/user directory.
+# opencode/agents에 복사된 심볼릭 링크가 준비 단계 쓰기를 외부/사용자 디렉터리로
+# 돌리면 안 된다.
 link_root = tmp / "opencode-symlink-parent"
 link_src_root = link_root / "skills/story-setup/references/templates"
 link_src = link_src_root / "agents"
@@ -243,9 +243,9 @@ PY
 
 echo "  OK OpenCode generated-file failures roll back without replacing the adapter root"
 
-# A stale generated agent that cannot be removed (immutable flag, lock, read-only
-# mount) must not abort the rollback: restorable files return to their prior
-# bytes, the un-removable file keeps its content, and manual assets stay put.
+# 오래된 생성 에이전트를 제거할 수 없어도(불변 플래그, 잠금, 읽기 전용 마운트)
+# 롤백이 중단되면 안 된다. 복원 가능한 파일은 이전 바이트로 돌아가고
+# 제거할 수 없는 파일은 내용을 유지하며 수동 자산도 그대로 남아야 한다.
 python3 - "scripts/sync-opencode.py" "$TMP_DIR" <<'PY'
 import importlib.util
 import sys
@@ -277,10 +277,10 @@ spec.loader.exec_module(module)
 
 real_unlink = Path.unlink
 real_copy2 = module.shutil.copy2
-# Key the fault on the file's OWN path, not its name: a real immutable file
-# still allows being read/copied into the backup dir, so only writes and unlinks
-# targeting stale.md itself must fail. Keying on the name would also block the
-# backup copy and abort before the rollback path is ever exercised.
+# 이름이 아닌 파일 자체 경로를 기준으로 장애를 주입한다. 실제 불변 파일도
+# 읽기와 백업 디렉터리 복사는 허용하므로 stale.toml 자체를 대상으로 하는 쓰기/삭제만
+# stale.md 자체를 대상으로 할 때만 실패해야 한다. 이름을 기준으로 하면
+# 롤백 경로를 검사하기 전에 중단된다.
 victim = (agents / "stale.md").resolve()
 
 
@@ -326,7 +326,7 @@ base = Path('skills/story-setup/references/opencode/agents')
 found = {p.stem for p in base.glob('*.md')}
 assert found == expected, found
 
-# 各 agent 的工具可用性（含未列出工具一律摘除）由下方 whollyDisabled 裁决矩阵锁。
+# 각 에이전트 도구 사용 가능 여부(목록에 없는 도구 모두 제거 포함)는 아래 whollyDisabled 판정 행렬로 고정한다.
 for p in sorted(base.glob('*.md')):
     text = p.read_text()
     assert text.startswith('---\n'), f'{p}: missing frontmatter'
@@ -346,11 +346,11 @@ PY
 
 echo "  OK agent templates"
 
-# frontmatter 解析必须锚定独占一行的 `---`（值里的三连字符不得截断 permissions/steps），
-# 且 disallowedTools 里的 Bash 必须落成整条 shell deny：OpenCode 未声明 shell 权限时默认允许，
-# 只有 edit deny 的只读 agent 仍能借 shell 重定向写正文。不给任何“只读命令”例外：命令级
-# 白名单挡不住 `( allowlisted-command ) > 正文.md` 这类外层重定向，只有整条 deny 能让运行时
-# 把 shell 工具从清单里摘掉。
+# 프런트매터 파싱은 한 줄을 단독 차지하는 `---`에 고정한다(값 안의 하이픈 3개로 permissions/steps가 잘리면 안 됨).
+# disallowedTools의 Bash는 shell 전체 거부로 변환한다. OpenCode는 shell 권한을 명시하지 않으면 기본 허용하므로
+# edit만 거부한 읽기 전용 에이전트도 shell 리디렉션으로 본문을 쓸 수 있다. 읽기 전용 명령 예외도 두지 않는다.
+# 명령 허용 목록은 `( allowlisted-command ) > 본문.md` 같은 외부 리디렉션을 막지 못한다. 전체 거부만이 런타임에서
+# shell 도구를 목록에서 제거할 수 있다.
 python3 - "scripts/sync-opencode.py" <<'PY'
 import importlib.util
 import sys
@@ -372,7 +372,7 @@ missing = {'name', 'description', 'tools', 'disallowedTools', 'maxTurns'} - set(
 assert not missing, f'frontmatter truncated at an inline ---: missing {missing}'
 assert body.strip() == 'body', body
 
-# 正文是授权的唯一依据，所以 body 是必传参数：给它一个默认值就等于「忘了传 = 悄悄改权限」。
+# 본문만 권한 근거이므로 body는 필수 인수다. 기본값을 주면 전달 누락이 조용한 권한 변경이 된다.
 try:
     module.convert_claude_to_opencode(fm)
 except TypeError:
@@ -380,7 +380,7 @@ except TypeError:
 else:
     raise AssertionError('convert_claude_to_opencode must require the agent body (no default)')
 
-# 只读 agent 的正文若要求执行命令，生成器必须大声失败，而不是暗开 shell 例外。
+# 읽기 전용 에이전트 본문이 명령 실행을 요구하면 생성기는 명확히 실패해야 하며 shell 예외를 몰래 열면 안 된다.
 try:
     module.convert_claude_to_opencode(
         fm, '**确定项目根目录：** 执行 `git rev-parse --show-toplevel`，失败则用当前工作目录。\n'
@@ -390,14 +390,14 @@ except ValueError as error:
 else:
     raise AssertionError('restricted agent instructions must not require Bash')
 
-# 正文没提该命令 → 一条都不放（整条 deny 让运行时把 shell 工具整个摘掉）
+# 본문에 명령 언급 없음 → 아무것도 허용하지 않음(전체 deny가 런타임에서 shell 도구를 제거)
 plain = module.convert_claude_to_opencode(fm, '只读 agent，正文没有任何 shell 步骤\n')
 assert plain['permissions']['shell'] == 'deny', (
     f'read-only agent whose body never asks for a command must get a plain shell deny: {plain}'
 )
 
-# 生成器必须**大声失败**，而不是默默产出一个跑不动或被撬开的 agent。
-# 正文要求任何 shell 命令 → 生成必须中断并点名该命令
+# 생성기는 실행 불가 또는 권한이 뚫린 에이전트를 조용히 만들지 말고 **명확히 실패**해야 한다.
+# 본문이 어떤 shell 명령이든 요구하면 생성을 중단하고 해당 명령을 지목해야 한다.
 try:
     module.convert_claude_to_opencode(fm, '**准备环境：** 执行 `npm install`，然后开始检查。\n')
 except ValueError as error:
@@ -407,32 +407,32 @@ else:
 
 
 def rules_in_file_order(fm_text: str):
-    """按**文件里的书写顺序**取 permissions 规则——顺序就是优先级，不能走 dict/set。"""
+    """파일에 쓰인 순서대로 permissions 규칙을 가져온다. 순서가 우선순위이므로 dict/set을 쓰면 안 된다."""
     import re
     return re.findall(r'^  - action: "?([^"\n]+)"?\n    resource: "?([^"\n]+)"?\n    effect: (\S+)$', fm_text, re.M)
 
 
-# format_frontmatter 不得对规则排序：一排序，生成器里「宽 deny 在前、窄 allow 在后」的
-# 顺序就被静默抹掉。用逆字母序的插入顺序探它。
+# format_frontmatter는 규칙을 정렬하면 안 된다. 넓은 deny가 먼저, 좁은 allow가 나중이라는 순서가
+# 조용히 지워지기 때문이다. 역알파벳 삽입 순서로 검사한다.
 probe = {'permissions': {'zzz': 'deny', '*': 'deny', 'aaa': 'allow'}}
 probe_rules = rules_in_file_order(module.format_frontmatter(probe))
 assert probe_rules == [('zzz', '*', 'deny'), ('*', '*', 'deny'), ('aaa', '*', 'allow')], (
     f'format_frontmatter reordered permission rules (must preserve dict order): {probe_rules}'
 )
 
-# 生成器自身的输出：只读 agent 的 shell 必须是整条 deny。
+# 생성기 자체 출력: 읽기 전용 에이전트의 shell은 전체 deny여야 한다.
 generated_rules = rules_in_file_order(module.format_frontmatter(plain))
 assert ('shell', '*', 'deny') in generated_rules, generated_rules
 PY
 
 echo "  OK generator makes read-only Bash unavailable and rejects contradictory instructions"
 
-# 生成产物的**裁决矩阵**。这里独立复刻上游 OpenCode 2.x 的判定，刻意不复用 sync-opencode.py
-# 里的解析——复用的话，复刻本身写错时测试会跟着一起错：
-#   core/src/tool.ts   whollyDisabled()：取最后一条 action 命中的规则，resource 为 * 且 deny 时
-#                      把工具整个摘出发给模型的清单；write/edit/patch 共用 action edit
+# 생성 산출물의 **판정 행렬**. 상위 OpenCode 2.x 판정을 독립적으로 재현하며 sync-opencode.py의 파싱은
+# 의도적으로 재사용하지 않는다. 재사용하면 재현 자체가 틀렸을 때 테스트도 함께 틀리기 때문이다.
+#   core/src/tool.ts   whollyDisabled(): action이 일치하는 마지막 규칙에서 resource가 *이고 deny이면
+#                      모델에 전달하는 목록에서 도구 전체를 뺀다. write/edit/patch는 action edit를 공유한다.
 #   util/wildcard.ts   match()
-# 运行时的真实判定由 test-agent-permissions.py --opencode 在真 CLI 上覆盖；这里是无 CLI 时的静态网。
+# 실제 런타임 판정은 test-agent-permissions.py --opencode가 실제 CLI로 검사한다. 여기는 CLI 없는 정적 안전망이다.
 python3 - <<'PY'
 import re
 from pathlib import Path
@@ -453,17 +453,17 @@ def rules_in_file_order(fm_text: str):
     return re.findall(r'^  - action: "?([^"\n]+)"?\n    resource: "?([^"\n]+)"?\n    effect: (\S+)$', fm_text, re.M)
 
 
-# 工具 → 它在权限里对应的 action（工具的 options.permission，缺省为工具名）
+# 도구 → 권한에서 대응하는 action(도구 options.permission, 기본값은 도구명)
 TOOL_ACTION = {
     'read': 'read', 'glob': 'glob', 'grep': 'grep',
     'write': 'edit', 'edit': 'edit', 'patch': 'edit',
     'shell': 'shell', 'subagent': 'subagent', 'webfetch': 'webfetch', 'websearch': 'websearch',
     'skill': 'skill', 'question': 'question', 'execute': 'execute',
-    # 本表没列出的工具（上游日后新增的也算）：只有开头那条整条 deny 能把它摘掉。
+    # 표에 없는 도구(향후 추가 포함)는 첫 전체 deny만 제거할 수 있다.
     'unlisted-future-tool': 'unlisted-future-tool',
 }
 READ_LIKE = {'read', 'glob', 'grep'}
-read_only = {'consistency-checker', 'story-explorer'}  # chapter-extractor 写批次输入文件，不再只读
+read_only = {'consistency-checker', 'story-explorer'}  # chapter-extractor는 배치 입력 파일을 쓰므로 더 이상 읽기 전용이 아니다.
 shell_agents = {'narrative-writer', 'story-researcher'}
 base = Path('skills/story-setup/references/opencode/agents')
 for path in sorted(base.glob('*.md')):
@@ -483,9 +483,9 @@ PY
 
 echo "  OK generated permissions leave each agent exactly its capability tools (2.x whollyDisabled)"
 
-# chapter-extractor 在 Claude 端靠内联 hook（analysis-input-guard）只写批次输入文件；OpenCode 没有
-# 单 agent hook，靠 edit 路径规则收窄。独立复刻 2.x permission.ts evaluate()：取最后一条 action 与
-# resource 都命中的规则；resource 是相对会话目录的路径（file-access.ts resolve）。
+# Claude의 chapter-extractor는 인라인 훅(analysis-input-guard)으로 배치 입력 파일만 쓴다. OpenCode에는
+# 에이전트별 훅이 없어 edit 경로 규칙으로 제한한다. 2.x permission.ts evaluate()를 독립 재현한다. action과
+# resource가 모두 일치하는 마지막 규칙을 사용하며 resource는 세션 디렉터리 기준 경로다(file-access.ts resolve).
 python3 - <<'PY'
 import re
 from pathlib import Path
@@ -509,21 +509,21 @@ def rules_of(name: str):
 
 
 extractor = rules_of('chapter-extractor')
-# * 在 2.x Wildcard.match 里编成 .*（s 旗标），可跨多层目录（本机 opencode 二进制内 Wildcard.match 核对过）。
-for path in ('拆文库/书/_analysis_cache/输入-RAW-4-6.md', '拆文库/书/_analysis_cache/输入-REUSE-1-3.md',
-             '_analysis_cache/输入-RAW-1-3.md', '作品/拆文库/书/_analysis_cache/输入-RAW-7-9.md'):
+# 2.x Wildcard.match는 *를 .*와 s 플래그로 컴파일해 여러 디렉터리 계층을 넘는다(로컬 opencode 바이너리에서 확인).
+for path in ('작품분석실/书/_analysis_cache/输入-RAW-4-6.md', '작품분석실/书/_analysis_cache/输入-REUSE-1-3.md',
+             '_analysis_cache/输入-RAW-1-3.md', '作品/작품분석실/书/_analysis_cache/输入-RAW-7-9.md'):
     assert evaluate('edit', path, extractor) == 'allow', (path, extractor)
-for path in ('拆文库/书/章节/第4章_摘要.md', '拆文库/书/_analysis_cache/批次-RAW-4-6.md',
-             '拆文库/书/_progress.md', 'book/正文/第1章.md', '拆文库/书/_analysis_cache/输入.md'):
+for path in ('작품분석실/书/장별분석/제4장_요약.md', '작품분석실/书/_analysis_cache/批次-RAW-4-6.md',
+             '작품분석실/书/_progress.md', 'book/본문/제1장.md', '작품분석실/书/_analysis_cache/输入.md'):
     assert evaluate('edit', path, extractor) == 'deny', (path, extractor)
 for name in ('character-designer', 'narrative-writer', 'story-architect'):
-    assert evaluate('edit', 'book/正文/第1章.md', rules_of(name)) == 'allow', name
+    assert evaluate('edit', 'book/본문/제1장.md', rules_of(name)) == 'allow', name
 PY
 
 echo "  OK chapter-extractor may only edit _analysis_cache/输入-{RAW|REUSE}-*.md (2.x evaluate)"
 
-# 守卫名解析必须 fail closed：frontmatter 挂了 Write/Edit 的 PreToolUse hook 却认不出守卫名
-# （命令写法变了），生成要报错，不能当成没挂守卫、给 agent 放开整个工作区的 edit。
+# 보호 훅 이름을 파싱할 수 없으면 차단한다. 프런트매터에 Write/Edit PreToolUse 훅이 있는데 명령 형식 변경으로
+# 이름을 인식하지 못하면 생성 오류를 내야 한다. 보호가 없다고 간주해 작업 공간 전체 edit를 허용하면 안 된다.
 python3 - "scripts/sync-opencode.py" <<'PY'
 import importlib.util
 import sys
@@ -547,10 +547,10 @@ for command in ('node "$CLAUDE_PROJECT_DIR/.claude/hooks/story_hook_cli.js" anal
         except ValueError:
             continue
         raise AssertionError(f"unrecognized write-guard hook must fail closed: {matcher} / {command}")
-# CRLF 模板照样认出守卫名；认不出时同样 fail closed，不因 `\n---\n` 找不到而当成没挂 hook。
+# CRLF 템플릿도 보호 이름을 인식해야 한다. 인식 불가 시 차단하며 `\n---\n`을 못 찾았다고 훅 없음으로 간주하지 않는다.
 assert module.frontmatter_write_guard(frontmatter(known).replace("\n", "\r\n")) == "analysis-input-guard"
 unknown = 'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/guard-analysis-input.sh'
-# matcher 写成 `*`/留空/整段不写都覆盖 Write/Edit；CRLF 下同理。
+# matcher의 `*`, 빈 값, 전체 생략 모두 Write/Edit를 포함하며 CRLF에서도 같다.
 cases = [frontmatter(unknown, "*"), frontmatter(unknown, ""), frontmatter(unknown).replace("\r\n", "\n").replace("\n", "\r\n"),
          frontmatter(unknown, "*").replace("\n", "\r\n"),
          frontmatter(unknown).replace('    - matcher: "Write|Edit"\n', "    -\n")]
@@ -560,14 +560,14 @@ for text in cases:
     except ValueError:
         continue
     raise AssertionError(f"write hook with wildcard/CRLF matcher must fail closed: {text!r}")
-# 只挂非写入 matcher（如 Bash）的 hook 与没有 hook 的 agent 不受影响。
+# Bash 등 비쓰기 matcher만 있는 훅과 훅 없는 에이전트는 영향받지 않는다.
 assert module.frontmatter_write_guard(frontmatter('bash x.sh', "Bash")) is None
 assert module.frontmatter_write_guard("---\nname: x\ntools: [Read]\n---\n\n正文\n") is None
 PY
 
 echo "  OK unrecognized Write/Edit hook in agent frontmatter fails generation (no silent edit allow)"
 
-# 生成必须幂等：跑两遍产物一致。否则 --check 会在无人改模板时随机报 out-of-sync。
+# 생성은 멱등적이어야 한다. 두 번 실행한 결과가 같아야 템플릿 변경 없이 --check가 무작위 동기화 오류를 내지 않는다.
 python3 - "scripts/sync-opencode.py" "$TMP_DIR" <<'PY'
 import contextlib
 import importlib.util
@@ -631,13 +631,13 @@ for p in sorted(Path('skills/story-setup/references/opencode/commands').glob('*.
     assert text.startswith('---\n'), f'{p}: missing frontmatter'
     fm = text.split('---', 2)[1]
     assert 'description:' in fm, f'{p}: missing description'
-    assert f'请使用 {p.stem} skill' in text, f'{p}: command body must route to same skill'
-    # OpenCode 只在模板不含 $ARGUMENTS 且不含 $1..$N 时才把用户参数追加到末尾，
-    # 这个回退行为官方文档没有写（opencode.ai/docs/commands 只描述占位符），
-    # 实测 1.14.32 会追加成一行裸文本。显式写占位符才与 ZCode 一致，也不依赖未文档化行为。
+    assert any(s in text for s in (f'请使用 {p.stem} skill', f'{p.stem} 스킬로')), f'{p}: command body must route to same skill'
+    # OpenCode는 템플릿에 $ARGUMENTS와 $1..$N이 모두 없을 때만 사용자 인수를 끝에 붙인다.
+    # 이 대체 동작은 공식 문서에 없다(opencode.ai/docs/commands는 자리표시자만 설명).
+    # 1.14.32 실측에서는 일반 텍스트 한 줄로 추가된다. 자리표시자를 명시해야 ZCode와 같고 미문서화 동작에 의존하지 않는다.
     assert '$ARGUMENTS' in text, f'{p}: command template must place $ARGUMENTS explicitly'
 
-# 两个有 command 面的适配层保持一致，任一侧漏写都拦下来
+# command 인터페이스가 있는 두 어댑터를 일치시키고 어느 쪽이든 누락하면 차단한다.
 zcode_dir = Path('skills/story-setup/references/zcode/commands')
 if zcode_dir.is_dir():
     zcode_names = {p.stem for p in zcode_dir.glob('*.md')}
@@ -648,37 +648,37 @@ PY
 
 echo "  OK slash command templates (含 \$ARGUMENTS 占位符与 ZCode 对齐)"
 
-# This job has no opencode CLI (the real load is asserted by test-opencode-cli-e2e.sh), so this is a
-# structural proxy: the deploy manifest must place the core under .opencode/plugins/lib/, never flat
-# in .opencode/plugins/ (a flat *.js there is auto-loaded by OpenCode as a broken second plugin).
+# 이 작업에는 opencode CLI가 없다(실제 로드는 test-opencode-cli-e2e.sh에서 단언). 따라서 구조로 대신 검사한다.
+# 배포 매니페스트는 코어를 반드시 .opencode/plugins/lib/에 두고 .opencode/plugins/ 바로 아래에는 두지 않는다.
+# (바로 아래 *.js는 OpenCode가 고장 난 두 번째 플러그인으로 자동 로드한다.)
 assert_grep '\.opencode/plugins/lib/story_hook_core\.js' "$REPO_ROOT/skills/story-setup/references/deploy-opencode.md" "OpenCode deploy manifest must target .opencode/plugins/lib/story_hook_core.js, not a flat .opencode/plugins/story_hook_core.js"
-# Version gate is fail-closed: on 1.x the plugin never loads and agents' `permissions:` rules are
-# ignored (read-only agents would get write/shell), so an unknown version must stop, not continue,
-# and a blocked OpenCode-only deploy must leave `.story-deployed` untouched.
-# story-setup 入口按宿主只读一份部署文件：入口路由到 deploy-opencode.md，版本门与模型配置写在那份里。
+# 버전 검사는 불확실하면 차단한다. 1.x에서는 플러그인이 로드되지 않고 에이전트의 `permissions:` 규칙도
+# 무시돼 읽기 전용 에이전트에 write/shell이 허용된다. 따라서 알 수 없는 버전에서는 중단해야 하며
+# 차단된 OpenCode 단독 배포는 `.story-deployed`를 건드리지 않아야 한다.
+# story-setup 진입점은 호스트별 배포 파일 하나만 읽는다. deploy-opencode.md로 연결하며 버전 검사와 모델 설정도 그 파일에 둔다.
 assert_grep 'references/deploy-opencode\.md' "$REPO_ROOT/skills/story-setup/SKILL.md" "story-setup entry must route opencode to its deploy file"
 SETUP_MD="$REPO_ROOT/skills/story-setup/references/deploy-opencode.md"
-assert_grep '命令不可用或解析不出版本 → 同样停止 OpenCode 部署' "$SETUP_MD" "OpenCode version gate must stop when the version cannot be determined"
-assert_grep 'target 只有 opencode 则不写、不更新 `\.story-deployed`' "$SETUP_MD" "blocked OpenCode-only deploy must not write or bump .story-deployed"
-if grep -q '解析不出版本 → 继续部署' "$SETUP_MD"; then fail "OpenCode version gate must not continue on an unknown version"; fi
-# 模型缓存必须先于 .opencode/agents/ 的 replace，否则用户已配的 model: 被覆盖后再缓存为空。
-assert_grep '先缓存已有模型配置' "$SETUP_MD" "OpenCode deploy must cache existing agent models before replacing .opencode/agents/"
-# 选模型问作者时用角色名（拆书助手／写手／总指挥），内部 agent 名只进技术备注列。
-assert_grep '拆书助手' "$SETUP_MD" "OpenCode model questions must name roles the author understands"
-# 用 python 按字符匹配：C 区域下 grep 的 [^」] 是字节集，会误排除含同一字节的汉字而漏报。
+assert_grep '命令不可用或解析不出版本 → 同样停止 OpenCode 部署|명령을 사용할 수 없거나 버전을 해석하지 못해도 OpenCode 배포를 중단한다' "$SETUP_MD" "OpenCode version gate must stop when the version cannot be determined"
+assert_grep 'target 只有 opencode 则不写、不更新 `\.story-deployed`|target이 opencode뿐이면 `\.story-deployed`를 만들거나 갱신하지 않고' "$SETUP_MD" "blocked OpenCode-only deploy must not write or bump .story-deployed"
+if grep -Eq '解析不出版本 → 继续部署|버전을 해석하지 못해도 OpenCode 배포를 계속한다' "$SETUP_MD"; then fail "OpenCode version gate must not continue on an unknown version"; fi
+# 모델 캐시는 .opencode/agents/ 교체 전에 저장해야 한다. 그렇지 않으면 사용자의 model:이 덮인 뒤 빈 값이 캐시된다.
+assert_grep '先缓存已有模型配置|기존 모델 설정부터 캐시한다' "$SETUP_MD" "OpenCode deploy must cache existing agent models before replacing .opencode/agents/"
+# 작가에게 모델을 물을 때는 역할명(작품 분석 도우미/집필자/총괄)을 사용하고 내부 에이전트 이름은 기술 비고 열에만 둔다.
+assert_grep '拆书助手|분석 보조' "$SETUP_MD" "OpenCode model questions must name roles the author understands"
+# Python으로 문자 단위 일치를 확인한다. C 로캘의 grep [^」]는 바이트 집합이라 같은 바이트를 가진 한자도 잘못 제외해 누락된다.
 python3 - "$SETUP_MD" <<'PY' || fail "OpenCode model questions must not show internal agent names to the author"
 import re, sys
 text = open(sys.argv[1], encoding="utf-8").read()
 internal = r"chapter-extractor|consistency-checker|story-explorer|story-researcher|character-designer|narrative-writer|story-architect"
-hits = [q for q in re.findall(r"「[^」]*」", text) if re.search(internal, q)]
+hits = [q for q in re.findall(r"「[^」]*」|‘[^’]*’", text) if re.search(internal, q)]
 if hits:
     print("internal agent names inside author-facing quotes: {}".format(hits), file=sys.stderr)
     sys.exit(1)
 PY
-assert_grep 'permissions:` 规则列表' "$REPO_ROOT/skills/story-review/SKILL.md" "story-review must validate OpenCode 2.x agents by their permissions: list"
-# #242: runtime behavioral test — loads plugin.ts against the deployed core layout (lib/) and
-# exercises ctx.location, the execute.before/after and compaction hooks. The core's byte identity is
-# owned by check-shared-files.sh; its net/guard semantics by test-prose-net-parity.sh.
+assert_grep 'permissions:` (规则列表|규칙 목록)' "$REPO_ROOT/skills/story-review/SKILL.md" "story-review must validate OpenCode 2.x agents by their permissions: list"
+# #242: 런타임 동작 테스트. 배포된 코어 구조(lib/)에 맞춰 plugin.ts를 로드하고
+# ctx.location, execute.before/after, 압축 훅을 실행한다. 코어의 바이트 일치는
+# check-shared-files.sh가, 검사망/보호 의미는 test-prose-net-parity.sh가 검증한다.
 node --experimental-strip-types scripts/test-opencode-plugin.mjs
 assert_grep 'AGENTS\.md|OpenCode' "$ROOT/AGENTS.md.tmpl" "OpenCode AGENTS template must be present"
 assert_grep 'story-long-write|story-short-write|story-review' "$ROOT/AGENTS.md.tmpl" "OpenCode AGENTS template must mention story skill routing"

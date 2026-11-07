@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Materialize oh-story skills into a project-local Antigravity skill root.
+"""oh-story 스킬을 프로젝트 로컬 Antigravity 스킬 루트에 실제 파일로 배치한다.
 
-Only the 14 known oh-story directories are replaced. Unknown user skills are
-preserved. An existing ``.agents/skills`` symlink is never followed for writes;
-it can be materialized only after the caller explicitly opts in.
+알려진 oh-story 디렉터리 14개만 교체하며, 알 수 없는 사용자 스킬은 보존한다.
+기존 ``.agents/skills`` 심볼릭 링크를 따라 쓰지 않는다. 호출자가 명시적으로
+동의한 경우에만 링크를 실제 디렉터리로 바꿀 수 있다.
 """
 
 from __future__ import annotations

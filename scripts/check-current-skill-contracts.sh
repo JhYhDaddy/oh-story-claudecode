@@ -1,5 +1,5 @@
 #!/bin/sh
-# Portable launcher for the structured current-skill contract validator.
+# 구조화된 현재 스킬 계약 검증기의 이식 가능한 실행기.
 
 set -eu
 

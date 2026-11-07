@@ -1,21 +1,21 @@
 #!/bin/bash
-# test-prose-net-parity.sh — 正文兜底「轻量确定性网」四端 parity 守卫
-# 网有两份运行实现：Codex `story_codex_hook.py` 与共享 JS core；Claude、OpenCode、ZCode
-# 消费各自的同字节 core 副本。本测试四层保证：
-#   A. 功能 parity：codex python 网与 JS core 网（经 zcode 入口加载）在同一组 fixture 上
-#      逐字相等。OpenCode/Claude 的核是同字节副本（check-shared-files.sh），plugin.ts 能否
-#      按部署布局加载并调到核由 test-opencode-plugin.mjs 覆盖，这里不重复跑。
-#   B. 命令函数 parity（CI 硬保证）：正文目标抽取、apply-patch 目标、git commit 侦测三个纯函数
-#      在 codex python 与 zcode JS 间逐字相等——锁住此前无守卫、已漂移的手抄逻辑。
-#   C. 未归核面 parity（CI 硬保证）：staged markdown warnings 与大纲阻断判定未归核——codex
-#      python 与 JS core 各有一份实现，在 fixture 上逐字比对（大小写变体命中、警告/阻断文案），
-#      语义/文案以 JS core 为准。Claude 端这两面另有纯 bash 实现（validate-story-commit.sh 的
-#      grep 段、guard-outline-before-prose.sh 的判定段），无跨端逐字锁，行为由
-#      check-story-setup-deployment.sh / test-hook-encoding-portable.sh 的运行回归覆盖。
-#   D. Claude bash 写正文守卫 ↔ JS core 行为 parity（CI 硬保证）：按「同一工程同一次写入，
-#      bash 拦不拦 == JS 核拦不拦」逐场景比对，并锚死每个场景的期望方向（否则两端一起漏拦
-#      也能 diff 干净）。补上 D 说的那条空档——#283 给另三端加追踪门时 Claude 侧静默漏了
-#      一整版（issue #305），正是因为 bash 那一面没有任何跨端断言。
+# test-prose-net-parity.sh — 본문 보완용 가벼운 결정론적 검사망의 네 환경 동등성 보호
+# 검사망 구현은 Codex `story_codex_hook.py`와 공유 JS 코어 두 개다. Claude/OpenCode/ZCode는
+# 각자 바이트가 동일한 코어 복사본을 사용한다. 이 테스트의 보장 네 계층:
+#   A. 기능 동등성: Codex Python 검사망과 ZCode 진입점으로 로드한 JS 코어 검사망이 같은 데이터에서
+#      문자별로 일치한다. OpenCode/Claude 코어는 동일 바이트 복사본(check-shared-files.sh)이며 plugin.ts가
+#      배포 구조로 코어를 로드하고 호출하는지는 test-opencode-plugin.mjs에서 검사하므로 여기서 반복하지 않는다.
+#   B. 명령 함수 동등성(CI 필수 보장): 본문 대상 추출/apply-patch 대상/git commit 감지의 순수 함수 3개가
+#      Codex Python과 ZCode JS에서 문자별로 일치한다. 보호 없이 수동 복사하다 어긋난 기존 로직을 고정한다.
+#   C. 미통합 영역 동등성(CI 필수 보장): 스테이징 Markdown 경고와 개요 차단 판정은 코어에 통합되지 않아 Codex
+#      Python과 JS 코어가 각각 구현한다. 데이터로 문자별 비교한다(대소문자 변형 탐지, 경고/차단 문구).
+#      의미와 문구는 JS 코어 기준이다. Claude의 두 영역은 별도 순수 bash 구현(validate-story-commit.sh의
+#      grep 부분, guard-outline-before-prose.sh 판정 부분)으로 환경 간 문자별 고정은 없으며 동작은
+#      check-story-setup-deployment.sh / test-hook-encoding-portable.sh 실행 회귀에서 검사한다.
+#   D. Claude bash 본문 쓰기 보호 ↔ JS 코어 동작 동등성(CI 필수 보장): 같은 프로젝트의 같은 쓰기에서
+#      bash 차단 여부 == JS 코어 차단 여부를 시나리오별 비교하고 각각 기대 방향도 고정한다(양쪽이 함께 놓쳐도
+#      diff가 같을 수 있기 때문). #283에서 다른 세 환경에 추적 조건을 추가할 때 Claude가 한 버전 내내
+#      조용히 누락된 공백(이슈 #305)을 메운다. 원인은 bash 영역의 환경 간 단언 부재였다.
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -36,7 +36,7 @@ done
 
 fails=0
 
-# ── A. 功能 parity（codex python 网 vs JS core 网） ──
+# ── A. 기능 동등성(Codex Python 검사망 대 JS 코어 검사망) ──
 run_functional() {
   command -v node >/dev/null 2>&1 || return 1
   command -v python3 >/dev/null 2>&1 || return 1
@@ -130,8 +130,8 @@ EOF
 import importlib.util, sys, json
 spec = importlib.util.spec_from_file_location("ch", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 fx = json.load(open(sys.argv[2], encoding='utf-8'))
-# 用 stdout.buffer 直写 UTF-8 字节：Windows runner 上 python<3.15 的文本 stdout 是 cp1252，
-# 含中文 findings 的 print 会 UnicodeEncodeError（与 node 侧 console.log 的 UTF-8 输出对齐）。
+# stdout.buffer로 UTF-8 바이트를 직접 쓴다. Windows의 Python<3.15 텍스트 stdout은 cp1252여서
+# 중국어 findings를 print하면 UnicodeEncodeError가 난다(node console.log의 UTF-8 출력과 일치시킴).
 for k in sorted(fx):
     line = k + " | " + " ;; ".join(m.prose_net_findings(fx[k]))
     sys.stdout.buffer.write((line + "\n").encode("utf-8"))
@@ -150,45 +150,45 @@ JS
     return 3
   fi
 
-  # 基础规则必须对真实输入产生预期结果；不能只证明三端一起输出了同样的空数组。
+  # 기본 규칙은 실제 입력에 기대 결과를 내야 한다. 세 환경이 같은 빈 배열을 냈다는 것만 증명하면 안 된다.
   grep -q '^clean | $' "$tmp/py.txt" || { echo "FAIL: 干净正文被误报" >&2; return 3; }
-  grep -q '^refuse | 第2行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 中文 AI 自指未命中" >&2; return 3; }
-  grep -q '^refuse_after_quote | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 对话后的 AI 自指被整行豁免" >&2; return 3; }
-  grep -q '^refuse_before_quote | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 对话前的 AI 自指被整行豁免" >&2; return 3; }
-  grep -q '^refuse_after_multiple_quotes | 第1行 元信息泄漏（生成拒绝语）' "$tmp/py.txt" || { echo "FAIL: 多段对话后的生成拒绝语被整行豁免" >&2; return 3; }
+  grep -q '^refuse | 第2行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 中文 AI 자기 언급未命中" >&2; return 3; }
+  grep -q '^refuse_after_quote | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 对话后的 AI 자기 언급被整行豁免" >&2; return 3; }
+  grep -q '^refuse_before_quote | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 对话前的 AI 자기 언급被整行豁免" >&2; return 3; }
+  grep -q '^refuse_after_multiple_quotes | 第1行 메타정보 유출(생성 거부 문구）' "$tmp/py.txt" || { echo "FAIL: 多段对话后的생성 거부 문구被整行豁免" >&2; return 3; }
   grep -q '^refuse_quoted_ok | $' "$tmp/py.txt" || { echo "FAIL: 成对引号内的合法角色台词被误报" >&2; return 3; }
   grep -q '^refuse_quoted_with_prefix_ok | $' "$tmp/py.txt" || { echo "FAIL: 带叙述前缀的成对引号台词被误报" >&2; return 3; }
   grep -q '^refuse_english_quoted_ok | $' "$tmp/py.txt" || { echo "FAIL: 成对引号内的英文角色台词被误报" >&2; return 3; }
-  grep -q '^refuse_unclosed_quote | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 未闭合引号不应跨行/整行豁免" >&2; return 3; }
-  grep -q '^refuse_apostrophe_contractions | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: ASCII 缩写撇号被误配成引号跨度，吞掉 AI 自指" >&2; return 3; }
-  grep -q '^refuse_curly_apostrophe_contractions | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 弯撇号缩写吞掉 AI 自指" >&2; return 3; }
-  grep -q '^refuse_mixed_curly_apostrophe_contractions | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 左/右弯撇号被误配成引号跨度，吞掉 AI 自指" >&2; return 3; }
+  grep -q '^refuse_unclosed_quote | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 未闭合引号不应跨行/整行豁免" >&2; return 3; }
+  grep -q '^refuse_apostrophe_contractions | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: ASCII 缩写撇号被误配成引号跨度，吞掉 AI 자기 언급" >&2; return 3; }
+  grep -q '^refuse_curly_apostrophe_contractions | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 弯撇号缩写吞掉 AI 자기 언급" >&2; return 3; }
+  grep -q '^refuse_mixed_curly_apostrophe_contractions | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 左/右弯撇号被误配成引号跨度，吞掉 AI 자기 언급" >&2; return 3; }
   grep -q '^refuse_single_quoted_ok | $' "$tmp/py.txt" || { echo "FAIL: ASCII 单引号内合法角色台词被误报" >&2; return 3; }
   grep -q '^refuse_curly_single_quoted_ok | $' "$tmp/py.txt" || { echo "FAIL: 弯单引号内合法角色台词被误报" >&2; return 3; }
-  grep -q '^refuse_unclosed_apostrophe | 第1行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: 词内撇号不应闭合未完成台词" >&2; return 3; }
+  grep -q '^refuse_unclosed_apostrophe | 第1行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: 词内撇号不应闭合未完成台词" >&2; return 3; }
   for name in refuse_quote_before_name_ok refuse_name_in_single_quote_ok refuse_name_in_curly_quote_ok refuse_contraction_in_single_quote_ok refuse_contraction_in_curly_quote_ok; do
     grep -q "^$name | $" "$tmp/py.txt" || { echo "FAIL: $name 台词内撇号被当成闭引号" >&2; return 3; }
   done
-  grep -q '^english_ai | 第2行 元信息泄漏（英文 AI 腔）' "$tmp/py.txt" || { echo "FAIL: 英文 AI 腔未命中" >&2; return 3; }
-  grep -q '^engword | 第2行 工程词泄漏' "$tmp/py.txt" || { echo "FAIL: 工程词泄漏未命中" >&2; return 3; }
-  grep -q '^placeholder | 第2行 占位符' "$tmp/py.txt" || { echo "FAIL: 占位符未命中" >&2; return 3; }
-  grep -q '^repeat | 第2行 紧邻复读' "$tmp/py.txt" || { echo "FAIL: 紧邻复读未命中" >&2; return 3; }
+  grep -q '^english_ai | 第2行 메타정보 유출(영문 AI 말투）' "$tmp/py.txt" || { echo "FAIL: 영문 AI 말투未命中" >&2; return 3; }
+  grep -q '^engword | 第2行 작업 용어 유출' "$tmp/py.txt" || { echo "FAIL: 작업 용어 유출未命中" >&2; return 3; }
+  grep -q '^placeholder | 第2行 자리표시자' "$tmp/py.txt" || { echo "FAIL: 占位符未命中" >&2; return 3; }
+  grep -q '^repeat | 第2行 인접 반복' "$tmp/py.txt" || { echo "FAIL: 인접 반복未命中" >&2; return 3; }
   grep -q '^repeat_seven_ok | $' "$tmp/py.txt" || { echo "FAIL: 7 字短行不应触发复读" >&2; return 3; }
-  grep -q '^repeat_eight | 第2行 紧邻复读' "$tmp/py.txt" || { echo "FAIL: 8 字复读边界未命中" >&2; return 3; }
+  grep -q '^repeat_eight | 第2行 인접 반복' "$tmp/py.txt" || { echo "FAIL: 8 字复读边界未命中" >&2; return 3; }
   grep -q '^repeat_astral_seven_ok | $' "$tmp/py.txt" || { echo "FAIL: 7 个增补面字符不应触发复读" >&2; return 3; }
-  grep -q '^repeat_astral_eight | 第2行 紧邻复读' "$tmp/py.txt" || { echo "FAIL: 8 个增补面字符的复读边界未命中" >&2; return 3; }
+  grep -q '^repeat_astral_eight | 第2行 인접 반복' "$tmp/py.txt" || { echo "FAIL: 8 个增补面字符的复读边界未命中" >&2; return 3; }
 
-  # Adapter 的正文网不再测量字数；同一份欠长正文只应由 storyctl 的公开命令判定。
-  # 这锁住职责分离：旧 90% 算法若重新混入任一 Hook，外部输出会立刻回归失败。
-  mkdir -p "$tmp/book/大纲" "$tmp/book/正文"
-  printf '字数目标：1000\n字数口径：visible_chars_v1\n' > "$tmp/book/大纲/细纲_第001章.md"
-  python3 - "$tmp/book/正文/第001章_欠账.md" <<'PY'
+  # 어댑터 본문 검사망은 글자 수를 재지 않는다. 분량 부족 본문은 storyctl 공개 명령만 판정해야 한다.
+  # 책임 분리를 고정한다. 이전 90% 알고리즘이 어느 훅에라도 다시 섞이면 외부 출력 회귀가 즉시 실패한다.
+  mkdir -p "$tmp/book/개요" "$tmp/book/본문"
+  printf '字数目标：1000\n字数口径：visible_chars_v1\n' > "$tmp/book/개요/상세개요_제001장.md"
+  python3 - "$tmp/book/본문/제001장_欠账.md" <<'PY'
 from pathlib import Path
 import sys
 Path(sys.argv[1]).write_text("# 第1章\n" + "字" * 800 + "。\n", encoding="utf-8")
 PY
   python3 "$STORYCTL" wordcount check \
-    --file "$tmp/book/正文/第001章_欠账.md" --target 1000 --chapter 1 \
+    --file "$tmp/book/본문/제001장_欠账.md" --target 1000 --chapter 1 \
     > "$tmp/storyctl-wordcount.json"
   python3 - "$tmp/storyctl-wordcount.json" <<'PY'
 import json, sys
@@ -198,7 +198,7 @@ assert result["metric"] == "visible_chars_v1", result
 assert result["actual"] == 801, result
 assert result["status"] == "under", result
 PY
-  [ -z "$(node "$CLAUDE_HOOK_CLI" prose-net "$tmp/book/正文/第001章_欠账.md")" ] || {
+  [ -z "$(node "$CLAUDE_HOOK_CLI" prose-net "$tmp/book/본문/제001장_欠账.md")" ] || {
     echo "FAIL: Claude Adapter 重新把字数测量混入正文内容网" >&2
     return 3
   }
@@ -211,27 +211,27 @@ result = json.load(open(sys.argv[1], encoding="utf-8"))
 assert result == {"continue": True}, result
 PY
 
-  # 毒句式 fixture 防空转断言（两端同错也能 diff 通过，故对期望输出显式断言）：
-  # 正例（用户实抓的真实毒句）须命中对应规则；反例（对话内/either-or/确认语/是不是/
-  # 窗口外 trailer）须完全静默。
-  grep -q '^toxic_voice | 第2行 毒句式\[voice-contrast\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 voice-contrast 未命中「声音不高…却」" >&2; return 3; }
-  grep -q '^toxic_negation | 第1行 毒句式\[negation-parade\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 negation-parade 未命中「没有…没有…」" >&2; return 3; }
+  # 유해 문형 데이터의 무효 검증 방지(양쪽이 같이 틀려도 diff가 통과하므로 기대 출력을 명시적으로 단언):
+  # 양성(사용자가 실제 찾은 유해 문장)은 해당 규칙에 걸리고 음성(대사 안/양자택일/확인 표현/是不是/
+  # 범위 밖 trailer)은 완전히 조용해야 한다.
+  grep -q '^toxic_voice | 第2行 문제 문장 패턴\[voice-contrast\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 voice-contrast 未命中「声音不高…却」" >&2; return 3; }
+  grep -q '^toxic_negation | 第1行 문제 문장 패턴\[negation-parade\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 negation-parade 未命中「没有…没有…」" >&2; return 3; }
   grep -q '^toxic_cross_negation | $' "$tmp/py.txt" || { echo "FAIL: 跨段「不是/也不是/只是」应由深扫语义复核，不应进轻量 blocking 网" >&2; return 3; }
-  grep -q '^toxic_reverse_notis | 第1行 毒句式\[reverse-not-is\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 reverse-not-is 未命中「是真嗓子，不是修音」" >&2; return 3; }
-  grep -q '^toxic_forward_notis | 第1行 毒句式\[not-is-comparison\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 not-is-comparison 未命中「不是…，而是…」" >&2; return 3; }
-  grep -q '^toxic_trailer | 第2行 毒句式\[trailer-ending\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 trailer-ending 未命中「没人知道，这才刚刚开头」" >&2; return 3; }
-  grep -q '^toxic_trailer_summary | 第2行 毒句式\[trailer-summary\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 trailer-summary 未命中「这一切都结束了」" >&2; return 3; }
-  grep -q '^toxic_trailer_summary_fate | 第2行 毒句式\[trailer-summary\]' "$tmp/py.txt" || { echo "FAIL: 毒句式正例 trailer-summary 未命中「这一夜注定无人入眠」" >&2; return 3; }
-  # trailer 两条正则的各分支各锁一个正例（此前只靠 check-hook-regex-sync 的规范串 grep）。
+  grep -q '^toxic_reverse_notis | 第1行 문제 문장 패턴\[reverse-not-is\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 reverse-not-is 未命中「是真嗓子，不是修音」" >&2; return 3; }
+  grep -q '^toxic_forward_notis | 第1行 문제 문장 패턴\[not-is-comparison\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 not-is-comparison 未命中「不是…，而是…」" >&2; return 3; }
+  grep -q '^toxic_trailer | 第2行 문제 문장 패턴\[trailer-ending\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 trailer-ending 未命中「没人知道，这才刚刚开头」" >&2; return 3; }
+  grep -q '^toxic_trailer_summary | 第2行 문제 문장 패턴\[trailer-summary\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 trailer-summary 未命中「这一切都结束了」" >&2; return 3; }
+  grep -q '^toxic_trailer_summary_fate | 第2行 문제 문장 패턴\[trailer-summary\]' "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 trailer-summary 未命中「这一夜注定无人入眠」" >&2; return 3; }
+  # trailer 정규식 두 개의 각 분기마다 양성 하나를 고정한다(이전에는 check-hook-regex-sync의 기준 문자열 grep만 사용).
   for pair in toxic_trailer_summary_sozhe:trailer-summary toxic_trailer_summary_new_chapter:trailer-summary \
       toxic_trailer_summary_fate_gear:trailer-summary toxic_trailer_shubuzhi:trailer-ending \
       toxic_trailer_imminent:trailer-ending toxic_trailer_pressing:trailer-ending; do
-    grep -q "^${pair%%:*} | 第2行 毒句式\[${pair#*:}\]" "$tmp/py.txt" || { echo "FAIL: 毒句式正例 ${pair%%:*} 未命中 ${pair#*:}" >&2; return 3; }
+    grep -q "^${pair%%:*} | 第2行 문제 문장 패턴\[${pair#*:}\]" "$tmp/py.txt" || { echo "FAIL: 문제 문장 패턴正例 ${pair%%:*} 未命中 ${pair#*:}" >&2; return 3; }
   done
-  # 其余备选词各占一行、各命中一条，数量锚死（10 条预告腔 + 8 条状态总结）：任一备选词在
-  # 单端被删或改写，两端逐字 diff 或这里的计数就会红。
-  [ "$(grep '^toxic_trailer_alternatives |' "$tmp/py.txt" | grep -o '毒句式\[trailer-ending\]' | wc -l | tr -d ' ')" = 10 ] \
-    && [ "$(grep '^toxic_trailer_alternatives |' "$tmp/py.txt" | grep -o '毒句式\[trailer-summary\]' | wc -l | tr -d ' ')" = 8 ] \
+  # 나머지 선택 단어는 각각 한 줄에 한 건씩 탐지되며 수량을 고정한다(예고체 10건 + 상태 요약 8건). 한쪽의 선택 단어를
+  # 삭제하거나 바꾸면 문자별 diff 또는 여기의 개수 검사가 실패한다.
+  [ "$(grep '^toxic_trailer_alternatives |' "$tmp/py.txt" | grep -o '문제 문장 패턴\[trailer-ending\]' | wc -l | tr -d ' ')" = 10 ] \
+    && [ "$(grep '^toxic_trailer_alternatives |' "$tmp/py.txt" | grep -o '문제 문장 패턴\[trailer-summary\]' | wc -l | tr -d ' ')" = 8 ] \
     || { echo "FAIL: trailer 备选词正例未逐行命中（期望 10 条 trailer-ending + 8 条 trailer-summary）" >&2; return 3; }
   grep -q '^toxic_bare_realize_ok | $' "$tmp/py.txt" || { echo "FAIL: 「那一刻…终于明白」审判金句被误报（短篇卖点，本规则不收认知节拍）" >&2; return 3; }
   grep -q '^toxic_summary_subclause_ok | $' "$tmp/py.txt" || { echo "FAIL: 条件从句「等这一切结束了，…」被误报（未落句末断言位）" >&2; return 3; }
@@ -247,25 +247,25 @@ PY
   grep -q '^toxic_trailer_window_ok | $' "$tmp/py.txt" || { echo "FAIL: 文末 600 字窗口外的「没人知道」被误报" >&2; return 3; }
   grep -q '^toxic_quote_mid_ok | $' "$tmp/py.txt" || { echo "FAIL: 句中引号段未按等长占位截断，规则跨引号拼出假命中" >&2; return 3; }
   grep -q '^toxic_multi_tail_ok | $' "$tmp/py.txt" || { echo "FAIL: 带中间对比项的反问尾巴「…，不是吗」被误报" >&2; return 3; }
-  grep -q '^toxic_exempt_marker_ok | $' "$tmp/py.txt" || { echo "FAIL: 标「去味:跳过」的正文毒句式未被写后网豁免" >&2; return 3; }
+  grep -q '^toxic_exempt_marker_ok | $' "$tmp/py.txt" || { echo "FAIL: 标「去味:跳过」的正文문제 문장 패턴未被写后网豁免" >&2; return 3; }
   grep -q '^toxic_exempt_fullwidth_ok | $' "$tmp/py.txt" || { echo "FAIL: 全角冒号豁免标记「去味：跳过」未生效" >&2; return 3; }
-  # 豁免标记的语法与 storyctl DESLOP_SKIP 同一套：必须写成 HTML 注释，注释内可有空格/Tab；
-  # 裸写的「去味:跳过」是正文可见文字，不算豁免。
+  # 제외 마커 구문은 storyctl DESLOP_SKIP와 같다. HTML 주석이어야 하고 안에 공백/탭을 허용한다.
+  # 주석 없이 쓴 ‘去味:跳过’는 보이는 본문 텍스트이므로 제외 마커가 아니다.
   grep -q '^toxic_exempt_spaced_ok | $' "$tmp/py.txt" || { echo "FAIL: 带空格的豁免标记 <!--去味 ： 跳过 --> 未生效（与 storyctl 语法不一致）" >&2; return 3; }
-  grep -q '^toxic_exempt_bare_blocked | .*毒句式' "$tmp/py.txt" || { echo "FAIL: 裸写的「去味:跳过」（不在 HTML 注释里）被当成豁免" >&2; return 3; }
-  grep -q '^toxic_exempt_other_nets | 第4行 工程词泄漏' "$tmp/py.txt" || { echo "FAIL: 豁免标记不应连带关掉毒句式以外的网（工程词漏检）" >&2; return 3; }
-  grep '^toxic_exempt_other_nets' "$tmp/py.txt" | grep -q '毒句式' && { echo "FAIL: 豁免标记在场时毒句式仍被推回" >&2; return 3; }
-  # HTML 注释（作者备注、豁免标记）不是正文：与 check-ai-patterns.js 同规则屏蔽，可跨行；到文末都没
-  # 闭合的 `<!--` 不算注释（漏写 `-->` 不能藏住后文）。此前 hook 不屏蔽，备注里的句式被当欠账硬拦，
-  # 而 chapter check 用的检测器返回空，两道门口径分叉。
+  grep -q '^toxic_exempt_bare_blocked | .*문제 문장 패턴' "$tmp/py.txt" || { echo "FAIL: 裸写的「去味:跳过」（不在 HTML 注释里）被当成豁免" >&2; return 3; }
+  grep -q '^toxic_exempt_other_nets | 第4行 작업 용어 유출' "$tmp/py.txt" || { echo "FAIL: 豁免标记不应连带关掉문제 문장 패턴以外的网（工程词漏检）" >&2; return 3; }
+  grep '^toxic_exempt_other_nets' "$tmp/py.txt" | grep -q '문제 문장 패턴' && { echo "FAIL: 豁免标记在场时문제 문장 패턴仍被推回" >&2; return 3; }
+  # HTML 주석(작가 메모/제외 마커)은 본문이 아니다. check-ai-patterns.js와 같은 규칙으로 여러 줄도 가린다. 끝까지
+  # 닫히지 않은 `<!--`는 주석이 아니다(`-->` 누락으로 뒤 내용을 숨기면 안 됨). 이전 훅은 가리지 않아 메모의 문형을 차단했지만
+  # chapter check 탐지기는 빈 결과를 반환해 두 검사의 기준이 갈렸다.
   for name in toxic_comment_ok toxic_comment_multiline_ok; do
-    grep -q "^$name | $" "$tmp/py.txt" || { echo "FAIL: $name HTML 注释里的句式被写后网当毒句式（检测器不扫注释）" >&2; return 3; }
+    grep -q "^$name | $" "$tmp/py.txt" || { echo "FAIL: $name HTML 注释里的句式被写后网当문제 문장 패턴（检测器不扫注释）" >&2; return 3; }
   done
-  grep -q '^toxic_comment_inline | 第1行 毒句式\[voice-contrast\]' "$tmp/py.txt" || { echo "FAIL: 行内注释之后的正文毒句式漏检" >&2; return 3; }
+  grep -q '^toxic_comment_inline | 第1行 문제 문장 패턴\[voice-contrast\]' "$tmp/py.txt" || { echo "FAIL: 行内注释之后的正文문제 문장 패턴漏检" >&2; return 3; }
   for name in toxic_comment_unclosed toxic_comment_unclosed_after_closed; do
-    grep -q "^$name | 第[34]行 毒句式\[voice-contrast\]" "$tmp/py.txt" || { echo "FAIL: $name 未闭合的 <!-- 把后文藏起来了" >&2; return 3; }
+    grep -q "^$name | 第[34]行 문제 문장 패턴\[voice-contrast\]" "$tmp/py.txt" || { echo "FAIL: $name 未闭合的 <!-- 把后文藏起来了" >&2; return 3; }
   done
-  # 与检测器逐 fixture 对齐：hook 报不报 voice-contrast == check-ai-patterns.js 报不报。
+  # 데이터마다 탐지기와 맞춘다. 훅의 voice-contrast 보고 여부 == check-ai-patterns.js 보고 여부.
   local detector="$ROOT/skills/story-long-write/scripts/check-ai-patterns.js" cname hook_hit det_hit
   for cname in toxic_comment_ok toxic_comment_multiline_ok toxic_comment_inline toxic_comment_unclosed toxic_comment_unclosed_after_closed; do
     node -e 'const fx=require(process.argv[1]);require("fs").writeFileSync(process.argv[2],fx[process.argv[3]])' "$tmp/fixtures.json" "$tmp/$cname.md" "$cname"
@@ -277,28 +277,28 @@ PY
   grep -q '^toxic_astral_window_ok | $' "$tmp/py.txt" || { echo "FAIL: 引号内 emoji 的占位长度未按 UTF-16 码元对齐，trailer 窗口切点漂移" >&2; return 3; }
   grep -q '^toxic_quote_codename_ok | $' "$tmp/py.txt" || { echo "FAIL: 引号占位替 trailer-summary 的句末 [。！] 伪造终止符（占位字符落进了规则接受位）" >&2; return 3; }
 
-  # AI 自指（软信号）防空转：带型号后缀的最典型退化开场必须命中，且不带拒绝语也要命中
-  # （此前 refuse fixture 是被「生成拒绝语」规则接住的，AI 自指规则零覆盖）；复合名词不误报。
-  grep -q '^ai_selfref_model | 第2行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: AI 自指未命中「作为一个AI语言模型」（无拒绝语）" >&2; return 3; }
-  grep -q '^ai_selfref_assistant | 第2行 元信息泄漏（AI 自指）' "$tmp/py.txt" || { echo "FAIL: AI 自指未命中「作为一个AI助手」" >&2; return 3; }
-  grep -q '^ai_selfref_era_ok | $' "$tmp/py.txt" || { echo "FAIL: 复合名词「人工智能时代的产物」被 AI 自指误报" >&2; return 3; }
+  # AI 자기 지칭(약한 신호)의 무효 검증 방지: 모델명 접미어가 붙은 전형적 퇴화 도입은 거부 표현 없이도 탐지해야 한다.
+  # 이전 refuse 데이터는 생성 거부 표현 규칙이 잡아 자기 지칭 규칙을 전혀 검증하지 못했다. 복합명사는 오탐하지 않는다.
+  grep -q '^ai_selfref_model | 第2行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: AI 자기 언급未命中「作为一个AI语言模型」（无拒绝语）" >&2; return 3; }
+  grep -q '^ai_selfref_assistant | 第2行 메타정보 유출(AI 자기 언급）' "$tmp/py.txt" || { echo "FAIL: AI 자기 언급未命中「作为一个AI助手」" >&2; return 3; }
+  grep -q '^ai_selfref_era_ok | $' "$tmp/py.txt" || { echo "FAIL: 复合名词「人工智能时代的产物」被 AI 자기 언급误报" >&2; return 3; }
 
-  # 截断收尾标点：】（章尾系统播报模板的收束符）与 ASCII " （ascii 引号模式的收引号）都算收束，
-  # 与深扫 oracle check-degeneration.js 的 findTruncation 一致；真截断另由 truncate fixture 锁。
-  grep -q '^terminal_banner_ok | $' "$tmp/py.txt" || { echo "FAIL: 以【…】收尾的章末系统播报被误判疑似截断" >&2; return 3; }
-  grep -q '^terminal_ascii_quote_ok | $' "$tmp/py.txt" || { echo "FAIL: 以 ASCII 收引号收尾的对话被误判疑似截断" >&2; return 3; }
-  grep -q '^truncate | 第2行 疑似截断' "$tmp/py.txt" || { echo "FAIL: 真截断（结尾无标点）未被检出" >&2; return 3; }
-  grep -q '^truncate_astral | 第2行 疑似截断' "$tmp/py.txt" || { echo "FAIL: 增补面字符结尾的真截断未被检出" >&2; return 3; }
+  # 잘림 판정 끝 문장부호: 】(장 끝 시스템 방송 닫기)와 ASCII "(ASCII 인용 닫기) 모두 마무리로 인정한다.
+  # 정밀 검사 기준인 check-degeneration.js의 findTruncation과 같으며 실제 잘림은 truncate 데이터가 따로 고정한다.
+  grep -q '^terminal_banner_ok | $' "$tmp/py.txt" || { echo "FAIL: 以【…】收尾的章末系统播报被误判잘림 의심" >&2; return 3; }
+  grep -q '^terminal_ascii_quote_ok | $' "$tmp/py.txt" || { echo "FAIL: 以 ASCII 收引号收尾的对话被误判잘림 의심" >&2; return 3; }
+  grep -q '^truncate | 第2行 잘림 의심' "$tmp/py.txt" || { echo "FAIL: 真截断（结尾无标点）未被检出" >&2; return 3; }
+  grep -q '^truncate_astral | 第2行 잘림 의심' "$tmp/py.txt" || { echo "FAIL: 增补面字符结尾的真截断未被检出" >&2; return 3; }
   ! grep '^truncate_astral |' "$tmp/py.txt" | grep -q '�' || { echo "FAIL: 增补面字符摘要被 UTF-16 切坏" >&2; return 3; }
   return 0
 }
 
-# ── B. 命令函数 parity（codex python vs zcode JS），CI 硬保证 ─────────────────
-# 正文目标抽取（重定向/tee/touch/cp·mv）、apply-patch 目标、git commit 侦测三个纯函数
-# （命令串 → 值）在下列 fixture 上逐字相等。此前只在 py/js 手抄、无守卫，已漂移（cp·mv
-# 元数、git 控制词 then/do/else/elif、子 shell 括号）。node+python3 在 CI 全平台都在，故为硬门。
-# 注：fixture 取两端已收敛的子集；引号内分隔符（echo "a; git commit"）与命令替换（$(git commit)）
-# 两端本就不等（py 用 shlex 尊重引号，js 裸拆），非本网职责，且只影响 advisory 不影响拦截。
+# ── B. 명령 함수 동등성(Codex Python 대 ZCode JS), CI 필수 보장 ──
+# 본문 대상 추출(리디렉션/tee/touch/cp·mv), apply-patch 대상, git commit 감지의 순수 함수 3개는
+# (명령 문자열 → 값) 아래 데이터에서 문자별로 같아야 한다. 이전 Python/JS 수동 복사는 보호가 없어 cp·mv 인수 수,
+# git 제어어 then/do/else/elif, 서브셸 괄호가 어긋났다. CI 모든 플랫폼에 node+python3가 있어 필수 검사다.
+# 참고: 데이터는 양쪽이 합의한 부분집합이다. 인용 안 구분자(echo "a; git commit")와 명령 치환($(git commit))은
+# 원래 다르다(Python shlex는 인용을 존중하고 JS는 단순 분할). 이 검사망 범위 밖이며 차단이 아닌 advisory에만 영향이 있다.
 run_cmd_parity() {
   command -v node >/dev/null 2>&1 || return 1
   command -v python3 >/dev/null 2>&1 || return 1
@@ -306,62 +306,62 @@ run_cmd_parity() {
   trap 'rm -rf "$tmp"' RETURN
   cat > "$tmp/cmd.json" <<'EOF'
 {
-  "redirect": "echo x > book/正文/第1章.md",
-  "redirect_clobber": "echo x >| book/正文/第1章.md",
-  "redirect_both": "echo x >& book/正文/第1章.md",
-  "redirect_fd_dup": "echo book/正文/第1章.md >&2",
-  "append": "cat a >> 正文.md",
-  "tee": "echo x | tee book/正文/第2章.md",
-  "tee_a": "printf y | tee -a 正文.md",
-  "tee_double_dash": "printf y | tee -- book/正文/第2章.md",
-  "tee_multi": "printf y | tee notes.md book/正文/第2章.md",
-  "touch": "touch book/正文/第3章.md",
-  "touch_multi": "touch notes.md book/正文/第3章.md",
-  "touch_reference": "touch -r book/正文/第1章.md notes.md",
-  "cp": "cp src.md book/正文/第4章.md",
-  "cp_command_wrapper": "command cp src.md book/正文/第4章.md",
-  "cp_command_p_wrapper": "command -p cp src.md book/正文/第4章.md",
-  "cp_command_double_dash_wrapper": "command -- cp src.md book/正文/第4章.md",
-  "cp_env_unset_short": "env -u FOO cp src.md book/正文/第4章.md",
-  "cp_env_unset_long": "env --unset FOO cp src.md book/正文/第4章.md",
-  "cp_absolute_binary": "/bin/cp src.md book/正文/第4章.md",
-  "cp_destination_directory": "cp draft/第4章.md book/正文/",
-  "cp_target_directory": "cp --target-directory=book/正文 draft/第4章.md",
-  "install": "install draft.md book/正文/第4章.md",
-  "mv2": "mv 正文.md",
-  "cp_flag": "cp -f a.md 正文.md",
-  "mention": "grep -n book/正文/第1章.md notes.md",
-  "redirect_quoted_space": "cat draft.md > \"my book/正文/第1章_x.md\"",
-  "redirect_fullwidth_space": "cat draft.md > book/正文/第003章　开局.md",
-  "tee_quoted_space": "printf x | tee 'my book/正文/第1章_x.md'",
-  "cp_quoted_space": "cp draft.md \"my book/正文/第1章_x.md\"",
-  "cp_quoted_operator": "cp draft.md \"book|archive/正文/第11章.md\"",
-  "literal_quoted_redirect": "echo '> book/正文/第7章.md'",
-  "heredoc_mention": "cat <<EOF\n> book/正文/第7章.md\nEOF",
-  "multiple_heredoc_mention": "cat <<A <<B\nfirst\nA\n> book/正文/第7章.md\nB",
-  "escaped_heredoc_mention": "cat <<\\EOF\n> book/正文/第7章.md\nEOF",
-  "escaped_heredoc_then_redirect": "cat <<\\EOF\nliteral\nEOF\necho x > book/正文/第7章.md",
-  "escaped_quote_tee_mention": "printf '%s\\n' \"literal \\\" | tee book/正文/第7章.md\"",
-  "nested_shell_redirect": "sh -c 'echo x > book/正文/第7章.md'",
-  "nested_shell_combined_flags": "bash -lc 'echo x > book/正文/第7章.md'",
-  "quoted_command_substitution_redirect": "echo \"$(echo x > book/正文/第7章.md)\"",
-  "quoted_backtick_substitution_redirect": "echo \"`echo x > book/正文/第7章.md`\"",
-  "patch_add": "*** Begin Patch\n*** Add File: book/正文/第5章.md\n+正文\n*** End Patch",
-  "patch_move": "*** Begin Patch\n*** Update File: draft.md\n*** Move to: book/正文/第6章.md\n+正文\n*** End Patch",
-  "patch_move_delete": "*** Begin Patch\n*** Delete File: draft.md\n*** Move to: book/正文/第7章.md\n*** End Patch",
-  "patch_move_out": "*** Begin Patch\n*** Update File: book/正文/第8章.md\n*** Move to: draft.md\n+x\n*** End Patch",
-  "patch_delete_only": "*** Begin Patch\n*** Delete File: book/正文/第9章.md\n*** End Patch",
-  "patch_multi_move": "*** Begin Patch\n*** Add File: notes.md\n+x\n*** Update File: draft.md\n*** Move to: book/正文/第10章.md\n+正文\n*** End Patch",
-  "patch_context_move": "*** Begin Patch\n*** Update File: book/正文/第12章.md\n@@\n *** Move to: notes.md\n+正文\n*** End Patch",
-  "cd_then_heredoc_redirect": "cd \"/p/书\" && cat > 正文/第022章_x.md <<EOF\nhi\nEOF",
-  "cd_chain_tee": "cd /a && cd b && tee 正文/第3章.md",
-  "cd_relative_cp": "cd 书 && cp draft.md 正文/第2章.md",
-  "cd_clobber_redirect": "cd 书 && cat draft >| 正文/第3章.md",
-  "cd_dup_redirect": "cd 书 && echo x >& 正文/第3章.md",
-  "cd_amp_redirect": "cd 书 && echo x &> 正文/第3章.md",
-  "cd_into_body_redirect": "cd 书/正文 && cat > 第3章.md",
-  "cd_into_body_tee": "cd 正文 && tee 第3章.md",
-  "cd_redirect_then_pipe": "cd 书 && cat x > 正文/第3章.md 2>&1 | tee log",
+  "redirect": "echo x > book/본문/제1장.md",
+  "redirect_clobber": "echo x >| book/본문/제1장.md",
+  "redirect_both": "echo x >& book/본문/제1장.md",
+  "redirect_fd_dup": "echo book/본문/제1장.md >&2",
+  "append": "cat a >> 본문.md",
+  "tee": "echo x | tee book/본문/제2장.md",
+  "tee_a": "printf y | tee -a 본문.md",
+  "tee_double_dash": "printf y | tee -- book/본문/제2장.md",
+  "tee_multi": "printf y | tee notes.md book/본문/제2장.md",
+  "touch": "touch book/본문/제3장.md",
+  "touch_multi": "touch notes.md book/본문/제3장.md",
+  "touch_reference": "touch -r book/본문/제1장.md notes.md",
+  "cp": "cp src.md book/본문/제4장.md",
+  "cp_command_wrapper": "command cp src.md book/본문/제4장.md",
+  "cp_command_p_wrapper": "command -p cp src.md book/본문/제4장.md",
+  "cp_command_double_dash_wrapper": "command -- cp src.md book/본문/제4장.md",
+  "cp_env_unset_short": "env -u FOO cp src.md book/본문/제4장.md",
+  "cp_env_unset_long": "env --unset FOO cp src.md book/본문/제4장.md",
+  "cp_absolute_binary": "/bin/cp src.md book/본문/제4장.md",
+  "cp_destination_directory": "cp draft/제4장.md book/본문/",
+  "cp_target_directory": "cp --target-directory=book/본문 draft/제4장.md",
+  "install": "install draft.md book/본문/제4장.md",
+  "mv2": "mv 본문.md",
+  "cp_flag": "cp -f a.md 본문.md",
+  "mention": "grep -n book/본문/제1장.md notes.md",
+  "redirect_quoted_space": "cat draft.md > \"my book/본문/제1장_x.md\"",
+  "redirect_fullwidth_space": "cat draft.md > book/본문/제003장　开局.md",
+  "tee_quoted_space": "printf x | tee 'my book/본문/제1장_x.md'",
+  "cp_quoted_space": "cp draft.md \"my book/본문/제1장_x.md\"",
+  "cp_quoted_operator": "cp draft.md \"book|archive/본문/제11장.md\"",
+  "literal_quoted_redirect": "echo '> book/본문/제7장.md'",
+  "heredoc_mention": "cat <<EOF\n> book/본문/제7장.md\nEOF",
+  "multiple_heredoc_mention": "cat <<A <<B\nfirst\nA\n> book/본문/제7장.md\nB",
+  "escaped_heredoc_mention": "cat <<\\EOF\n> book/본문/제7장.md\nEOF",
+  "escaped_heredoc_then_redirect": "cat <<\\EOF\nliteral\nEOF\necho x > book/본문/제7장.md",
+  "escaped_quote_tee_mention": "printf '%s\\n' \"literal \\\" | tee book/본문/제7장.md\"",
+  "nested_shell_redirect": "sh -c 'echo x > book/본문/제7장.md'",
+  "nested_shell_combined_flags": "bash -lc 'echo x > book/본문/제7장.md'",
+  "quoted_command_substitution_redirect": "echo \"$(echo x > book/본문/제7장.md)\"",
+  "quoted_backtick_substitution_redirect": "echo \"`echo x > book/본문/제7장.md`\"",
+  "patch_add": "*** Begin Patch\n*** Add File: book/본문/제5장.md\n+본문\n*** End Patch",
+  "patch_move": "*** Begin Patch\n*** Update File: draft.md\n*** Move to: book/본문/제6장.md\n+본문\n*** End Patch",
+  "patch_move_delete": "*** Begin Patch\n*** Delete File: draft.md\n*** Move to: book/본문/제7장.md\n*** End Patch",
+  "patch_move_out": "*** Begin Patch\n*** Update File: book/본문/제8장.md\n*** Move to: draft.md\n+x\n*** End Patch",
+  "patch_delete_only": "*** Begin Patch\n*** Delete File: book/본문/제9장.md\n*** End Patch",
+  "patch_multi_move": "*** Begin Patch\n*** Add File: notes.md\n+x\n*** Update File: draft.md\n*** Move to: book/본문/제10장.md\n+본문\n*** End Patch",
+  "patch_context_move": "*** Begin Patch\n*** Update File: book/본문/제12장.md\n@@\n *** Move to: notes.md\n+본문\n*** End Patch",
+  "cd_then_heredoc_redirect": "cd \"/p/书\" && cat > 본문/제022장_x.md <<EOF\nhi\nEOF",
+  "cd_chain_tee": "cd /a && cd b && tee 본문/제3장.md",
+  "cd_relative_cp": "cd 书 && cp draft.md 본문/제2장.md",
+  "cd_clobber_redirect": "cd 书 && cat draft >| 본문/제3장.md",
+  "cd_dup_redirect": "cd 书 && echo x >& 본문/제3장.md",
+  "cd_amp_redirect": "cd 书 && echo x &> 본문/제3장.md",
+  "cd_into_body_redirect": "cd 书/본문 && cat > 제3장.md",
+  "cd_into_body_tee": "cd 본문 && tee 제3장.md",
+  "cd_redirect_then_pipe": "cd 书 && cat x > 본문/제3장.md 2>&1 | tee log",
   "commit_plain": "git commit -m x",
   "commit_chain": "git add . && git commit -m x",
   "commit_if": "if true; then git commit -m x; fi",
@@ -396,29 +396,29 @@ JS
     diff "$tmp/cpy.txt" "$tmp/cjs.txt" >&2 || true
     return 3
   fi
-  # 防空转：带空格/全角空格的目标必须整段取出（两端同错也能 diff 通过）。字符类排 \s 会把
-  # 「第003章　开局.md」截成「第003章」、把引号排除在类外会让引号路径整条抽不到目标 → 静默放行。
-  grep -q 'redirect_quoted_space :: pros=\[my book/正文/第1章_x.md\]' "$tmp/cpy.txt" \
+  # 무효 검증 방지: 공백/전각 공백 대상은 온전히 추출해야 한다(양쪽이 같이 틀려도 diff 통과). 문자 집합에서 \s를 제외하면
+  # ‘제003장　开局.md’가 ‘제003장’로 잘리고 따옴표를 제외하면 인용 경로 전체를 놓쳐 조용히 허용된다.
+  grep -q 'redirect_quoted_space :: pros=\[my book/본문/제1장_x.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 带空格的引号重定向目标未被整段取出（引号未被尊重）" >&2; return 3; }
-  grep -q 'redirect_fullwidth_space :: pros=\[book/正文/第003章　开局.md\]' "$tmp/cpy.txt" \
+  grep -q 'redirect_fullwidth_space :: pros=\[book/본문/제003장　开局.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 全角空格章名被 \\s 截断（U+3000 不是 shell 分词符）" >&2; return 3; }
-  grep -q 'tee_quoted_space :: pros=\[my book/正文/第1章_x.md\]' "$tmp/cpy.txt" \
+  grep -q 'tee_quoted_space :: pros=\[my book/본문/제1장_x.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 带空格的引号 tee 目标未被整段取出" >&2; return 3; }
-  # 有 cd 时按段扫描重定向：`>|` `>&` `&>` 不能被切段切丢，cd 进 正文/ 后的相对目标也要认出来。
-  for want in 'cd_clobber_redirect :: pros=\[书/正文/第3章.md\]' 'cd_dup_redirect :: pros=\[书/正文/第3章.md\]' \
-      'cd_amp_redirect :: pros=\[书/正文/第3章.md\]' 'cd_into_body_redirect :: pros=\[书/正文/第3章.md\]' \
-      'cd_into_body_tee :: pros=\[正文/第3章.md\]' 'cd_redirect_then_pipe :: pros=\[书/正文/第3章.md\]'; do
+  # cd가 있으면 구간별 리디렉션을 검사한다. `>|` `>&` `&>`가 분할로 사라지면 안 되고 본문/로 cd한 뒤 상대 대상도 인식해야 한다.
+  for want in 'cd_clobber_redirect :: pros=\[书/본문/제3장.md\]' 'cd_dup_redirect :: pros=\[书/본문/제3장.md\]' \
+      'cd_amp_redirect :: pros=\[书/본문/제3장.md\]' 'cd_into_body_redirect :: pros=\[书/본문/제3장.md\]' \
+      'cd_into_body_tee :: pros=\[본문/제3장.md\]' 'cd_redirect_then_pipe :: pros=\[书/본문/제3장.md\]'; do
     grep -q "$want" "$tmp/cpy.txt" || { echo "FAIL: cd 后的写正文目标没认出来：$want" >&2; return 3; }
   done
-  grep -q 'cp_quoted_space :: pros=\[my book/正文/第1章_x.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_quoted_space :: pros=\[my book/본문/제1장_x.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: cp 的引号目标被按空白切碎，末位取到了另一本书的路径" >&2; return 3; }
-  grep -q 'cp_quoted_operator :: pros=\[book|archive/正文/第11章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_quoted_operator :: pros=\[book|archive/본문/제11장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: cp 引号目标里的 | 被误当 shell 管道切段，正文守卫会静默放行" >&2; return 3; }
-  grep -q 'tee_double_dash :: pros=\[book/正文/第2章.md\]' "$tmp/cpy.txt" \
+  grep -q 'tee_double_dash :: pros=\[book/본문/제2장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: tee -- 的正文目标未被提取" >&2; return 3; }
-  grep -q 'tee_multi :: pros=\[book/正文/第2章.md\]' "$tmp/cpy.txt" \
+  grep -q 'tee_multi :: pros=\[book/본문/제2장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: tee 的第二个正文输出目标未被提取" >&2; return 3; }
-  grep -q 'touch_multi :: pros=\[book/正文/第3章.md\]' "$tmp/cpy.txt" \
+  grep -q 'touch_multi :: pros=\[book/본문/제3장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: touch 的第二个正文目标未被提取" >&2; return 3; }
   grep -q 'touch_reference :: pros=\[\]' "$tmp/cpy.txt" \
     || { echo "FAIL: touch -r 的参考源被误判成写入目标" >&2; return 3; }
@@ -430,62 +430,62 @@ JS
     || { echo "FAIL: 多 heredoc 的后续正文被误判成真实写入" >&2; return 3; }
   grep -q 'escaped_heredoc_mention :: pros=\[\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 反斜杠引用 heredoc 正文中的路径提及被误判成真实写入" >&2; return 3; }
-  grep -q 'escaped_heredoc_then_redirect :: pros=\[book/正文/第7章.md\]' "$tmp/cpy.txt" \
+  grep -q 'escaped_heredoc_then_redirect :: pros=\[book/본문/제7장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 反斜杠引用 heredoc 吞掉了其后的真实正文写入" >&2; return 3; }
   grep -q 'escaped_quote_tee_mention :: pros=\[\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 转义引号内的 tee 示例被误判成真实写入" >&2; return 3; }
-  grep -q 'nested_shell_redirect :: pros=\[book/正文/第7章.md\]' "$tmp/cpy.txt" \
+  grep -q 'nested_shell_redirect :: pros=\[book/본문/제7장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: sh -c 内的真实正文重定向绕过了守卫" >&2; return 3; }
-  grep -q 'nested_shell_combined_flags :: pros=\[book/正文/第7章.md\]' "$tmp/cpy.txt" \
+  grep -q 'nested_shell_combined_flags :: pros=\[book/본문/제7장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: bash -lc 内的真实正文重定向绕过了守卫" >&2; return 3; }
-  grep -q 'quoted_command_substitution_redirect :: pros=\[book/正文/第7章.md\]' "$tmp/cpy.txt" \
+  grep -q 'quoted_command_substitution_redirect :: pros=\[book/본문/제7장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 双引号内的 \$(...) 正文写入绕过了守卫" >&2; return 3; }
-  grep -q 'quoted_backtick_substitution_redirect :: pros=\[book/正文/第7章.md\]' "$tmp/cpy.txt" \
+  grep -q 'quoted_backtick_substitution_redirect :: pros=\[book/본문/제7장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 双引号内的反引号正文写入绕过了守卫" >&2; return 3; }
-  grep -q 'cp_command_wrapper :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_command_wrapper :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: command cp 的正文目标未被提取" >&2; return 3; }
-  grep -q 'cp_command_p_wrapper :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_command_p_wrapper :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: command -p cp 的正文目标未被提取" >&2; return 3; }
-  grep -q 'cp_command_double_dash_wrapper :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_command_double_dash_wrapper :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: command -- cp 的正文目标未被提取" >&2; return 3; }
-  grep -q 'cp_env_unset_short :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_env_unset_short :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: env -u 包装的 cp 正文目标未被提取" >&2; return 3; }
-  grep -q 'cp_env_unset_long :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_env_unset_long :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: env --unset 包装的 cp 正文目标未被提取" >&2; return 3; }
-  grep -q 'cp_absolute_binary :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_absolute_binary :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 绝对路径 cp 的正文目标未被提取" >&2; return 3; }
-  grep -q 'cp_destination_directory :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_destination_directory :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: cp 到正文目录时未按源文件名还原落盘目标" >&2; return 3; }
-  grep -q 'cp_target_directory :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'cp_target_directory :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: cp --target-directory 的正文目标未被提取" >&2; return 3; }
-  grep -q 'install :: pros=\[book/正文/第4章.md\]' "$tmp/cpy.txt" \
+  grep -q 'install :: pros=\[book/본문/제4장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: install 的正文目标未被提取" >&2; return 3; }
-  grep -q 'redirect_clobber :: pros=\[book/正文/第1章.md\]' "$tmp/cpy.txt" \
+  grep -q 'redirect_clobber :: pros=\[book/본문/제1장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: >| 正文重定向绕过了守卫" >&2; return 3; }
-  grep -q 'redirect_both :: pros=\[book/正文/第1章.md\]' "$tmp/cpy.txt" \
+  grep -q 'redirect_both :: pros=\[book/본문/제1장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: >& 文件 正文重定向绕过了守卫" >&2; return 3; }
   grep -q 'redirect_fd_dup :: pros=\[\]' "$tmp/cpy.txt" \
     || { echo "FAIL: >&2 文件描述符复制被误判成正文写入" >&2; return 3; }
-  # 防空转（apply_patch 搬家形态）：`*** Move to:` 是 Update/Delete File 段的子指令，落盘路径是
-  # 目的地。只认 Add/Update File 时「Update draft.md + Move to 书/正文/第N章.md」抽到的是源
-  # draft.md → 细纲门整条空过、写后兜底网扫的是已不存在的源（两端同错，diff 也看不出来）。
-  grep -q 'patch_move :: pros=\[\] patch=\[book/正文/第6章.md\]' "$tmp/cpy.txt" \
+  # 무효 검증 방지(apply_patch 이동): `*** Move to:`는 Update/Delete File 구간의 하위 명령으로 저장 경로는
+  # 목적지다. Add/Update File만 인식하면 ‘Update draft.md + Move to 书/본문/제N장.md’에서 원본
+  # draft.md를 추출해 상세 개요 검사를 통째로 건너뛰고 쓰기 후에는 사라진 원본을 검사한다(양쪽 동일 오류는 diff로 못 잡음).
+  grep -q 'patch_move :: pros=\[\] patch=\[book/본문/제6장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: apply_patch 的 *** Move to: 目的地未进目标表（源被搬走，只有目的地落盘）" >&2; return 3; }
-  grep -q 'patch_move_delete :: pros=\[\] patch=\[book/正文/第7章.md\]' "$tmp/cpy.txt" \
+  grep -q 'patch_move_delete :: pros=\[\] patch=\[book/본문/제7장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: *** Delete File: + *** Move to: 的目的地未进目标表" >&2; return 3; }
   grep -q 'patch_move_out :: pros=\[\] patch=\[draft.md\]' "$tmp/cpy.txt" \
-    || { echo "FAIL: 搬出 正文/ 时源仍被当写入目标（源已不存在，只有目的地该被判）" >&2; return 3; }
+    || { echo "FAIL: 搬出 본문/ 时源仍被当写入目标（源已不存在，只有目的地该被判）" >&2; return 3; }
   grep -q 'patch_delete_only :: pros=\[\] patch=\[\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 纯 *** Delete File: 不该进目标表（删除不是写入，认它只会给删稿误报）" >&2; return 3; }
-  grep -q 'patch_multi_move :: pros=\[\] patch=\[notes.md|book/正文/第10章.md\]' "$tmp/cpy.txt" \
+  grep -q 'patch_multi_move :: pros=\[\] patch=\[notes.md|book/본문/제10장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: 一份补丁里 Add 段与 Move 段的目标未同时取全（Move 只该顶替同段的源）" >&2; return 3; }
-  grep -q 'patch_context_move :: pros=\[\] patch=\[book/正文/第12章.md\]' "$tmp/cpy.txt" \
+  grep -q 'patch_context_move :: pros=\[\] patch=\[book/본문/제12장.md\]' "$tmp/cpy.txt" \
     || { echo "FAIL: patch 上下文行里的字面 *** Move to 被误当控制指令，实际正文目标被顶掉" >&2; return 3; }
 
-  # ReDoS 回归（shellWords）：调用方先按 [;&|\n] 拆段会拆开引号内的 |，留下一个不闭合的 "。
-  # 旧的 /"(?:\\.|[^"])*"|'[^']*'|[^\s]+/ 里 \\. 与 [^"] 都能吃反斜杠，每个反斜杠让搜索空间翻倍，
-  # 这条百余字的提交命令实测烧掉数十秒 CPU（超过 zcode hooks.json 的 timeoutMs 15000 被杀）。
-  # 线性手写分词必须毫秒级判完，故给 2 秒预算（Python 侧 shlex 本就线性，一并计时防漂移）。
+  # ReDoS 회귀(shellWords): 호출자가 [;&|\n]으로 먼저 나누면 인용 안 |도 분리해 닫히지 않은 "를 남긴다.
+  # 이전 정규식의 이스케이프 문자 분기와 따옴표 이외 문자 분기가 모두 역슬래시를 소비해 역슬래시마다 탐색 공간이 두 배가 된다.
+  # 이 백여 자 커밋 명령은 실제 CPU를 수십 초 사용해 ZCode hooks.json의 timeoutMs 15000을 넘고 종료됐다.
+  # 직접 작성한 선형 토큰화는 밀리초 수준이어야 하므로 2초 예산을 둔다(Python shlex도 선형이며 변화를 막기 위해 함께 측정).
   node - "$ZCODE" > "$tmp/redos.txt" <<'JS' || return 3
 const h = require(process.argv[2])
 const cmd = 'git commit -m "fix: 正则转义覆盖 ' + Array.from({ length: 18 }, () => "\\\\x").join(" ") + ' covered | see README"'
@@ -503,7 +503,7 @@ cmd = 'git commit -m "fix: 正则转义覆盖 ' + " ".join([r"\\x"] * 18) + ' co
 t0 = time.time()
 hit = m.is_git_commit_command(cmd)
 ms = int((time.time() - t0) * 1000)
-# 失败文案走 stderr.buffer 直写 UTF-8：Windows python 的文本 stderr 是 cp1252，中文会 UnicodeEncodeError
+# 실패 문구는 stderr.buffer로 UTF-8을 직접 쓴다. Windows Python 텍스트 stderr는 cp1252라 중국어에서 UnicodeEncodeError가 난다.
 if not hit:
     sys.stderr.buffer.write("FAIL: py 侧 git commit 侦测漏判带转义/管道的提交命令\n".encode("utf-8")); sys.exit(3)
 if ms > 2000:
@@ -512,15 +512,15 @@ PY
   return 0
 }
 
-# ── C. 未归核面 parity（codex python vs JS core），CI 硬保证 ─────────────────────
-# staged markdown warnings 与大纲阻断判定未归核：codex python（staged_markdown_warnings /
-# prose_block_reason）与 JS core（stagedMarkdownWarnings / proseBlockReason）各有一份实现，
-# 语义/文案以 JS core 为准，这里在 fixture 上逐字比对防漂移。Claude 端的纯 bash 实现不在此锁，
-# 由 check-story-setup-deployment.sh / test-hook-encoding-portable.sh 的运行回归覆盖。
-# fixture 至少覆盖：① name 字段大小写变体（NAME/全角空格补白）命中一致——有字段不告警；
-# ② 缺字段/硬编码属性的中文警告文案（含头尾框线）逐字一致；③ 长篇缺细纲/有细纲、
-# 短篇缺小节大纲/无设定信号 4 组阻断判定与阻断文案逐字一致；④ 毒句式欠账门 4 组：
-# 有欠账拦、标「去味:跳过」/全角冒号「去味：跳过」豁免放、上一章含坏字节替换解码继续扫。
+# ── C. 미통합 영역 동등성(Codex Python 대 JS 코어), CI 필수 보장 ──
+# 스테이징 Markdown 경고와 개요 차단 판정은 코어에 통합되지 않았다. Codex Python의 staged_markdown_warnings /
+# prose_block_reason과 JS 코어의 stagedMarkdownWarnings / proseBlockReason이 각각 구현한다.
+# 의미/문구는 JS 코어 기준이며 데이터의 문자별 비교로 불일치를 막는다. Claude 순수 bash 구현은 여기서 고정하지 않고
+# check-story-setup-deployment.sh / test-hook-encoding-portable.sh 실행 회귀로 검사한다.
+# 최소 범위: ① name 필드 대소문자/전각 공백 변형을 동일하게 탐지해 필드가 있으면 경고하지 않음
+# ② 필드 누락/하드코딩 속성의 중국어 경고(상하 테두리 포함) 문자별 일치 ③ 장편 상세 개요 없음/있음,
+# 단편 절 개요 없음/설정 신호 없음의 4그룹 차단 판정과 문구 일치 ④ 유해 문형 미해결 조건 4그룹:
+# 미해결 시 차단, ‘去味:跳过’/전각 콜론 ‘去味：跳过’ 마커면 허용, 이전 장의 잘못된 바이트는 대체 디코딩 후 계속 검사.
 run_uncored_parity() {
   command -v node >/dev/null 2>&1 || return 1
   command -v python3 >/dev/null 2>&1 || return 1
@@ -528,22 +528,22 @@ run_uncored_parity() {
   local tmp; tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' RETURN
 
-  # E1: staged markdown warnings —— 建独立 git 仓库并 stage 固定文件集
+  # E1: 스테이징 Markdown 경고 — 독립 git 저장소를 만들고 고정 파일 집합을 스테이징한다.
   local repo="$tmp/repo"
-  mkdir -p "$repo/book/正文" "$repo/设定"
+  mkdir -p "$repo/book/본문" "$repo/설정"
   git -C "$repo" init -q
-  printf '身高: 180\n他推门而入。\n年龄　：18\n' > "$repo/book/正文/第1章.md"
-  printf 'NAME：林远\n' > "$repo/设定/主角.md"            # 大小写变体：字段在，不告警
-  printf '　名字 ：苏离\n' > "$repo/设定/配角.md"          # 全角空格补白：字段在，不告警
-  printf '简介：没有名字字段\n' > "$repo/设定/反派.md"     # 缺字段：告警
-  # 角色卡收窄：只有 设定/角色|人物 子目录内的文件 + 设定/ 直属扁平角色卡才查 name 字段；
-  # 项目级设定件（关系/文风/题材定位…）与非角色子目录不查。四端（bash/OpenCode/JS/py）
-  # 同口径，这里锁 py↔js 两端，防任一端被改回「整棵 设定/ 一刀切」的假警告版本。
-  mkdir -p "$repo/设定/角色" "$repo/设定/世界观"
-  printf '简介：没有名字字段的角色卡\n' > "$repo/设定/角色/新人.md"  # 角色卡子目录：缺字段，告警
-  printf '# 角色关系图\n' > "$repo/设定/关系.md"                     # 项目级设定件：不告警
-  printf '# 文风\n' > "$repo/设定/文风.md"                           # 项目级设定件：不告警
-  printf '# 地理\n' > "$repo/设定/世界观/地理.md"                    # 非角色子目录：整目录跳过
+  printf '身高: 180\n他推门而入。\n年龄　：18\n' > "$repo/book/본문/제1장.md"
+  printf 'NAME：林远\n' > "$repo/설정/주인공.md"            # 대소문자 변형: 필드가 있으므로 경고 없음
+  printf '　名字 ：苏离\n' > "$repo/설정/조연.md"          # 전각 공백 패딩: 필드가 있으므로 경고 없음
+  printf '简介：没有名字字段\n' > "$repo/설정/악역.md"     # 필드 누락: 경고
+  # 인물 카드로 제한: 설정/角色|人物 하위 파일과 설정/ 바로 아래 평면 인물 카드만 name 필드를 검사한다.
+  # 프로젝트 설정(관계/문체/소재 포지셔닝 등)과 인물 외 하위 디렉터리는 제외한다. 네 환경(bash/OpenCode/JS/Python)은
+  # 같은 기준이다. 여기서 Python↔JS를 고정해 설정/ 전체를 일괄 검사하는 오경고 버전으로 돌아가지 않게 한다.
+  mkdir -p "$repo/설정/인물" "$repo/설정/세계관"
+  printf '简介：没有名字字段的角色卡\n' > "$repo/설정/인물/新人.md"  # 인물 카드 하위 디렉터리: 필드 누락 시 경고
+  printf '# 角色关系图\n' > "$repo/설정/관계.md"                     # 프로젝트 설정: 경고 없음
+  printf '# 文风\n' > "$repo/설정/문체.md"                           # 프로젝트 설정: 경고 없음
+  printf '# 地理\n' > "$repo/설정/세계관/地理.md"                    # 인물 외 하위 디렉터리: 전체 건너뜀
   git -C "$repo" add -A
 
   python3 - "$CODEX" "$repo" > "$tmp/spy.txt" <<'PY'
@@ -562,91 +562,91 @@ JS
     diff "$tmp/spy.txt" "$tmp/sjs.txt" >&2 || true
     return 3
   fi
-  # 防空转（两边都输出空串也会 diff 通过）：断言命中/未命中与统一后的中文文案确实在场
-  grep -q '正文硬编码角色属性，应引用设定文件' "$tmp/spy.txt" || { echo "FAIL: staged warnings 未按统一文案报硬编码属性" >&2; return 3; }
-  grep -q '反派.md: 设定文件缺少 name/名字 必填字段。' "$tmp/spy.txt" || { echo "FAIL: staged warnings 未按统一文案报缺 name 字段" >&2; return 3; }
-  grep -q '主角.md' "$tmp/spy.txt" && { echo "FAIL: 大写 NAME： 应视为字段已存在（大小写不敏感）" >&2; return 3; }
-  grep -q '配角.md' "$tmp/spy.txt" && { echo "FAIL: 全角空格补白的 名字 ： 应视为字段已存在" >&2; return 3; }
-  grep -q '设定/角色/新人.md: 设定文件缺少 name/名字 必填字段。' "$tmp/spy.txt" || { echo "FAIL: 设定/角色 子目录下的角色卡应仍查 name 字段" >&2; return 3; }
-  grep -q '关系.md' "$tmp/spy.txt" && { echo "FAIL: 项目级设定件 关系.md 不该被当角色卡查 name" >&2; return 3; }
-  grep -q '文风.md' "$tmp/spy.txt" && { echo "FAIL: 项目级设定件 文风.md 不该被当角色卡查 name" >&2; return 3; }
-  grep -q '地理.md' "$tmp/spy.txt" && { echo "FAIL: 设定/ 下非角色子目录应整目录跳过" >&2; return 3; }
+  # 무효 검증 방지(양쪽 빈 문자열도 diff 통과): 탐지/미탐지와 통일된 중국어 문구의 실제 존재를 단언한다.
+  grep -q '본문에 인물 속성을 직접 고정했습니다. 설정 파일을 참조하세요' "$tmp/spy.txt" || { echo "FAIL: staged warnings 未按统一文案报硬编码属性" >&2; return 3; }
+  grep -q '악역.md: 설정 파일에 필수 이름 필드(name/名字)가 없습니다.' "$tmp/spy.txt" || { echo "FAIL: staged warnings 未按统一文案报缺 name 字段" >&2; return 3; }
+  grep -q '주인공.md' "$tmp/spy.txt" && { echo "FAIL: 大写 NAME： 应视为字段已存在（大小写不敏感）" >&2; return 3; }
+  grep -q '조연.md' "$tmp/spy.txt" && { echo "FAIL: 全角空格补白的 名字 ： 应视为字段已存在" >&2; return 3; }
+  grep -q '설정/인물/新人.md: 설정 파일에 필수 이름 필드(name/名字)가 없습니다.' "$tmp/spy.txt" || { echo "FAIL: 설정/인물 子目录下的角色卡应仍查 name 字段" >&2; return 3; }
+  grep -q '관계.md' "$tmp/spy.txt" && { echo "FAIL: 项目级设定件 관계.md 不该被当角色卡查 name" >&2; return 3; }
+  grep -q '문체.md' "$tmp/spy.txt" && { echo "FAIL: 项目级设定件 문체.md 不该被当角色卡查 name" >&2; return 3; }
+  grep -q '地理.md' "$tmp/spy.txt" && { echo "FAIL: 설정/ 下非角色子目录应整目录跳过" >&2; return 3; }
 
-  # E2: 大纲/追踪阻断判定 —— 长篇缺细纲(拦)/有细纲(放)、短篇缺小节大纲(拦)/无设定信号(放)、
-  #     毒句式欠账门（上一章有欠账拦 / 标「去味:跳过」豁免放 / 全角冒号「去味：跳过」豁免放 /
-  #     上一章含坏字节替换解码继续扫仍拦）、新书无脚手架时仍须先建细纲（拦）
+  # E2: 개요/추적 차단 판정 — 장편 상세 개요 없음(차단)/있음(허용), 단편 절 개요 없음(차단)/설정 신호 없음(허용),
+  #     유해 문형 미해결 조건(이전 장 미해결 시 차단 / ‘去味:跳过’ 제외 허용 / 전각 콜론 ‘去味：跳过’ 제외 허용 /
+  #     이전 장의 잘못된 바이트를 대체 디코딩한 뒤 계속 검사해 차단), 골격 없는 새 책도 상세 개요를 먼저 요구(차단)
   local blk="$tmp/blk"
-  # 细纲必须写了内容（不计 # 号和空白 ≥30 字，标题文字照算）才放行；这段旧书式的自由文本细纲不含 v0.8 字段，照样算数。
+  # 상세 개요 내용이 있어야 허용(#과 공백 제외 30자 이상, 제목 문자 포함). v0.8 필드 없는 기존 자유 형식 개요도 인정한다.
   local filled='# 第2章 细纲
 江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久谁都没先开口。'
-  mkdir -p "$blk/long/正文" "$blk/long/大纲" "$blk/short" "$blk/short2" \
-    "$blk/long2/正文" "$blk/long2/大纲" "$blk/long3/正文" "$blk/long3/大纲"
-  printf '%s\n' "$filled" > "$blk/long/大纲/细纲_第2章.md"
-  : > "$blk/short/设定.md"
+  mkdir -p "$blk/long/본문" "$blk/long/개요" "$blk/short" "$blk/short2" \
+    "$blk/long2/본문" "$blk/long2/개요" "$blk/long3/본문" "$blk/long3/개요"
+  printf '%s\n' "$filled" > "$blk/long/개요/상세개요_제2장.md"
+  : > "$blk/short/설정.md"
   : > "$blk/short2/其他.md"
-  printf '%s\n' "$filled" > "$blk/long2/大纲/细纲_第2章.md"
-  printf '%s\n' '# 第1章 旧' '' '声音不大，却带着一股狠劲。' > "$blk/long2/正文/第1章_旧.md"
-  printf '%s\n' "$filled" > "$blk/long3/大纲/细纲_第2章.md"
-  printf '%s\n' '# 第1章 旧' '<!-- 去味:跳过 -->' '声音不大，却带着一股狠劲。' > "$blk/long3/正文/第1章_旧.md"
-  mkdir -p "$blk/long4/正文" "$blk/long4/大纲" "$blk/long5/正文" "$blk/long5/大纲"
-  printf '%s\n' "$filled" > "$blk/long4/大纲/细纲_第2章.md"
-  printf '%s\n' '# 第1章 旧' '<!-- 去味：跳过 -->' '声音不大，却带着一股狠劲。' > "$blk/long4/正文/第1章_旧.md"
-  printf '%s\n' "$filled" > "$blk/long5/大纲/细纲_第2章.md"
-  { printf '%s\n' '# 第1章 旧' '声音不大，却带着一股狠劲。'; printf '\xff\n'; } > "$blk/long5/正文/第1章_旧.md"
-  # 豁免标记语法：注释内带空格/Tab 也认（long8）；裸写不在注释里的「去味:跳过」不认（long9）。
-  mkdir -p "$blk/long8/正文" "$blk/long8/大纲" "$blk/long9/正文" "$blk/long9/大纲"
-  printf '%s\n' "$filled" > "$blk/long8/大纲/细纲_第2章.md"
-  printf '%s\n' '# 第1章 旧' '<!--  去味 : 跳过	-->' '声音不大，却带着一股狠劲。' > "$blk/long8/正文/第1章_旧.md"
-  printf '%s\n' "$filled" > "$blk/long9/大纲/细纲_第2章.md"
-  printf '%s\n' '# 第1章 旧' '去味:跳过' '声音不大，却带着一股狠劲。' > "$blk/long9/正文/第1章_旧.md"
+  printf '%s\n' "$filled" > "$blk/long2/개요/상세개요_제2장.md"
+  printf '%s\n' '# 제1장 旧' '' '声音不大，却带着一股狠劲。' > "$blk/long2/본문/제1장_旧.md"
+  printf '%s\n' "$filled" > "$blk/long3/개요/상세개요_제2장.md"
+  printf '%s\n' '# 제1장 旧' '<!-- 去味:跳过 -->' '声音不大，却带着一股狠劲。' > "$blk/long3/본문/제1장_旧.md"
+  mkdir -p "$blk/long4/본문" "$blk/long4/개요" "$blk/long5/본문" "$blk/long5/개요"
+  printf '%s\n' "$filled" > "$blk/long4/개요/상세개요_제2장.md"
+  printf '%s\n' '# 제1장 旧' '<!-- 去味：跳过 -->' '声音不大，却带着一股狠劲。' > "$blk/long4/본문/제1장_旧.md"
+  printf '%s\n' "$filled" > "$blk/long5/개요/상세개요_제2장.md"
+  { printf '%s\n' '# 제1장 旧' '声音不大，却带着一股狠劲。'; printf '\xff\n'; } > "$blk/long5/본문/제1장_旧.md"
+  # 제외 마커: 주석 안 공백/탭 허용(long8), 주석 밖에 쓴 ‘去味:跳过’는 불인정(long9).
+  mkdir -p "$blk/long8/본문" "$blk/long8/개요" "$blk/long9/본문" "$blk/long9/개요"
+  printf '%s\n' "$filled" > "$blk/long8/개요/상세개요_제2장.md"
+  printf '%s\n' '# 제1장 旧' '<!--  去味 : 跳过	-->' '声音不大，却带着一股狠劲。' > "$blk/long8/본문/제1장_旧.md"
+  printf '%s\n' "$filled" > "$blk/long9/개요/상세개요_제2장.md"
+  printf '%s\n' '# 제1장 旧' '去味:跳过' '声音不大，却带着一股狠劲。' > "$blk/long9/본문/제1장_旧.md"
   for book in long long2 long3 long4 long5 long8 long9; do
-    mkdir -p "$blk/$book/追踪"
-    printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":1}' > "$blk/$book/追踪/_tracking-state.json"
-    printf '%s\n' '> 状态修订：0' > "$blk/$book/追踪/上下文.md"
+    mkdir -p "$blk/$book/추적"
+    printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":1}' > "$blk/$book/추적/_tracking-state.json"
+    printf '%s\n' '> 状态修订：0' > "$blk/$book/추적/문맥.md"
   done
-  # 上一章正文已存在、state 提交进度落后：必须拦住下一章首建。
-  mkdir -p "$blk/long6/正文" "$blk/long6/大纲" "$blk/long6/追踪"
-  printf '%s\n' "$filled" > "$blk/long6/大纲/细纲_第2章.md"
-  printf '%s\n' '# 第1章 旧' '他把门关上了。' > "$blk/long6/正文/第1章_旧.md"
-  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":0}' > "$blk/long6/追踪/_tracking-state.json"
-  printf '%s\n' '> 状态修订：0' > "$blk/long6/追踪/上下文.md"
-  # canonical case：agent 直接首建 {书}/正文/第N章.md，即使书目录还没有大纲/追踪/设定脚手架，
-  # 也必须 fail closed；相对目标的 cwd 语义由各宿主 adapter 单独负责，不能靠削弱核心守卫来掩盖。
-  mkdir -p "$blk/bare/正文"
-  # 空细纲（只有文件名对得上）：0 字节 / 只有标题 / BOM+CRLF+全角空格 / 29 字（差 1 字）都拦；
-  # 恰好 30 字放行；同章两份细纲一空一满放行（任一份写了内容即可）。state 均有效，
-  # 只有细纲这一个变量。
-  # 标题行的文字也算内容（只去掉行首 #）：`# 第1章 细纲` 计 5 字，正文再补 24/25 字凑成 29/30。
+  # 이전 장 본문은 있지만 state 커밋 진행도가 뒤처지면 다음 장 최초 생성을 차단해야 한다.
+  mkdir -p "$blk/long6/본문" "$blk/long6/개요" "$blk/long6/추적"
+  printf '%s\n' "$filled" > "$blk/long6/개요/상세개요_제2장.md"
+  printf '%s\n' '# 제1장 旧' '他把门关上了。' > "$blk/long6/본문/제1장_旧.md"
+  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":0}' > "$blk/long6/추적/_tracking-state.json"
+  printf '%s\n' '> 状态修订：0' > "$blk/long6/추적/문맥.md"
+  # 표준 사례: 에이전트가 {书}/본문/제N장.md를 최초 생성할 때 책 디렉터리에 개요/추적/설정 골격이 없어도
+  # 차단해야 한다. 상대 대상 cwd 의미는 호스트 어댑터가 각각 책임지며 코어 보호를 약화해 감추면 안 된다.
+  mkdir -p "$blk/bare/본문"
+  # 파일명만 맞는 빈 상세 개요: 0바이트/제목만/BOM+CRLF+전각 공백/29자(1자 부족)는 모두 차단한다.
+  # 정확히 30자는 허용한다. 같은 장의 개요가 둘이고 하나만 채워져도 허용한다. state는 모두 유효해
+  # 상세 개요만 유일한 변수다.
+  # 제목 문자도 내용에 포함한다(줄 앞 #만 제거). `# 第1章 细纲`은 5자이며 본문 24/25자로 29/30자를 만든다.
   local body29='他推门进屋看见师父坐在柜台后面他推门进屋看见师父'
   local body30='他推门进屋看见师父坐在柜台后面他推门进屋看见师父坐'
   for book in oe_zero oe_heading oe_bomcrlf oe_29 oe_30 oe_dup oe_headcontent oe_gbk; do
-    mkdir -p "$blk/$book/正文" "$blk/$book/大纲" "$blk/$book/追踪"
-    printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":0}' > "$blk/$book/追踪/_tracking-state.json"
-    printf '%s\n' '> 状态修订：0' > "$blk/$book/追踪/上下文.md"
+    mkdir -p "$blk/$book/본문" "$blk/$book/개요" "$blk/$book/추적"
+    printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":0}' > "$blk/$book/추적/_tracking-state.json"
+    printf '%s\n' '> 状态修订：0' > "$blk/$book/추적/문맥.md"
   done
-  mkdir -p "$blk/long7/正文" "$blk/long7/大纲" "$blk/long7/追踪"
-  printf '%s\n' "$filled" > "$blk/long7/大纲/细纲_第2章.md"
-  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":1}' > "$blk/long7/追踪/_tracking-state.json"
-  printf '%s\n' '> 状态修订：0' > "$blk/long7/追踪/上下文.md"
-  { printf '%s\n' '# 第1章 旧'; for i in 1 2 3 4 5 6 7 8; do printf '%s\n' "声音不大，却带着第${i}股狠劲。"; done; printf '%s\n' '他把门关上了。'; } > "$blk/long7/正文/第1章_旧.md"
-  : > "$blk/oe_zero/大纲/细纲_第001章.md"
-  printf '%s\n' '# 第1章 细纲' '## 目标情绪' '  ## 主角选择' '' > "$blk/oe_heading/大纲/细纲_第001章.md"
-  printf '\357\273\277# 第1章 细纲\r\n\r\n\343\200\200\343\200\200\t \r\n' > "$blk/oe_bomcrlf/大纲/细纲_第001章.md"
-  printf '%s\n' '# 第1章 细纲' "$body29" > "$blk/oe_29/大纲/细纲_第001章.md"
-  printf '%s\n' '# 第1章 细纲' "$body30" > "$blk/oe_30/大纲/细纲_第001章.md"
-  : > "$blk/oe_dup/大纲/细纲_第001章.md"
-  printf '%s\n' '# 第1章 细纲' "$body30" > "$blk/oe_dup/大纲/细纲_第1章_开端.md"
-  # 内容写在标题行上（`## 核心事件：…`）的细纲是写了东西的，不能按「只有标题」拦。
-  printf '%s\n' '# 第1章' '## 核心事件：江晨雨夜推门发现失踪三年的师父坐在柜台后' '## 主角选择：留下' > "$blk/oe_headcontent/大纲/细纲_第001章.md"
-  # 不是合法 UTF-8 的细纲（GBK 旧稿）按非空放行，与 bash guard 同口径。
-  python3 -c 'import sys;open(sys.argv[1],"wb").write("第二天他就回来了，大家都说他变了，只是没人问".encode("gbk")+b"\n")' "$blk/oe_gbk/大纲/细纲_第001章.md"
+  mkdir -p "$blk/long7/본문" "$blk/long7/개요" "$blk/long7/추적"
+  printf '%s\n' "$filled" > "$blk/long7/개요/상세개요_제2장.md"
+  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":1}' > "$blk/long7/추적/_tracking-state.json"
+  printf '%s\n' '> 状态修订：0' > "$blk/long7/추적/문맥.md"
+  { printf '%s\n' '# 제1장 旧'; for i in 1 2 3 4 5 6 7 8; do printf '%s\n' "声音不大，却带着第${i}股狠劲。"; done; printf '%s\n' '他把门关上了。'; } > "$blk/long7/본문/제1장_旧.md"
+  : > "$blk/oe_zero/개요/상세개요_제001장.md"
+  printf '%s\n' '# 제1장 细纲' '## 目标情绪' '  ## 主角选择' '' > "$blk/oe_heading/개요/상세개요_제001장.md"
+  printf '\357\273\277# 제1장 细纲\r\n\r\n\343\200\200\343\200\200\t \r\n' > "$blk/oe_bomcrlf/개요/상세개요_제001장.md"
+  printf '%s\n' '# 제1장 细纲' "$body29" > "$blk/oe_29/개요/상세개요_제001장.md"
+  printf '%s\n' '# 제1장 细纲' "$body30" > "$blk/oe_30/개요/상세개요_제001장.md"
+  : > "$blk/oe_dup/개요/상세개요_제001장.md"
+  printf '%s\n' '# 제1장 细纲' "$body30" > "$blk/oe_dup/개요/상세개요_제1장_开端.md"
+  # 제목 줄에 내용이 있는 상세 개요(`## 核心事件：…`)를 제목뿐이라고 차단하면 안 된다.
+  printf '%s\n' '# 제1장' '## 核心事件：江晨雨夜推门发现失踪三年的师父坐在柜台后' '## 主角选择：留下' > "$blk/oe_headcontent/개요/상세개요_제001장.md"
+  # UTF-8이 아닌 상세 개요(이전 GBK 원고)는 bash 보호와 동일하게 비어 있지 않으면 허용한다.
+  python3 -c 'import sys;open(sys.argv[1],"wb").write("第二天他就回来了，大家都说他变了，只是没人问".encode("gbk")+b"\n")' "$blk/oe_gbk/개요/상세개요_제001장.md"
 
   python3 - "$CODEX" "$blk" > "$tmp/bpy.txt" <<'PY'
 import importlib.util, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("ch", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 root = Path(sys.argv[2])
-for rel in ["long/正文/第1章_起.md", "long/正文/第2章_承.md", "short/正文.md", "short2/正文.md", "long2/正文/第2章_新.md", "long3/正文/第2章_新.md", "long4/正文/第2章_新.md", "long5/正文/第2章_新.md", "long6/正文/第2章_新.md", "bare/正文/第1章_起.md", "$PROJ/正文/第001章_x.md", "$(pwd)/book/正文/第001章_y.md", "long7/正文/第2章_新.md", "long8/正文/第2章_新.md", "long9/正文/第2章_新.md", "oe_zero/正文/第001章_a.md", "oe_heading/正文/第001章_a.md", "oe_bomcrlf/正文/第001章_a.md", "oe_29/正文/第001章_a.md", "oe_30/正文/第001章_a.md", "oe_dup/正文/第001章_a.md", "oe_headcontent/正文/第001章_a.md", "oe_gbk/正文/第001章_a.md"]:
+for rel in ["long/본문/제1장_起.md", "long/본문/제2장_承.md", "short/본문.md", "short2/본문.md", "long2/본문/제2장_新.md", "long3/본문/제2장_新.md", "long4/본문/제2장_新.md", "long5/본문/제2장_新.md", "long6/본문/제2장_新.md", "bare/본문/제1장_起.md", "$PROJ/본문/제001장_x.md", "$(pwd)/book/본문/제001장_y.md", "long7/본문/제2장_新.md", "long8/본문/제2장_新.md", "long9/본문/제2장_新.md", "oe_zero/본문/제001장_a.md", "oe_heading/본문/제001장_a.md", "oe_bomcrlf/본문/제001장_a.md", "oe_29/본문/제001장_a.md", "oe_30/본문/제001장_a.md", "oe_dup/본문/제001장_a.md", "oe_headcontent/본문/제001장_a.md", "oe_gbk/본문/제001장_a.md"]:
     reason = m.prose_block_reason(root, root / rel)
     sys.stdout.buffer.write((f"{rel} :: {reason if reason else '-'}\n").encode("utf-8"))
 PY
@@ -654,7 +654,7 @@ PY
 const path = require("node:path")
 const core = require(process.argv[2])
 const root = process.argv[3]
-for (const rel of ["long/正文/第1章_起.md", "long/正文/第2章_承.md", "short/正文.md", "short2/正文.md", "long2/正文/第2章_新.md", "long3/正文/第2章_新.md", "long4/正文/第2章_新.md", "long5/正文/第2章_新.md", "long6/正文/第2章_新.md", "bare/正文/第1章_起.md", "$PROJ/正文/第001章_x.md", "$(pwd)/book/正文/第001章_y.md", "long7/正文/第2章_新.md", "long8/正文/第2章_新.md", "long9/正文/第2章_新.md", "oe_zero/正文/第001章_a.md", "oe_heading/正文/第001章_a.md", "oe_bomcrlf/正文/第001章_a.md", "oe_29/正文/第001章_a.md", "oe_30/正文/第001章_a.md", "oe_dup/正文/第001章_a.md", "oe_headcontent/正文/第001章_a.md", "oe_gbk/正文/第001章_a.md"]) {
+for (const rel of ["long/본문/제1장_起.md", "long/본문/제2장_承.md", "short/본문.md", "short2/본문.md", "long2/본문/제2장_新.md", "long3/본문/제2장_新.md", "long4/본문/제2장_新.md", "long5/본문/제2장_新.md", "long6/본문/제2장_新.md", "bare/본문/제1장_起.md", "$PROJ/본문/제001장_x.md", "$(pwd)/book/본문/제001장_y.md", "long7/본문/제2장_新.md", "long8/본문/제2장_新.md", "long9/본문/제2장_新.md", "oe_zero/본문/제001장_a.md", "oe_heading/본문/제001장_a.md", "oe_bomcrlf/본문/제001장_a.md", "oe_29/본문/제001장_a.md", "oe_30/본문/제001장_a.md", "oe_dup/본문/제001장_a.md", "oe_headcontent/본문/제001장_a.md", "oe_gbk/본문/제001장_a.md"]) {
   const reason = core.proseBlockReason(root, path.join(root, rel))
   console.log(`${rel} :: ${reason || "-"}`)
 }
@@ -664,51 +664,51 @@ JS
     diff "$tmp/bpy.txt" "$tmp/bjs.txt" >&2 || true
     return 3
   fi
-  grep -q '第1章_起.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 长篇缺细纲未被拦截" >&2; return 3; }
-  grep -q '第2章_承.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 长篇有细纲被误拦" >&2; return 3; }
-  grep -q 'short/正文.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 短篇缺小节大纲未被拦截" >&2; return 3; }
-  grep -q 'short2/正文.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 无设定信号的正文.md 被误拦" >&2; return 3; }
-  grep -q '毒句式欠账' "$tmp/bpy.txt" || { echo "FAIL: 上一章毒句式欠账未被欠账门拦截" >&2; return 3; }
-  grep -q 'long3/正文/第2章_新.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 标「去味:跳过」豁免的上一章仍被欠账门误拦" >&2; return 3; }
-  grep -q 'long4/正文/第2章_新.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 全角冒号豁免标记「去味：跳过」未被欠账门认可" >&2; return 3; }
-  grep -q 'long8/正文/第2章_新.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 注释内带空格的豁免标记 <!--  去味 : 跳过 --> 未被欠账门认可" >&2; return 3; }
-  grep -q 'long9/正文/第2章_新.md :: ⛔.*未清毒句式欠账' "$tmp/bpy.txt" || { echo "FAIL: 裸写的「去味:跳过」（不在 HTML 注释里）被欠账门当成豁免" >&2; return 3; }
-  grep -q 'long5/正文/第2章_新.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 上一章含坏字节时两端应替换解码继续扫（不得整体放行）" >&2; return 3; }
-  grep -q 'long6/正文/第2章_新.md :: ⛔.*必须先提交第1章追踪事务' "$tmp/bpy.txt" || { echo "FAIL: state 的 last_committed_chapter 落后正文时未拦住下一章" >&2; return 3; }
-  grep -q 'bare/正文/第1章_起.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 新书无 大纲/追踪/设定 脚手架时首章守卫 fail open" >&2; return 3; }
-  # 缺细纲文案给补零的规范文件名（细纲_第001章.md），不给 细纲_第1章.md 误导模型建错名。
-  grep -q 'long/正文/第1章_起.md :: ⛔.*细纲_第001章\.md' "$tmp/bpy.txt" || { echo "FAIL: 缺细纲文案未给补零的规范细纲文件名" >&2; return 3; }
-  # 目标含未展开的 shell 变量（cat > "$PROJ/正文/..."）：仍拦，但说路径没解析出来，不谎报缺细纲。
-  grep -q '\$PROJ/正文/第001章_x.md :: ⛔.*未展开的 shell 变量' "$tmp/bpy.txt" || { echo "FAIL: shell 变量目标未按「路径未解析」拦截" >&2; return 3; }
-  grep -q '\$PROJ/正文/第001章_x.md :: .*缺少细纲' "$tmp/bpy.txt" && { echo "FAIL: shell 变量目标被误报为缺少细纲" >&2; return 3; }
-  grep -q '\$(pwd)/book/正文/第001章_y.md :: ⛔.*未展开的 shell 变量' "$tmp/bpy.txt" || { echo "FAIL: \$(...) 命令替换目标未按「路径未解析」拦截" >&2; return 3; }
+  grep -q '제1장_起.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 长篇缺细纲未被拦截" >&2; return 3; }
+  grep -q '제2장_承.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 长篇有细纲被误拦" >&2; return 3; }
+  grep -q 'short/본문.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 短篇缺小节大纲未被拦截" >&2; return 3; }
+  grep -q 'short2/본문.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 无设定信号的正文.md 被误拦" >&2; return 3; }
+  grep -q '미수정 문제 문장' "$tmp/bpy.txt" || { echo "FAIL: 上一章미수정 문제 문장未被欠账门拦截" >&2; return 3; }
+  grep -q 'long3/본문/제2장_新.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 标「去味:跳过」豁免的上一章仍被欠账门误拦" >&2; return 3; }
+  grep -q 'long4/본문/제2장_新.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 全角冒号豁免标记「去味：跳过」未被欠账门认可" >&2; return 3; }
+  grep -q 'long8/본문/제2장_新.md :: -' "$tmp/bpy.txt" || { echo "FAIL: 注释内带空格的豁免标记 <!--  去味 : 跳过 --> 未被欠账门认可" >&2; return 3; }
+  grep -q 'long9/본문/제2장_新.md :: ⛔.*미수정 문제 문장' "$tmp/bpy.txt" || { echo "FAIL: 裸写的「去味:跳过」（不在 HTML 注释里）被欠账门当成豁免" >&2; return 3; }
+  grep -q 'long5/본문/제2장_新.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 上一章含坏字节时两端应替换解码继续扫（不得整体放行）" >&2; return 3; }
+  grep -q 'long6/본문/제2장_新.md :: ⛔.*먼저 제출할 추적 트랜잭션: 제1장' "$tmp/bpy.txt" || { echo "FAIL: state 的 last_committed_chapter 落后正文时未拦住下一章" >&2; return 3; }
+  grep -q 'bare/본문/제1장_起.md :: ⛔' "$tmp/bpy.txt" || { echo "FAIL: 新书无 개요/추적/설정 脚手架时首章守卫 fail open" >&2; return 3; }
+  # 상세 개요 누락 안내는 상세개요_제001장.md처럼 앞자리 0을 채운 표준 이름을 제시한다. 상세개요_제1장.md로 잘못 만들게 하면 안 된다.
+  grep -q 'long/본문/제1장_起.md :: ⛔.*상세개요_제001장\.md' "$tmp/bpy.txt" || { echo "FAIL: 缺细纲文案未给补零的规范细纲文件名" >&2; return 3; }
+  # 대상에 미확장 셸 변수(cat > "$PROJ/본문/...")가 있으면 차단하되 상세 개요 누락 아닌 경로 해석 실패로 안내한다.
+  grep -q '\$PROJ/본문/제001장_x.md :: ⛔.*치환되지 않은 셸 변수' "$tmp/bpy.txt" || { echo "FAIL: shell 变量目标未按「路径未解析」拦截" >&2; return 3; }
+  grep -q '\$PROJ/본문/제001장_x.md :: .*상세 개요가 없습니다' "$tmp/bpy.txt" && { echo "FAIL: shell 变量目标被误报为상세 개요가 없습니다" >&2; return 3; }
+  grep -q '\$(pwd)/book/본문/제001장_y.md :: ⛔.*치환되지 않은 셸 변수' "$tmp/bpy.txt" || { echo "FAIL: \$(...) 命令替换目标未按「路径未解析」拦截" >&2; return 3; }
   for want in oe_zero oe_heading oe_bomcrlf oe_29; do
-    grep -q "^$want/正文/第001章_a.md :: ⛔ 写正文被拦截：第 1 章的细纲（oe_[a-z0-9]*/大纲/细纲_第001章.md）是空的" "$tmp/bpy.txt" \
-      || { echo "FAIL: 空细纲场景 ${want} 未按「细纲是空的」拦截：$(grep "^$want/" "$tmp/bpy.txt")" >&2; return 3; }
+    grep -q "^$want/본문/제001장_a.md :: ⛔ 본문 쓰기 차단: 제1장의 상세 개요(oe_[a-z0-9]*/개요/상세개요_제001장.md)가 비어 있습니다" "$tmp/bpy.txt" \
+      || { echo "FAIL: 空细纲场景 ${want} 未按「细纲가 비어 있습니다」拦截：$(grep "^$want/" "$tmp/bpy.txt")" >&2; return 3; }
   done
-  # 欠账超过 6 处时的「另有 N 处」指引：长篇上一章指 storyctl chapter check 并带上一章章号（两端逐字同）。
-  grep -qF 'long7/正文/第2章_新.md :: ⛔' "$tmp/bpy.txt" \
-    && grep -qF '另有 2 处，完整检查：{PYTHON} <story-long-write>/scripts/storyctl.py chapter check --project <书目录> --chapter 1）' "$tmp/bpy.txt" \
+  # 미해결 6곳 초과 시 ‘추가 N곳’ 안내: 장편 이전 장은 장 번호를 포함한 storyctl chapter check로 연결한다(양쪽 문자별 동일).
+  grep -qF 'long7/본문/제2장_新.md :: ⛔' "$tmp/bpy.txt" \
+    && grep -qF '추가 2곳, 전체 검사: {PYTHON} <story-long-write>/scripts/storyctl.py chapter check --project <작품폴더> --chapter 1）' "$tmp/bpy.txt" \
     || { echo "FAIL: 欠账门「另有 N 处」未指向上一章的 chapter check：$(grep -A8 '^long7/' "$tmp/bpy.txt")" >&2; return 3; }
   for want in oe_30 oe_dup oe_headcontent oe_gbk; do
-    grep -q "^$want/正文/第001章_a.md :: -" "$tmp/bpy.txt" \
+    grep -q "^$want/본문/제001장_a.md :: -" "$tmp/bpy.txt" \
       || { echo "FAIL: 写了内容的细纲场景 ${want} 被误拦：$(grep "^$want/" "$tmp/bpy.txt")" >&2; return 3; }
   done
 
-  # E2b: 毒句式复扫指引 py↔js 逐字同，且方向锚死：长篇分章正文 → chapter check（带章号），
-  #      短篇 正文.md / 正文目录外的第N章 / 无路径 → check-ai-patterns.js。
+  # E2b: 유해 문형 재검사 안내 Python↔JS 문자별 일치와 방향 고정: 장편 분할 본문 → 장 번호를 포함한 chapter check,
+  #      단편 본문.md / 본문 디렉터리 밖의 제N장 / 경로 없음 → check-ai-patterns.js.
   python3 - "$CODEX" > "$tmp/rpy.txt" <<'PY'
 import importlib.util, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("ch", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-for rel in ["书/正文/第012章_夜路.md", "书/正文.md", "书/草稿/第3章.md", ""]:
+for rel in ["书/본문/제012장_夜路.md", "书/본문.md", "书/草稿/제3장.md", ""]:
     hint = m.toxic_rescan_hint(Path("/p") / rel if rel else None)
     sys.stdout.buffer.write(f"{rel or '-'} :: {hint}\n".encode("utf-8"))
 PY
   node - "$CLAUDE_CORE" > "$tmp/rjs.txt" <<'JS'
 const path = require("node:path")
 const core = require(process.argv[2])
-for (const rel of ["书/正文/第012章_夜路.md", "书/正文.md", "书/草稿/第3章.md", ""]) {
+for (const rel of ["书/본문/제012장_夜路.md", "书/본문.md", "书/草稿/제3장.md", ""]) {
   console.log(`${rel || "-"} :: ${core.toxicRescanHint(rel ? path.join("/p", rel) : "")}`)
 }
 JS
@@ -717,37 +717,37 @@ JS
     diff "$tmp/rpy.txt" "$tmp/rjs.txt" >&2 || true
     return 3
   fi
-  grep -qxF '书/正文/第012章_夜路.md :: 完整检查：{PYTHON} <story-long-write>/scripts/storyctl.py chapter check --project <书目录> --chapter 12' "$tmp/rpy.txt" \
+  grep -qxF '书/본문/제012장_夜路.md :: 전체 검사: {PYTHON} <story-long-write>/scripts/storyctl.py chapter check --project <작품폴더> --chapter 12' "$tmp/rpy.txt" \
     || { echo "FAIL: 长篇分章正文的复扫指引未指向 chapter check" >&2; return 3; }
-  for want in '书/正文.md' '书/草稿/第3章.md' '-'; do
-    grep -qxF -- "$want :: 完整扫描：node <skill>/scripts/check-ai-patterns.js --check <正文文件>" "$tmp/rpy.txt" \
+  for want in '书/본문.md' '书/草稿/제3장.md' '-'; do
+    grep -qxF -- "$want :: 전체 스캔: node <skill>/scripts/check-ai-patterns.js --check <본문파일>" "$tmp/rpy.txt" \
       || { echo "FAIL: 非长篇分章目标（${want}）的复扫指引应保持 check-ai-patterns.js" >&2; return 3; }
   done
 
-  # E3: 追踪状态判定 parity。覆盖缺失、坏 JSON、旧 schema、派生 revision 不一致、
-  #     缺修订号、缺章号、提交落后和有效 state 放行，避免 Codex Python 与三端 JS core 漂移。
+  # E3: 추적 상태 판정 동등성. 누락, 잘못된 JSON, 이전 스키마, 파생 revision 불일치,
+  #     리비전/장 번호 누락, 뒤처진 커밋, 유효 state 허용을 검사해 Codex Python과 세 환경 JS 코어의 불일치를 막는다.
   local cp="$tmp/checkpoints"
-  mkdir -p "$cp"/{missing,malformed,old,mismatch,norevision,nolast,behind,valid,revised}/追踪
+  mkdir -p "$cp"/{missing,malformed,old,mismatch,norevision,nolast,behind,valid,revised}/추적
   for name in malformed old mismatch norevision nolast behind valid revised; do
-    printf '%s\n' '> 状态修订：0' > "$cp/$name/追踪/上下文.md"
+    printf '%s\n' '> 状态修订：0' > "$cp/$name/추적/문맥.md"
   done
-  printf '%s\n' '{not-json' > "$cp/malformed/追踪/_tracking-state.json"
-  printf '%s\n' '{"schema_version":3,"state_revision":0,"last_committed_chapter":7}' > "$cp/old/追踪/_tracking-state.json"
-  printf '%s\n' '{"schema_version":4,"state_revision":1,"last_committed_chapter":7}' > "$cp/mismatch/追踪/_tracking-state.json"
-  printf '%s\n' '{"schema_version":4,"last_committed_chapter":7}' > "$cp/norevision/追踪/_tracking-state.json"
-  printf '%s\n' '{"schema_version":4,"state_revision":0}' > "$cp/nolast/追踪/_tracking-state.json"
-  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":6}' > "$cp/behind/追踪/_tracking-state.json"
-  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":7}' > "$cp/valid/追踪/_tracking-state.json"
-  # 回炉/改名/留原稿备份：章号已在追踪范围内（expected 7 < last 9），文件名是新的但该章早已提交，
-  # 顺序校验对它恒为假，必须放行——否则 workflow-revision 的「备份原稿」步骤在三端被硬拦。
-  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":9}' > "$cp/revised/追踪/_tracking-state.json"
+  printf '%s\n' '{not-json' > "$cp/malformed/추적/_tracking-state.json"
+  printf '%s\n' '{"schema_version":3,"state_revision":0,"last_committed_chapter":7}' > "$cp/old/추적/_tracking-state.json"
+  printf '%s\n' '{"schema_version":4,"state_revision":1,"last_committed_chapter":7}' > "$cp/mismatch/추적/_tracking-state.json"
+  printf '%s\n' '{"schema_version":4,"last_committed_chapter":7}' > "$cp/norevision/추적/_tracking-state.json"
+  printf '%s\n' '{"schema_version":4,"state_revision":0}' > "$cp/nolast/추적/_tracking-state.json"
+  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":6}' > "$cp/behind/추적/_tracking-state.json"
+  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":7}' > "$cp/valid/추적/_tracking-state.json"
+  # 재작업/이름 변경/원고 백업: 장 번호가 추적 범위 안(expected 7 < last 9)이면 새 파일명이어도 이미 커밋한 장이므로
+  # 순서 위반이 아니며 허용해야 한다. 그렇지 않으면 workflow-revision의 원고 백업 단계가 세 환경에서 차단된다.
+  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":9}' > "$cp/revised/추적/_tracking-state.json"
   python3 - "$CODEX" "$cp" > "$tmp/cpy.txt" <<'PY'
 import importlib.util, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("ch", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 root = Path(sys.argv[2])
-# 同 B/C 段：Windows runner 上 python<3.15 的文本 stdout 是 cp1252，
-# 含中文的 issue 直接 print 会 UnicodeEncodeError，必须走 stdout.buffer 直写 UTF-8。
+# B/C부와 같이 Windows의 Python<3.15 텍스트 stdout은 cp1252여서
+# 중국어 issue를 직접 print하면 UnicodeEncodeError가 나므로 stdout.buffer로 UTF-8을 직접 써야 한다.
 for name, expected in [("missing", None), ("malformed", None), ("old", None), ("mismatch", None), ("norevision", None), ("nolast", 7), ("behind", 7), ("valid", 7), ("revised", 7)]:
     issue = m.tracking_checkpoint_issue(root / name, require_state=True, expected_last_committed=expected)
     sys.stdout.buffer.write((f"{name} :: {issue or '-'}" + "\n").encode("utf-8"))
@@ -766,22 +766,22 @@ JS
     diff "$tmp/cpy.txt" "$tmp/cjs.txt" >&2 || true
     return 3
   fi
-  grep -q 'missing :: .*_tracking-state.json 缺失' "$tmp/cpy.txt" || { echo "FAIL: 缺失 state 未 fail closed" >&2; return 3; }
-  grep -q 'malformed :: .*无法解析' "$tmp/cpy.txt" || { echo "FAIL: 坏 JSON 未 fail closed" >&2; return 3; }
+  grep -q 'missing :: .*_tracking-state.json이 없습니다' "$tmp/cpy.txt" || { echo "FAIL: 缺失 state 未 fail closed" >&2; return 3; }
+  grep -q 'malformed :: .*해석할 수 없습니다' "$tmp/cpy.txt" || { echo "FAIL: 坏 JSON 未 fail closed" >&2; return 3; }
   grep -q 'old :: .*schema_version=4' "$tmp/cpy.txt" || { echo "FAIL: 旧 schema 未 fail closed" >&2; return 3; }
-  grep -q 'mismatch :: .*状态修订.*mode=revision 事务重建派生视图' "$tmp/cpy.txt" || { echo "FAIL: 派生 revision 不一致未给 mode=revision 重建动作" >&2; return 3; }
-  grep -q 'norevision :: .*缺少整数 state_revision' "$tmp/cpy.txt" || { echo "FAIL: 缺 state_revision 未 fail closed" >&2; return 3; }
-  grep -q 'nolast :: .*缺少整数 last_committed_chapter' "$tmp/cpy.txt" || { echo "FAIL: 缺 last_committed 未 fail closed" >&2; return 3; }
-  grep -q 'behind :: .*必须先提交第7章追踪事务' "$tmp/cpy.txt" || { echo "FAIL: 落后章号未 fail closed" >&2; return 3; }
+  grep -q 'mismatch :: .*상태 리비전.*mode=revision 트랜잭션을 다시 제출해 파생 문서를 재구성' "$tmp/cpy.txt" || { echo "FAIL: 派生 revision 不一致未给 mode=revision 重建动作" >&2; return 3; }
+  grep -q 'norevision :: .*정수 state_revision이 없습니다' "$tmp/cpy.txt" || { echo "FAIL: 缺 state_revision 未 fail closed" >&2; return 3; }
+  grep -q 'nolast :: .*정수 last_committed_chapter가 없습니다' "$tmp/cpy.txt" || { echo "FAIL: 缺 last_committed 未 fail closed" >&2; return 3; }
+  grep -q 'behind :: .*먼저 제출할 추적 트랜잭션: 제7장' "$tmp/cpy.txt" || { echo "FAIL: 落后章号未 fail closed" >&2; return 3; }
   grep -q 'valid :: -' "$tmp/cpy.txt" || { echo "FAIL: 有效 state 被误拦" >&2; return 3; }
   grep -q 'revised :: -' "$tmp/cpy.txt" || { echo "FAIL: 回炉/备份已提交章号被误拦（workflow-revision 备份原稿会卡死）" >&2; return 3; }
 
-  # E4: 续写状态卡超预算在 Python/JS 两端都告警，且不得依赖 mtime 偶然触发。
+  # E4: 이어쓰기 상태 카드 예산 초과는 Python/JS 모두 경고하고 mtime에 우연히 의존하면 안 된다.
   local hot="$tmp/hot-context"
-  mkdir -p "$hot/book/正文" "$hot/book/追踪"
-  printf '%s\n' '# 第1章 开端' '正文。' > "$hot/book/正文/第001章_开端.md"
-  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":1}' > "$hot/book/追踪/_tracking-state.json"
-  python3 - "$hot/book/追踪/上下文.md" <<'PY'
+  mkdir -p "$hot/book/본문" "$hot/book/추적"
+  printf '%s\n' '# 제1장 开端' '正文。' > "$hot/book/본문/제001장_开端.md"
+  printf '%s\n' '{"schema_version":4,"state_revision":0,"last_committed_chapter":1}' > "$hot/book/추적/_tracking-state.json"
+  python3 - "$hot/book/추적/문맥.md" <<'PY'
 from pathlib import Path
 import sys
 Path(sys.argv[1]).write_bytes(("> 状态修订：0\n" + "状态" * 7000).encode("utf-8"))
@@ -790,7 +790,7 @@ PY
 import importlib.util, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("ch", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-# findings 运行期含中文；Windows 文本 stdout 是 cp1252，必须走 buffer 直写 UTF-8。
+# 실행 중 findings에 중국어가 있다. Windows 텍스트 stdout은 cp1252이므로 buffer로 UTF-8을 직접 쓴다.
 for finding in m.continuity_findings(Path(sys.argv[2])):
     sys.stdout.buffer.write((finding + "\n").encode("utf-8"))
 PY
@@ -803,7 +803,7 @@ JS
     diff "$tmp/hpy.txt" "$tmp/hjs.txt" >&2 || true
     return 3
   fi
-  grep -q '超出续写状态卡预算 12288 字节' "$tmp/hpy.txt" || { echo "FAIL: 热上下文超预算未告警" >&2; return 3; }
+  grep -q '이어 쓰기 상태 카드의 12288바이트 한도를 초과했습니다' "$tmp/hpy.txt" || { echo "FAIL: 热上下文超预算未告警" >&2; return 3; }
   return 0
 }
 
@@ -826,26 +826,26 @@ case "$rc_cmd" in
   *) fails=$((fails + 1)) ;;
 esac
 
-# D. Claude bash 写正文守卫 ↔ JS core proseBlockReason 行为 parity（CI 硬保证）。
-# 大纲/细纲阻断必须在无 node 的运行时也拦得住，所以 guard-outline-before-prose.sh 用纯 bash
-# 判定；追踪检查点要解析 JSON，只能经 story_hook_cli.js 调共享核。两条路径混在一个 BLOCKING
-# 守卫里，此前无任何跨端断言覆盖 bash 那一面——#283 给另三端加了追踪门，Claude 侧静默漏了
-# 一整版（issue #305）。这里按「同一工程同一次写入，bash 拦不拦 == JS 核拦不拦」逐场景比对，
-# 任一端单边改动都会红。
+# D. Claude bash 본문 쓰기 보호 ↔ JS 코어 proseBlockReason 동작 동등성(CI 필수 보장).
+# 개요/상세 개요 차단은 node 없는 런타임에서도 작동해야 하므로 guard-outline-before-prose.sh가 순수 bash로
+# 판정한다. 추적 점검은 JSON 파싱이 필요해 story_hook_cli.js로 공유 코어를 호출한다. 한 차단 훅에 두 경로가
+# 섞여 있었지만 bash 쪽 환경 간 단언이 없어 #283이 다른 세 환경에 추적 조건을 넣을 때 Claude는 한 버전 내내
+# 조용히 누락됐다(이슈 #305). 같은 프로젝트의 같은 쓰기에 bash 차단 여부 == JS 코어 차단 여부를 시나리오별 비교해
+# 어느 한쪽만 바뀌어도 실패하게 한다.
 run_bash_guard_parity() {
   command -v node >/dev/null 2>&1 || return 1
   command -v python3 >/dev/null 2>&1 || return 1
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
 
   # scenario|last_committed|ctx_revision|schema|outline_ch|target_ch|target_exists|拆文库|state|prev[|outline_kind]
-  # state=none 时 last/ctx/schema 无意义。target_exists=1 走续写路径（不判细纲，仍判追踪）。
-  # outline_kind 缺省 filled（旧书式自由文本 ≥30 字）；empty=0 字节、heading=只有标题、
-  # short29=差 1 字、exact30=恰好 30 字、bomcrlf=BOM+CRLF+全角空格的空壳、dup=一空一满两份。
-  # whitelist 场景：上一章的毒句式登记在书级 .deslop-whitelist 里（Claude 经 prose-toxic 子命令，
-  # 须与 JS 核一样读白名单，否则 bash 单边误拦）。
-  # prev = 上一章（第001章_旧.md）内容，走欠账门：toxic 有毒句式无豁免、marker 首 6 行内标
-  # <!-- 去味:跳过 -->、fullwidth 全角冒号 去味：跳过（两端正则都认 ：|:）、marker7 标记落在第 7 行
-  # （出了豁免窗口，照拦）；- 不建上一章。
+  # state=none이면 last/ctx/schema는 무의미하다. target_exists=1은 이어쓰기 경로(상세 개요 제외, 추적은 검사).
+  # outline_kind 기본은 filled(기존 자유 형식 30자 이상). empty=0바이트, heading=제목만,
+  # short29=1자 부족, exact30=정확히 30자, bomcrlf=BOM+CRLF+전각 공백의 빈 껍데기, dup=빈 것과 채운 것 두 개.
+  # whitelist 사례: 이전 장 유해 문형이 책별 .deslop-whitelist에 등록됨. Claude의 prose-toxic 하위 명령도
+  # JS 코어처럼 허용 목록을 읽어야 bash만 오차단하지 않는다.
+  # prev = 이전 장(제001장_旧.md) 내용으로 미해결 검사를 거친다. toxic=유해 문형 있고 제외 없음, marker=첫 6줄에
+  # <!-- 去味:跳过 --> 표시, fullwidth=전각 콜론 去味：跳过(양쪽 정규식 모두 ：|: 인식), marker7=마커가 7행에 있음
+  # (제외 범위를 벗어나므로 차단). -=이전 장을 만들지 않음.
   local scenarios="
 nostate|-|-|-|1|1|0|0|none|-
 nooutline|-|-|-|-|1|0|0|none|-
@@ -881,11 +881,11 @@ outline_empty_existing|1|0|4|1|1|1|0|yes|-|empty
   while IFS='|' read -r name last ctx schema outline target exists lib state prev okind; do
     [ -n "${name:-}" ] || continue
     local proj="$tmp/$name" book="$tmp/$name/书"
-    mkdir -p "$book/大纲" "$book/正文" "$book/追踪"
-    [ "$lib" = "1" ] && mkdir -p "$proj/拆文库/书"
+    mkdir -p "$book/개요" "$book/본문" "$book/추적"
+    [ "$lib" = "1" ] && mkdir -p "$proj/작품분석실/书"
     if [ "$outline" != "-" ]; then
-      local ofile="$book/大纲/细纲_第00${outline}章.md"
-      # 标题文字也算内容：`# 细纲` 计 2 字，正文 28 字凑成恰好 30。
+      local ofile="$book/개요/상세개요_제00${outline}장.md"
+      # 제목도 내용에 포함한다. `# 细纲` 2자 + 본문 28자로 정확히 30자를 만든다.
       local o30='他推门进屋看见师父坐在柜台后面他推门进屋看见师父坐在柜台'
       case "${okind:-filled}" in
         filled) printf '%s\n' '# 细纲' '江晨在雨夜推开旧书店的门，发现柜台后坐着失踪三年的师父，两人对视良久。' > "$ofile" ;;
@@ -894,32 +894,32 @@ outline_empty_existing|1|0|4|1|1|1|0|yes|-|empty
         short29) printf '%s\n' '# 细纲' "${o30%台}" > "$ofile" ;;
         exact30) printf '%s\n' '# 细纲' "$o30" > "$ofile" ;;
         bomcrlf) printf '\357\273\277# 细纲\r\n\343\200\200\r\n\t\r\n' > "$ofile" ;;
-        dup) : > "$ofile"; printf '%s\n' '# 细纲' "$o30" > "$book/大纲/细纲_第${outline}章_标题.md" ;;
+        dup) : > "$ofile"; printf '%s\n' '# 细纲' "$o30" > "$book/개요/상세개요_제${outline}장_标题.md" ;;
         headcontent) printf '%s\n' '# 第1章' '## 核心事件：江晨雨夜推门发现失踪三年的师父坐在柜台后' '## 主角选择：留下' > "$ofile" ;;
-        # 22 字 GBK 细纲：不是合法 UTF-8，各端解码计数口径不同（bash 按字节计 27 会拦、JS/py 按替换符计 35 会放），统一按非空放行。
+        # 22자 GBK 상세 개요는 유효 UTF-8이 아니어서 계산이 다르다(bash 바이트 계산 27로 차단, JS/Python 대체 문자 계산 35로 허용). 비어 있지 않으면 허용으로 통일한다.
         gbk) python3 -c 'import sys;open(sys.argv[1],"wb").write("第二天他就回来了，大家都说他变了，只是没人问".encode("gbk")+b"\n")' "$ofile" ;;
       esac
     fi
     local toxic='声音不大，却带着一股狠劲。'
     case "$prev" in
-      toxic) printf '%s\n' '# 第1章 旧' "$toxic" > "$book/正文/第001章_旧.md" ;;
-      marker) printf '%s\n' '# 第1章 旧' '<!-- 去味:跳过 -->' "$toxic" > "$book/正文/第001章_旧.md" ;;
-      fullwidth) printf '%s\n' '# 第1章 旧' '<!-- 去味：跳过 -->' "$toxic" > "$book/正文/第001章_旧.md" ;;
-      marker7) printf '%s\n' '# 第1章 旧' '他推门。' '她抬头。' '灯亮了。' '雨停了。' '风起了。' '<!-- 去味:跳过 -->' "$toxic" > "$book/正文/第001章_旧.md" ;;
-      spaced) printf '%s\n' '# 第1章 旧' '<!--去味 ：	跳过 -->' "$toxic" > "$book/正文/第001章_旧.md" ;;
-      bare) printf '%s\n' '# 第1章 旧' '去味:跳过' "$toxic" > "$book/正文/第001章_旧.md" ;;
-      whitelist) printf '%s\n' '# 第1章 旧' "$toxic" > "$book/正文/第001章_旧.md"
+      toxic) printf '%s\n' '# 제1장 旧' "$toxic" > "$book/본문/제001장_旧.md" ;;
+      marker) printf '%s\n' '# 제1장 旧' '<!-- 去味:跳过 -->' "$toxic" > "$book/본문/제001장_旧.md" ;;
+      fullwidth) printf '%s\n' '# 제1장 旧' '<!-- 去味：跳过 -->' "$toxic" > "$book/본문/제001장_旧.md" ;;
+      marker7) printf '%s\n' '# 제1장 旧' '他推门。' '她抬头。' '灯亮了。' '雨停了。' '风起了。' '<!-- 去味:跳过 -->' "$toxic" > "$book/본문/제001장_旧.md" ;;
+      spaced) printf '%s\n' '# 제1장 旧' '<!--去味 ：	跳过 -->' "$toxic" > "$book/본문/제001장_旧.md" ;;
+      bare) printf '%s\n' '# 제1장 旧' '去味:跳过' "$toxic" > "$book/본문/제001장_旧.md" ;;
+      whitelist) printf '%s\n' '# 제1장 旧' "$toxic" > "$book/본문/제001장_旧.md"
         printf '%s\n' '# 作者保留的原句' "${toxic%。}" > "$book/.deslop-whitelist" ;;
     esac
     if [ "$state" = "yes" ]; then
       printf '{"schema_version":%s,"state_revision":0,"last_committed_chapter":%s}\n' "$schema" "$last" \
-        > "$book/追踪/_tracking-state.json"
-      printf '> 状态修订：%s。\n' "$ctx" > "$book/追踪/上下文.md"
+        > "$book/추적/_tracking-state.json"
+      printf '> 状态修订：%s。\n' "$ctx" > "$book/추적/문맥.md"
     fi
-    local abs="$book/正文/第00${target}章_测试.md"
+    local abs="$book/본문/제00${target}장_测试.md"
     [ "$exists" = "1" ] && printf '# 第%s章 测试\n正文。\n' "$target" > "$abs"
 
-    # bash 侧：exit 2 = 拦，0 = 放行
+    # bash 측: exit 2 = 차단, 0 = 허용
     local payload code
     payload=$(python3 -c 'import json,sys;print(json.dumps({"tool_input":{"file_path":sys.argv[1]}}))' "$abs")
     ( cd "$proj" && CLAUDE_PROJECT_DIR="$proj" CLAUDE_TOOL_INPUT="$payload" bash "$CLAUDE_GUARD" ) >/dev/null 2>"$tmp/$name.bash.err"
@@ -927,7 +927,7 @@ outline_empty_existing|1|0|4|1|1|1|0|yes|-|empty
     if [ "$code" = 2 ]; then printf '%s :: block\n' "$name" >> "$out_bash"
     else printf '%s :: pass\n' "$name" >> "$out_bash"; fi
 
-    # JS 核侧（拦截文案另存，供欠账门场景核对两端给出同一条修法）
+    # JS 코어 측(차단 문구를 별도 저장해 미해결 조건 사례에서 같은 수정 안내인지 확인)
     node - "$CLAUDE_CORE" "$proj" "$abs" "$name" "$tmp/$name.js.err" >> "$out_js" <<'JS'
 const core = require(process.argv[2])
 const reason = core.proseBlockReason(process.argv[3], process.argv[4])
@@ -941,7 +941,7 @@ JS
     diff "$out_bash" "$out_js" >&2 || true
     return 3
   fi
-  # 光对齐还不够：两端一起漏拦也会 diff 干净。锚死每个场景的期望方向。
+  # 일치만으로 부족하다. 양쪽이 함께 차단을 놓쳐도 diff가 같으므로 각 시나리오 기대 방향을 고정한다.
   local expect="nostate block
 nooutline block
 importwindow pass
@@ -975,34 +975,34 @@ outline_empty_existing pass"
       return 3
     }
   done <<< "$expect"
-  # 空细纲拦下时两端都得说清是哪章细纲空了（只比对文件名：Windows 上 bash 给的是绝对路径）。
+  # 빈 상세 개요를 차단할 때 양쪽 모두 어느 장인지 설명해야 한다(Windows bash는 절대 경로이므로 파일명만 비교).
   local side
   for name in outline_empty outline_heading outline_short29 outline_bomcrlf; do
     for side in bash js; do
-      grep -q '细纲_第001章.md）是空的' "$tmp/$name.$side.err" || {
-        echo "FAIL: 场景 $name 的 $side 拦截文案未说明细纲是空的：$(cat "$tmp/$name.$side.err")" >&2
+      grep -q '상세개요_제001장.md)가 비어 있습니다' "$tmp/$name.$side.err" || {
+        echo "FAIL: 场景 $name 的 $side 拦截文案未说明细纲是비어 있습니다：$(cat "$tmp/$name.$side.err")" >&2
         return 3
       }
     done
   done
   for name in debt debt_marker7; do
     for side in bash js; do
-      grep -q '未清毒句式欠账' "$tmp/$name.$side.err" && grep -qF '<!-- 去味:跳过 --> 后重试' "$tmp/$name.$side.err" || {
+      grep -q '미수정 문제 문장' "$tmp/$name.$side.err" && grep -qF '<!-- 去味:跳过 -->를 추가하고 다시 시도' "$tmp/$name.$side.err" || {
         echo "FAIL: 场景 $name 的 $side 拦截文案未指明上一章欠账与豁免标记写法：$(cat "$tmp/$name.$side.err")" >&2
         return 3
       }
     done
   done
 
-  # node 缺席时追踪门必须 fail-open（大纲门仍靠纯 bash 拦住）。
+  # node가 없으면 추적 조건은 허용해야 한다(개요 조건은 순수 bash로 계속 차단).
   local nonode="$tmp/nonode"; mkdir -p "$nonode"
-  local proj="$tmp/nostate" abs="$tmp/nostate/书/正文/第001章_测试.md"
+  local proj="$tmp/nostate" abs="$tmp/nostate/书/본문/제001장_测试.md"
   local payload; payload=$(python3 -c 'import json,sys;print(json.dumps({"tool_input":{"file_path":sys.argv[1]}}))' "$abs")
   ( cd "$proj" && PATH="$nonode:/usr/bin:/bin" CLAUDE_PROJECT_DIR="$proj" CLAUDE_TOOL_INPUT="$payload" \
       bash "$CLAUDE_GUARD" ) >/dev/null 2>&1
   [ $? -eq 0 ] || { echo "FAIL: node 缺席时追踪门未 fail-open（BLOCKING 路径不得依赖 node 在场）" >&2; return 3; }
-  # 空细纲门是纯 bash：node 缺席时照样拦（负载按 Claude 实际发送的原始 UTF-8，纯 bash 抽取不解 \u 转义）。
-  proj="$tmp/outline_empty"; abs="$tmp/outline_empty/书/正文/第001章_测试.md"
+  # 빈 상세 개요 검사는 순수 bash이므로 node 없이도 차단한다(Claude 실제 원본 UTF-8 입력 사용, bash 추출은 \u 이스케이프를 해석하지 않음).
+  proj="$tmp/outline_empty"; abs="$tmp/outline_empty/书/본문/제001장_测试.md"
   payload=$(python3 -c 'import json,sys;sys.stdout.buffer.write(json.dumps({"tool_input":{"file_path":sys.argv[1]}},ensure_ascii=False).encode("utf-8"))' "$abs")
   ( cd "$proj" && PATH="$nonode:/usr/bin:/bin" CLAUDE_PROJECT_DIR="$proj" CLAUDE_TOOL_INPUT="$payload" \
       bash "$CLAUDE_GUARD" ) >/dev/null 2>&1

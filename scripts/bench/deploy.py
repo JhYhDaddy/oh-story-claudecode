@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""把某个版本的 skill 包确定性地部署进一个书项目，供基准会话使用。
+"""특정 버전의 스킬 묶음을 책 프로젝트에 결정론적으로 배포해 기준 세션에서 사용한다.
 
-与 story-setup 的部署清单同构（Claude Code / Codex 两端），但不经过模型：
-同一版本、同一 fixture 每次部署出来的字节相同，版本间对比才有意义。
+story-setup의 배포 목록과 같은 구조(Claude Code / Codex 양쪽)이지만 모델을 거치지 않는다.
+같은 버전과 같은 fixture는 매번 같은 바이트로 배포되어야 버전 간 비교가 의미를 갖는다.
 
-用法：
-  deploy.py export --ref v0.7.11 --out <pkg目录>        # 从 git 导出一份包
+사용법:
+  deploy.py export --ref v0.7.11 --out <pkg目录>        # Git에서 묶음 하나 내보내기
   deploy.py deploy --pkg <pkg目录> --host claude-code --proj <项目目录>
 """
 import argparse
@@ -49,7 +49,7 @@ def render(tmpl, proj):
 
 
 def instructions(pkg, host, tmpl, path, proj):
-    """项目指令文件：包里有管理块合并脚本就照 story-setup 合并（多端共用一份文件），旧包按原样渲染。"""
+    """프로젝트 지침 파일: 관리 블록 병합 스크립트가 있으면 story-setup처럼 병합한다(여러 호스트가 공유). 이전 패키지는 그대로 렌더링한다."""
     merger = pkg / 'skills/story-setup/scripts/merge-project-instructions.py'
     if not merger.is_file():
         path.write_text(render(tmpl, proj), encoding='utf-8')
@@ -60,7 +60,7 @@ def instructions(pkg, host, tmpl, path, proj):
 
 
 def sentinel(proj, contract, target, refs_dir):
-    """多端部署进同一项目时 target_cli 逗号合并，references_dir 保留先部署的那端。"""
+    """여러 호스트를 같은 프로젝트에 배포하면 target_cli는 쉼표로 합치고 references_dir은 먼저 배포한 호스트 값을 유지한다."""
     path = proj / '.story-deployed'
     old = {}
     if path.is_file():

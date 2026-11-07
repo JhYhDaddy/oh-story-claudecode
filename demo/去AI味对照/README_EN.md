@@ -1,23 +1,27 @@
-# De-AI comparison — the deterministic checks in `/story-deslop`
+# AI 문체 제거 비교 — `/story-deslop`의 결정적 검사
 
-[中文](README.md)
+[기존 중국어판의 한국어 번역](README.md)
 
-The local check in `story-deslop` is a **writing lint**: it matches known AI sentence templates one by one and returns
-the line, the matched span and a rewrite direction. Blocking findings stop the write; advisory findings go to human judgement.
+`story-deslop`의 로컬 검사는 **집필 린트**입니다. 알려진 AI 문장 패턴을 하나씩 대조해 행 번호, 검출된 구간, 수정 방향을 알려 줍니다.
+blocking 항목은 차단하고 advisory 항목은 사람이 판단합니다.
 
-| File | What it is |
+이 디렉터리의 파일 세 개는 다음과 같습니다. 원본 검사 입력은 유지하며, [한국어 비교 본문](../ko/files/去AI味对照/改前.md)은 별도 경로에 제공합니다.
+
+| 파일 | 설명 |
 |---|---|
-| [`改前.md`](改前.md) | A **hand-constructed** AI-flavored sample, written to show what the checker catches. Not skill output. |
-| [`改后.md`](改后.md) | The same scene (first time at the piano in the rehearsal room), verbatim from [`第021章_离别怎么会开花`](../长篇/让你管账号，你高燃混剪炸全网/正文/第021章_离别怎么会开花.md) — written by `/story-long-write` in one real session. |
-| This file | The full output of both real scans. |
+| [`改前.md`](改前.md) | 검사기가 무엇을 잡아내는지 보여 주려고 **직접 만든** AI 문체 예시입니다. 스킬 출력이 아닙니다. |
+| [`改后.md`](改后.md) | 같은 장면(연습실에서 처음 피아노를 연주하는 장면)의 본문 원문입니다. `/story-long-write`가 실제 세션 한 번에서 쓴 [`第021章_离别怎么会开花`](../长篇/让你管账号，你高燃混剪炸全网/正文/第021章_离别怎么会开花.md)에서 가져왔습니다. |
+| 이 파일 | 실제 스캔 두 번의 전체 출력입니다. |
 
-Reproduce with:
+재현 명령:
 
 ```bash
 node skills/story-deslop/scripts/check-ai-patterns.js --check --fail-on=blocking demo/去AI味对照/改前.md
 ```
 
-## Scanning `改前.md`: 8 findings (7 blocking / 1 advisory), exit 1
+## `改前.md` 검사: 8건 검출(7 blocking / 1 advisory), exit 1
+
+아래는 실제 실행 출력이므로 원문을 보존합니다. 검출 이유는 상투어 밀도, 대시 사용, 부정으로 시작하는 대비, 부정형 나열, 음량 대비, 다음 장을 예고하는 마무리입니다.
 
 ```
 改前.md:3:1: [advisory] cliche-density-tic: 套词密度过高：高危 AI 套词 8 处（24.9/千字）；不要同义词轮换，改成角色当下可见的动作、物件、对话和具体后果。 (仿佛 一丝 深吸一口气 缓缓 微微)
@@ -30,22 +34,22 @@ node skills/story-deslop/scripts/check-ai-patterns.js --check --fail-on=blocking
 改前.md:25:1: [blocking] trailer-ending: 预告式总结收尾：「没人知道/才刚刚开始/正朝着…压了过去」是 AI 章尾预告腔；结尾停在具体动作、画面或一句台词上，悬念让事件自己挂住，别替读者预告下一章。 (没人知道)
 ```
 
-Rule distribution: `not-is-comparison` ×2 · `trailer-ending` ×2 · `cliche-density-tic` · `em-dash` · `negation-parade` · `voice-contrast`
+검출 규칙 분포:`not-is-comparison` ×2 · `trailer-ending` ×2 · `cliche-density-tic` · `em-dash` · `negation-parade` · `voice-contrast`
 
-## Scanning `改后.md`: zero findings, exit 0
+## `改后.md` 검사: 검출 0건, exit 0
 
 ```
-(no output)
+(출력 없음)
 ```
 
-## The two passages
+## 두 구간 비교(한국어 번역)
 
-| 改前 (blocked) | 改后 (shipped prose) |
+| 수정 전(차단된 표현) | 수정 후(본문 원문의 번역) |
 |---|---|
-| 这一刻，他终于明白了什么叫做命运的安排——不是巧合，而是一种冥冥之中的注定。 | 指尖刚一碰下去，手指就自己走了起来，跑在了脑子前头。<br>一串音落下去，他才后知后觉。<br>这是《离别开出花》的调子。 |
-| 键盘手的喉结滚动了一下，手中的搪瓷杯微微颤抖。<br>身后的战友们目光渐渐变了，那些原本准备好的调侃，仿佛被一只无形的手扼住了咽喉。 | 是乐队键盘手，手里端着一只搪瓷杯，人愣在原地，杯子里的水洒出来一点也没察觉。<br>他身后跟着两个战友，一个张着嘴，半天没找回自己的声音，另一个手快，已经掏出手机对着门里录了起来。 |
-| 而这一切，才刚刚开始。<br>没人知道，这段旋律将在十四天后，掀起怎样的惊涛骇浪。 | 键盘手回过神，声音都拔高了半分：“江导什么时候学的钢琴？这手上的功夫，没十年童子功压根摸不着边！”<br>江晨没接话，心里却乐了。<br>十年童子功，他今天上午刚拿到手。 |
+| 그 순간 그는 운명의 안배가 무엇인지 마침내 깨달았다. 우연이 아니라 보이지 않는 곳에서 이미 정해진 필연이었다. | 손끝이 닿자마자 손가락이 저절로 움직여 머리보다 앞서 나갔다.<br>음이 한 줄기 흘러나온 뒤에야 그는 뒤늦게 알아차렸다.<br>《이별이 꽃을 피우다》의 선율이었다. |
+| 키보디스트의 목울대가 한 번 움직였고 손에 든 법랑 컵이 미세하게 떨렸다.<br>뒤에 선 전우들의 눈빛도 서서히 달라졌다. 준비해 둔 농담은 보이지 않는 손이 목을 조르기라도 한 듯 나오지 않았다. | 밴드의 키보디스트였다. 법랑 컵을 들고 그 자리에 굳어 서서는 물이 조금 쏟아진 것도 몰랐다.<br>뒤에는 전우 둘이 따라왔다. 한 명은 입을 벌린 채 한참 말을 잇지 못했고, 손이 빠른 다른 한 명은 벌써 휴대전화를 꺼내 문 안쪽을 찍고 있었다. |
+| 그리고 이 모든 것은 이제 시작일 뿐이었다.<br>이 선율이 열나흘 뒤 얼마나 거센 파란을 일으킬지 아무도 알지 못했다. | 키보디스트가 정신을 차리더니 목소리가 조금 높아졌다. “장 감독, 피아노는 언제 배웠어요? 이 솜씨는 어려서부터 십 년은 익혀야 겨우 흉내라도 내겠는데요!”<br>장천은 대꾸하지 않았지만 속으로는 웃었다.<br>어려서부터 십 년 익힌 솜씨라니. 오늘 오전에 막 얻은 능력이었다. |
 
-Both passages tell the same beat. The first tells the reader what to feel; the second hands it to visible action and objects.
+두 구간은 같은 일을 서술합니다. 수정 전에는 추상적인 판단으로 독자가 느낄 바를 대신 규정하고, 수정 후에는 눈에 보이는 행동과 사물이 그 일을 전달합니다.
 
-> The checker only handles deterministic sentence and punctuation patterns; how a passage reads is still a human call.
+> 검사기는 확정적으로 판단할 수 있는 문장 패턴과 문장부호 문제만 다룹니다. 읽는 느낌은 여전히 사람이 판단해야 합니다.

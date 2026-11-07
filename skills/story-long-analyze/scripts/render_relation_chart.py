@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""Render the character-relationship charts from 角色/角色关系.md.
-
-The Markdown file ``人物关系图/人物关系图.md`` (Mermaid graphs plus a plain
-list) is always written: it shows Chinese names in any Markdown viewer. PNG
-pictures are optional (``--png``) and are drawn only when matplotlib and a font
-that really contains every drawn character are available. Emoji and other
-symbols are left out of the pictures; without a font for the remaining text no
-PNG is written, so names are never replaced by pinyin, initials or empty boxes.
+"""인물/인물관계.md에서 인물 관계도를 렌더링한다.
+``인물관계도/인물관계도.md``(Mermaid 그래프와 일반 목록)는 항상 저장해 Markdown 뷰어에서 중국어 이름을 표시한다.
+PNG는 선택 사항(``--png``)이며 matplotlib과 모든 표시 문자를 실제 지원하는 글꼴이 있을 때만 생성한다.
+그림에서는 이모지·기타 기호를 뺀다. 나머지 텍스트의 글꼴이 없으면 PNG를 만들지 않아 이름이 병음·머리글자·빈 상자로 대체되지 않는다.
 """
 
 from __future__ import annotations
@@ -25,15 +21,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
-RELATION_FILE = Path("角色") / "角色关系.md"
-CHART_DIR = Path("人物关系图")
-CHART_MD = CHART_DIR / "人物关系图.md"
+RELATION_FILE = Path("인물") / "인물관계.md"
+CHART_DIR = Path("인물관계도")
+CHART_MD = CHART_DIR / "인물관계도.md"
 CORE_PNG = CHART_DIR / "核心人物关系.png"
 EVOLUTION_PNG = CHART_DIR / "关键关系演变.png"
-# 「甲 → 乙」, 「甲 ↔ 乙」 (both ways) and chains such as 「甲 → 乙 → 丙」.
+# ‘甲 → 乙’, 양방향 ‘甲 ↔ 乙’, ‘甲 → 乙 → 丙’ 같은 연쇄.
 ARROW_RE = re.compile(r"\s*(↔|<->|⇔|<=>|→|->|⇒|=>|—>|－>)\s*")
 BOTH_WAYS = {"↔", "<->", "⇔", "<=>"}
-# Common Simplified-Chinese capable fonts on macOS, Windows and Linux.
+# macOS·Windows·Linux의 일반적인 간체 중국어 지원 글꼴.
 CJK_FONT_NAMES = (
     "PingFang SC", "Hiragino Sans GB", "Heiti SC", "STHeiti", "Songti SC", "STSong",
     "Microsoft YaHei", "SimHei", "SimSun", "DengXian",
@@ -41,10 +37,10 @@ CJK_FONT_NAMES = (
     "Source Han Sans CN", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Sarasa Gothic SC",
     "Arial Unicode MS",
 )
-# Fonts that answer every character with a placeholder box; they never count.
+# 모든 문자를 빈 상자로 표시하는 글꼴은 절대 인정하지 않는다.
 FALLBACK_FONT_RE = re.compile(r"last\s*resort|adobe\s*blank", re.IGNORECASE)
 BASE_TEXT = "中文人物关系未命名→…"
-MD_VIEW = "关系图已经写在 人物关系图/人物关系图.md 里，用能预览 Markdown 的编辑器打开就能看到中文。"
+MD_VIEW = "关系图已经写在 인물관계도/인물관계도.md 里，用能预览 Markdown 的编辑器打开就能看到中文。"
 NO_FONT_MESSAGE = (
     "这台电脑上没有找到能显示中文的字体，所以没有生成关系图图片（硬画会把人名变成拼音或方块）。"
     + MD_VIEW + "装上任意一款中文字体（如思源黑体、文泉驿）后再生成一次，就能得到图片版。"
@@ -80,7 +76,7 @@ def atomic_write(path: Path, data: bytes) -> None:
 
 
 def cells(line: str) -> List[str]:
-    """Table cells; an escaped 「\\|」 stays inside its cell."""
+    """표 셀. 이스케이프한 ‘\\|’는 해당 셀 안에 남는다."""
     stripped = line.strip()
     stripped = stripped[1:] if stripped.startswith("|") else stripped
     stripped = stripped[:-1] if stripped.endswith("|") and not stripped.endswith("\\|") else stripped
@@ -108,10 +104,8 @@ def exact(row: Dict[str, str], keys: Tuple[str, ...]) -> str:
 
 
 def parse_relations(text: str) -> Tuple[List[Dict[str, str]], int]:
-    """Relations of a relationship table, plus the number of rows left out.
-
-    Current files use one 「主体 → 客体」 column; older ones use separate
-    主体/客体 or A/B columns. Any table with such a pair of columns counts.
+    """관계 표의 관계와 제외한 행 수.
+    현재 파일은 ‘主体 → 客体’ 한 열, 이전 파일은 主体/客体 또는 A/B 분리 열을 쓴다. 이런 열 쌍이 있는 모든 표를 인정한다.
     """
     relations = []  # type: List[Dict[str, str]]
     skipped = 0
@@ -183,7 +177,7 @@ def render_markdown(book: str, relations: List[Dict[str, str]], png_note: str) -
                 names.append(name)
     node = {name: "p%s" % index for index, name in enumerate(names, start=1)}
     lines = ["# 人物关系图：%s" % book, "",
-             "> 由 角色/角色关系.md 生成；关系事实以该文件为准。%s" % png_note, "",
+             "> 由 인물/인물관계.md 生成；关系事实以该文件为准。%s" % png_note, "",
              "## 核心人物关系", "", "```mermaid", "graph LR"]
     lines.extend('    %s["%s"]' % (node[name], mermaid_text(name, "未命名")) for name in names)
     for relation in latest_by_pair(relations):
@@ -208,19 +202,19 @@ def render_markdown(book: str, relations: List[Dict[str, str]], png_note: str) -
 
 
 def png_text(value: str, placeholder: str = "") -> str:
-    """Text as drawn in the pictures: emoji and other symbols are left out."""
+    """그림에 표시할 텍스트. 이모지와 기타 기호를 제외한다."""
     kept = "".join(char for char in value
                    if char in BASE_TEXT or not unicodedata.category(char).startswith(("S", "C", "M")))
     return re.sub(r"\s+", " ", kept).strip() or placeholder
 
 
-def font_face(path: str):  # noqa: ANN201 - matplotlib type
+def font_face(path: str):  # noqa: ANN201 - matplotlib 타입
     from matplotlib.ft2font import FT2Font
     return FT2Font(path)
 
 
 def missing_glyphs(path: str, text: str) -> Optional[List[str]]:
-    """Characters of text the font (face 0) lacks; None when the font is unusable."""
+    """글꼴(face 0)이 지원하지 않는 텍스트 문자. 글꼴을 사용할 수 없으면 None."""
     if FALLBACK_FONT_RE.search(os.path.basename(path)):
         return None
     try:
@@ -228,12 +222,12 @@ def missing_glyphs(path: str, text: str) -> Optional[List[str]]:
         if FALLBACK_FONT_RE.search(str(getattr(font, "family_name", ""))):
             return None
         return sorted({char for char in text if not char.isspace() and not font.get_char_index(ord(char))})
-    except Exception:  # noqa: BLE001 - any font loading failure means "not usable"
+    except Exception:  # noqa: BLE001 - 글꼴 로딩 실패는 모두 사용 불가를 뜻함
         return None
 
 
 def font_candidates() -> List[str]:
-    """Installed fonts worth trying, well-known Chinese fonts first."""
+    """시도할 설치 글꼴. 잘 알려진 중국어 글꼴을 우선한다."""
     try:
         from matplotlib import font_manager
     except ImportError:
@@ -255,7 +249,7 @@ def font_candidates() -> List[str]:
 
 
 def find_cjk_font(text: str) -> Tuple[Optional[str], List[str]]:
-    """(font that draws every character of text, []) or (None, characters no Chinese font draws)."""
+    """(모든 문자를 그리는 글꼴, []) 또는 (None, 어떤 중국어 글꼴도 그리지 못하는 문자)."""
     text = text + BASE_TEXT
     override = os.environ.get("STORY_ANALYZE_CHART_FONT")
     if override == "none":
@@ -303,7 +297,7 @@ def draw_png(relations: List[Dict[str, str]], font_path: str, root: Path) -> Lis
     for relation in core:
         for name in (relation["source"], relation["target"]):
             degree[name] = degree.get(name, 0) + 1
-    # The most connected character (usually the protagonist) sits in the middle.
+    # 연결이 가장 많은 인물(보통 주인공)을 가운데 배치한다.
     names = sorted(degree, key=lambda name: -degree[name])
     ring = names[1:] if len(names) > 2 else names
     positions = {name: (math.cos(2 * math.pi * index / len(ring)), math.sin(2 * math.pi * index / len(ring)))
@@ -313,7 +307,7 @@ def draw_png(relations: List[Dict[str, str]], font_path: str, root: Path) -> Lis
     size = min(14, 8 + 0.3 * len(names))
     figure, axis = plt.subplots(figsize=(size, size))
     axis.set_axis_off()
-    bend = 0.18  # curve both directions of a pair apart so their labels do not overlap
+    bend = 0.18  # 한 쌍의 양방향 곡선을 벌려 레이블이 겹치지 않게 한다.
     for relation in core:
         (x1, y1), (x2, y2) = positions[relation["source"]], positions[relation["target"]]
         axis.annotate("", xy=(x2, y2), xytext=(x1, y1),
@@ -366,16 +360,16 @@ def render(root: Path, want_png: bool) -> Dict[str, object]:
     try:
         text = source.read_text(encoding="utf-8-sig")
     except OSError:
-        raise ChartError("relation_file_missing", "还没有 角色/角色关系.md，先整理人物关系，再生成关系图。")
+        raise ChartError("relation_file_missing", "还没有 인물/인물관계.md，先整理人物关系，再生成关系图。")
     relations, skipped = parse_relations(text)
     if not relations:
-        raise ChartError("relation_table_empty", "角色/角色关系.md 里没有认得出的关系表（需要「主体 → 客体」一列），关系图没有生成。")
-    # The Markdown chart is the main result: write it before trying any picture.
+        raise ChartError("relation_table_empty", "인물/인물관계.md 里没有认得出的关系表（需要「主体 → 客体」一列），关系图没有生成。")
+    # Markdown 관계도가 주 산출물이므로 그림을 시도하기 전에 저장한다.
     atomic_write(root / CHART_MD, render_markdown(root.name, relations, "").encode("utf-8"))
     png_written = []  # type: List[str]
     messages = []  # type: List[str]
     if skipped:
-        messages.append("角色/角色关系.md 里有 %s 行没认出是谁和谁的关系，没画进关系图。" % skipped)
+        messages.append("인물/인물관계.md 里有 %s 行没认出是谁和谁的关系，没画进关系图。" % skipped)
     if want_png:
         drawn = "".join(png_text(value) for relation in relations
                         for value in (relation["source"], relation["target"], relation["state"],
@@ -388,7 +382,7 @@ def render(root: Path, want_png: bool) -> Dict[str, object]:
         else:
             try:
                 png_written = draw_png(relations, font_path, root)
-            except Exception:  # noqa: BLE001 - the Markdown chart is already written
+            except Exception:  # noqa: BLE001 - Markdown 관계도는 이미 저장됨
                 messages.append(PNG_FAILED_MESSAGE)
             if png_written:
                 atomic_write(root / CHART_MD,
@@ -405,7 +399,7 @@ def main() -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", required=True, type=Path, help="拆文库/{书名} 目录")
+    parser.add_argument("--root", required=True, type=Path, help="작품분석실/{书名} 目录")
     parser.add_argument("--png", action="store_true", help="also draw PNG pictures when a Chinese font exists")
     args = parser.parse_args()
     try:

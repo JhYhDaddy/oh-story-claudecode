@@ -1,7 +1,7 @@
 ---
-description: 多视角对抗式审查。使用多个 Agent 对作品进行多维度审稿。
+description: 다중 관점 대립 검토. 여러 에이전트가 작품을 다양한 차원에서 심사한다.
 ---
 
-请使用 story-review skill，帮助我对作品进行多视角审查和评分。
+story-review 스킬로 작품의 다중 관점 검토와 평가를 도와주세요.
 
-用户参数：$ARGUMENTS
+사용자 매개변수: $ARGUMENTS

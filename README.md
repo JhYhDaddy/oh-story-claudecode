@@ -13,9 +13,9 @@
   &nbsp;·&nbsp;
   <a href="https://app.zenstory.ai/?utm_source=gh-oh-story&utm_medium=readme"><b>온라인 집필 작업 공간</b></a>
   &nbsp;·&nbsp;
-  <a href="#安装"><b>설치</b></a>
+  <a href="#설치"><b>설치</b></a>
   &nbsp;·&nbsp;
-  <a href="#常见问题"><b>자주 묻는 질문</b></a>
+  <a href="#자주-묻는-질문"><b>자주 묻는 질문</b></a>
   &nbsp;·&nbsp;
   <a href="README_EN.md"><b>영어판의 한국어 번역</b></a>
 </p>
@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <a href="https://t.me/ohstoryclaudecode"><img alt="Telegram 소통방" src="https://img.shields.io/badge/Telegram%20%E4%BA%A4%E6%B5%81%E7%BE%A4-26A5E4?style=for-the-badge&logo=telegram&logoColor=white"></a>
+  <a href="https://t.me/ohstoryclaudecode"><img alt="Telegram 소통방" src="https://img.shields.io/badge/Telegram%20%EC%86%8C%ED%86%B5%EB%B0%A9-26A5E4?style=for-the-badge&logo=telegram&logoColor=white"></a>
   <a href="https://github.com/zenstory-ai/oh-story-claudecode/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/badge/GitHub%20Discussions-181717?style=for-the-badge&logo=github&logoColor=white"></a>
 </p>
 
@@ -103,7 +103,7 @@ npx skills add zenstory-ai/oh-story-claudecode -y -g
 ```
 
 **작가만 아는 진실과 독자가 이미 아는 사실을 나누어 기록**하여, 인물이 답을 너무 일찍 아는지, 복선이 이미 드러났는지를 검사합니다.
-전체 파일: [`demo/长篇/.../追踪/上下文.md`](demo/长篇/让你管账号，你高燃混剪炸全网/追踪/上下文.md)
+전체 파일: [이어쓰기 상태 카드 원본](demo/长篇/让你管账号，你高燃混剪炸全网/追踪/上下文.md)
 
 <a id="续写第-21-章从门禁到回写一条链走完"></a>
 ### 제21장 이어쓰기: 사전 검사부터 상태 반영까지
@@ -144,10 +144,10 @@ npx skills add zenstory-ai/oh-story-claudecode -y -g
 
 새 인물 담수의에게는 설정 카드와 인물 상태 파일이 생겼습니다. 그가 “50년간 이야기했지만 누구도 끝까지 듣지 않은” 이야기의 진실 후보(E015)는 `시간선/작가용진실.md`에 미공개로 기록합니다. `독자가아는사실.md`에는 강신이 실제로 본 그 한 문장만 기록합니다. 더 이상 유효하지 않은 위험은 `장별기록/제021장.md`의 “이번 장에서 종료한 항목”에 기록하므로 **상태가 기록 없이 사라지지 않습니다**.
 
-완성본: [`正文/第021章_离别怎么会开花.md`](demo/长篇/让你管账号，你高燃混剪炸全网/正文/第021章_离别怎么会开花.md)
-· [`大纲/细纲_第021章.md`](demo/长篇/让你管账号，你高燃混剪炸全网/大纲/细纲_第021章.md)
-· [`设定/角色/谭守义.md`](demo/长篇/让你管账号，你高燃混剪炸全网/设定/角色/谭守义.md)
-· [`追踪/逐章记录/第021章.md`](demo/长篇/让你管账号，你高燃混剪炸全网/追踪/逐章记录/第021章.md)
+완성본: [제21장 본문 원본](demo/长篇/让你管账号，你高燃混剪炸全网/正文/第021章_离别怎么会开花.md)
+· [제21장 상세 개요 원본](demo/长篇/让你管账号，你高燃混剪炸全网/大纲/细纲_第021章.md)
+· [담수의 인물 설정 원본](demo/长篇/让你管账号，你高燃混剪炸全网/设定/角色/谭守义.md)
+· [제21장 추적 기록 원본](demo/长篇/让你管账号，你高燃混剪炸全网/追踪/逐章记录/第021章.md)
 
 
 <a id="拆文报告评分要给得出理由"></a>
@@ -164,7 +164,7 @@ npx skills add zenstory-ai/oh-story-claudecode -y -g
 > **종합적으로 보면**, 세 장은 “인물 설정을 탄탄히 하고 쾌감 포인트를 전혀 주지 않는” 극단적인 구조입니다. 이대로 그대로 따라한다면 판체 독자들을 멀어지게 할 것입니다.
 > 다만 스승의 설명으로 설정을 전달하기, 이름을 늦게 공개하기, 감정을 신체 반응으로 드러내기 같은 개별 기법은 충분히 재사용할 수 있습니다.
 
-전체 보고서: [`demo/拆文库/盘龙/拆文报告.md`](demo/拆文库/盘龙/拆文报告.md)
+전체 보고서: [반룡 작품 분석 보고서 원본](demo/拆文库/盘龙/拆文报告.md)
 
 <a id="短篇拆文把自己的作品拆成可复用的模块"></a>
 ### 단편 작품 분석: 자신의 작품을 재사용 가능한 모듈들로 나누어 분석하기
@@ -183,7 +183,7 @@ npx skills add zenstory-ai/oh-story-claudecode -y -g
 > 직접 설명하는 비중이 보여주는 비중보다 큽니다(tell > show). 이는 1인칭 후회물에서 흔한 문제입니다.
 
 후속 단계인 `/story-short-write`는 보고서, 사건 노드, 집필 기법, 원문을 함께 참고해 새 작품을 구상합니다.
-전체 결과: [`demo/拆文库/曾将爱意私藏/`](demo/拆文库/曾将爱意私藏/)
+전체 결과: [한때 사랑을 감추었다 분석 자료 원본](demo/拆文库/曾将爱意私藏/)
 
 <a id="去-ai-味逐条匹配已知句式"></a>
 ### AI 문체 제거: 알려진 문장 패턴에 따라 일일이 매칭하기
@@ -191,14 +191,16 @@ npx skills add zenstory-ai/oh-story-claudecode -y -g
 `/story-deslop`의 로컬 검사는 글쓰기용 린트입니다. 알려진 문장 패턴을 하나씩 대조합니다.
 행 번호, 감지된 구절, 수정 방향을 제시합니다. 인위적으로 만든 AI 문체 예시에서는 8곳이 감지되었고, 그중 7곳은 blocking 판정이었습니다.
 
-```text
-改前.md:7:20     [blocking] em-dash             (么叫做命运的安排——不是巧合，而是一)
-改前.md:7:22     [blocking] not-is-comparison   (不是巧合，而是一种冥冥之中的注定)
-改前.md:11:1     [blocking] negation-parade     (没有犹豫，没有生涩，)
-改前.md:19:3     [blocking] voice-contrast      (声音不大，却)
-改前.md:21:2     [blocking] not-is-comparison   (不是一次简单的弹奏，而是一场蓄谋已久的惊艳亮相)
-改前.md:3:1      [advisory] cliche-density-tic  (仿佛 一丝 深吸一口气 缓缓 微微)
-```
+아래는 중국어 원본 검사 결과의 **한국어 설명**입니다. 한국어 문장에 검사기를 실행한 결과는 아닙니다. 원본의 행·열 번호와 규칙 식별자를 함께 표시했습니다.
+
+| 원본 위치(행:열) | 판정 | 규칙 | 감지 구절의 한국어 풀이 |
+| --- | --- | --- | --- |
+| 7:20 | 차단 | `em-dash` | 운명의 안배란 무엇인가—우연이 아니라… |
+| 7:22 | 차단 | `not-is-comparison` | 우연이 아니라 보이지 않는 운명이었다 |
+| 11:1 | 차단 | `negation-parade` | 망설임도 없었고, 어색함도 없었다 |
+| 19:3 | 차단 | `voice-contrast` | 목소리는 크지 않았지만… |
+| 21:2 | 차단 | `not-is-comparison` | 단순한 연주가 아니라 오래 준비한 놀라운 등장이었다 |
+| 3:1 | 참고 | `cliche-density-tic` | 마치, 한 줄기, 깊이 숨을 들이쉬다, 천천히, 살짝 |
 
 제21장 본문의 같은 장면을 같은 검사기로 확인하면 **감지 0건, exit 0**입니다.
 두 문장의 글자 수는 거의 같지만, 차이점은 수정 전에는 추상적인 표현을 사용하여 독자에게 사물의 성격을 규정해 주었던 반면, 수정 후에는 같은 사건을 실제로 일어나는 행동과 사물을 통해 표현하고 있다는 점입니다.
@@ -292,24 +294,24 @@ flowchart LR
 
 | 스킬 | 호출 | 설명 |
 |:------|:-----|:-----|
-| `story-setup` | `/story-setup` `$story-setup` `/准备写书` | 환경 배포 · Claude/Antigravity/OpenCode/Codex/ZCode/OpenClaw/Reasonix + generic(기존 설정과 안전하게 병합) |
+| `story-setup` | `/story-setup` `$story-setup` | 환경 배포 · Claude/Antigravity/OpenCode/Codex/ZCode/OpenClaw/Reasonix + generic(기존 설정과 안전하게 병합) |
 | `story` | `/story` `$story` `/story dashboard` | 툴박스 라우팅 · 모호한 의도와 작가의 습관에 따른 요청 분배 + 로컬 작품 분석/프로젝트 대시보드 |
-| `story-long-write` | `/story-long-write` `/写长篇` | 장편 글쓰기 · 개요 작성, 등장인물 설정, 본문 작성, 작가의 선호 사항 관리 |
-| `story-short-write` | `/story-short-write` `/写短篇` | 단편 글쓰기 · 감정 설계, 반전 구상, 완성도 높은 원고 작성, 작가의 선호 사항 관리 |
-| `story-deslop` | `/story-deslop` `/去AI味` | AI 문체 제거 · AI가 작성한 흔적을 감지하고 제거하기 |
+| `story-long-write` | `/story-long-write` | 장편 글쓰기 · 개요 작성, 등장인물 설정, 본문 작성, 작가의 선호 사항 관리 |
+| `story-short-write` | `/story-short-write` | 단편 글쓰기 · 감정 설계, 반전 구상, 완성도 높은 원고 작성, 작가의 선호 사항 관리 |
+| `story-deslop` | `/story-deslop` | AI 문체 제거 · AI가 작성한 흔적을 감지하고 제거하기 |
 
 **추가 기능**: 비교 대상 작품 분석, 순위 조사, 기존 원고 가져오기, 다각도 검토, 게시 자료 정리, 표지는 필요할 때 사용합니다.
 
 | 스킬 | 호출 | 설명 |
 |:------|:-----|:-----|
-| `story-long-analyze` | `/story-long-analyze` `/长篇拆文` | 장편 작품 분석 · 황금 삼장, 쾌감 포인트 설계, 리듬 분석 |
-| `story-long-scan` | `/story-long-scan` `/长篇扫榜` | 장편 시장 조사 · 한국 공개·제공 자료 기본, 중국 수집기는 선택 |
-| `story-short-analyze` | `/story-short-analyze` `/短篇拆文` | 단편 작품 분석 · 줄거리 핵심, 구조 분석, 감정선, 반전 구성, 글쓰기 기법, 공감 요소 분석 |
-| `story-short-scan` | `/story-short-scan` `/短篇扫榜` | 단편 시장 조사 · 포스타입 등 공개·제공 자료 기본 |
-| `story-import` | `/story-import` `/导入小说` | 역방향 가져오기 · 기존 소설을 표준 프로젝트 구조로 역분석하기 |
-| `story-review` | `/story-review` `/审查` | 다각도 검토 · full / lean / solo, 한국·미정은 일반 기준, 중국 기준 선택 |
+| `story-long-analyze` | `/story-long-analyze` | 장편 작품 분석 · 황금 삼장, 쾌감 포인트 설계, 리듬 분석 |
+| `story-long-scan` | `/story-long-scan` | 장편 시장 조사 · 한국 공개·제공 자료 기본, 중국 수집기는 선택 |
+| `story-short-analyze` | `/story-short-analyze` | 단편 작품 분석 · 줄거리 핵심, 구조 분석, 감정선, 반전 구성, 글쓰기 기법, 공감 요소 분석 |
+| `story-short-scan` | `/story-short-scan` | 단편 시장 조사 · 포스타입 등 공개·제공 자료 기본 |
+| `story-import` | `/story-import` | 역방향 가져오기 · 기존 소설을 표준 프로젝트 구조로 역분석하기 |
+| `story-review` | `/story-review` | 다각도 검토 · full / lean / solo, 한국·미정은 일반 기준, 중국 기준 선택 |
 | `story-publish` | `/story-publish` | 게시 준비 · 기존 설정과 개요로 작품 등록 자료(제목·소개·태그)를 정리하며, 한국 플랫폼 자료 초안과 판체 양식 검증 지원 |
-| `story-cover` | `/story-cover` `/封面` | 표지 프롬프트 또는 완성 이미지 · GPT-Image-2로 이미지 생성(Codex 내장 사용량 또는 API 대체 경로) |
+| `story-cover` | `/story-cover` | 표지 프롬프트 또는 완성 이미지 · GPT-Image-2로 이미지 생성(Codex 내장 사용량 또는 API 대체 경로) |
 | `browser-cdp` | `/browser-cdp` | 브라우저 제어 · CDP로 로그인 상태를 재사용해 데이터 수집 |
 
 > `story-deslop`의 로컬 검사는 린트 작업으로 이루어지며, ‘blocking’ 기능은 결정적인 문법 오류나 구두점 문제에만 적용되고, 그 외의 경우는 읽는 느낌에 따라 판단됩니다. 주작과 같은 외부 검사 도구들은 자가 테스트를 위한 참고 자료로만 사용되며, 인간의 직접적인 읽는 느낌을 대체할 수는 없습니다.
@@ -379,13 +381,13 @@ v0.7.7부터 장편 본문은 하나의 기계 집계 기준으로 글자 수를
 <a id="去ai味之后朱雀等-ai-检测还是判定为-ai-怎么办"></a>
 ### AI 문체 제거를 한 후에도 주작 등의 AI 감지 시스템이 여전히 그것을 AI로 판단한다면 어떻게 해야 할까요?
 
-`story-deslop`(`/去AI味`)은 로컬 스크립트를 사용하여 알려진 문장 구조, 구두점, 변형 흔적을 검출한 후, 에이전트가 문맥을 고려하여 해당 내용을 재검토하고 수정합니다. 최적화의 목표는 읽는 느낌을 개선하는 것이며, 주작과 같은 외부 검사 도구들은 자체 테스트를 위한 참고 자료로만 사용됩니다.
+`story-deslop`은 로컬 스크립트를 사용하여 알려진 문장 구조, 구두점, 변형 흔적을 검출한 후, 에이전트가 문맥을 고려하여 해당 내용을 재검토하고 수정합니다. 최적화의 목표는 읽는 느낌을 개선하는 것이며, 주작과 같은 외부 검사 도구들은 자체 테스트를 위한 참고 자료로만 사용됩니다.
 [이 구체적인 수정 가이드](https://zenstory.ai/zh/oh-story/revise-ai-prose)을 참고하여 모호한 표현, 반복되는 문장 구조, 과장된 논리나 지나친 설명들을 각각 처리하면서도 장면 설정과 작가의 의도는 그대로 유지할 수 있습니다. 이 저장소에 수록된 구현 세부 사항은 [AI 문체 제거를 위한 구체적인 방법](docs/how-to-remove-ai-flavor-from-web-fiction.md)에서 확인할 수 있습니다.
 
 <a id="已经写了一部分的小说能导入后继续写吗"></a>
 ### 일부분은 이미 썼는데, 그 내용을 가져와서 계속 쓸 수 있을까요?
 
-가능합니다. 먼저 작성 프로젝트의 루트 디렉터리에서 `/story-setup`를 실행한 다음, 새로운 세션을 열거나 기존 세션을 새로고친 후에 `/story-import`(`/导入小说`)을 실행하여 기존 소설을 표준 프로젝트 구조로 역분석합니다. 그 결과를 검토한 후에 `/story-long-write 写第N章`을 사용하여 이어서 작성하면 됩니다. (N은 가져온 내용의 다음 장을 의미하며, 먼저 해당 장의 상세 개요를 작성해야 합니다.) 단편 소설의 경우에는 먼저 구상을 완성한 후에 이어서 작성하시기 바랍니다. [가져오기 및 이어서 작성하기 가이드인](https://zenstory.ai/zh/oh-story/import-and-continue)에서는 왜 원고의 실제 내용이 모델의 추측보다 우선시되어야 하는지를 설명하고 있습니다.
+가능합니다. 먼저 작성 프로젝트의 루트 디렉터리에서 `/story-setup`를 실행한 다음, 새로운 세션을 열거나 기존 세션을 새로고친 후에 `/story-import`을 실행하여 기존 소설을 표준 프로젝트 구조로 역분석합니다. 그 결과를 검토한 후에 `/story-long-write 제N장 집필`을 사용하여 이어서 작성하면 됩니다. (N은 가져온 내용의 다음 장을 의미하며, 먼저 해당 장의 상세 개요를 작성해야 합니다.) 단편 소설의 경우에는 먼저 구상을 완성한 후에 이어서 작성하시기 바랍니다. [가져오기 및 이어서 작성하기 가이드인](https://zenstory.ai/zh/oh-story/import-and-continue)에서는 왜 원고의 실제 내용이 모델의 추측보다 우선시되어야 하는지를 설명하고 있습니다.
 
 <a id="长篇续写怎样减少忘伏笔或角色提前知道答案"></a>
 ### 장편 속편을 쓸 때 복선을 잊어버리거나 등장인물들이 너무 빨리 답을 알게 되는 것을 어떻게 줄일 수 있을까요?

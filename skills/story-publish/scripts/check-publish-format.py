@@ -116,6 +116,8 @@ def title_warnings(title, rule):
 
 def check(text):
     """출판 문서 하나의 (errors, warnings)를 반환한다."""
+    if text.lstrip("\ufeff\r\n ").startswith("> 형식:"):
+        return check_korean_draft(text)
     lines = text.lstrip("﻿").splitlines()
     headings = [(index, len(match[1]), match[2]) for index, line in unfenced(lines)
                 if (match := re.match(r"^(#{1,6})\s+(.*?)\s*$", line))]
@@ -199,12 +201,49 @@ def check(text):
     return errors, warnings
 
 
+KOREAN_PLATFORMS = {"문피아", "네이버 웹소설", "노벨피아", "네이버 시리즈", "카카오페이지", "리디", "포스타입"}
+KOREAN_SECTIONS = ["기본 정보", "작품 소개", "표지", "작가 확인 대기", "플랫폼 확인 필요", "출처"]
+
+
+def check_korean_draft(text):
+    """국내 초안의 구조만 검사한다. 플랫폼 공식 양식 검증이 아니다."""
+    lines = text.lstrip("\ufeff\r\n ").splitlines()
+    visible = unfenced(lines)
+    headings = [(i, len(m[1]), m[2]) for i, line in visible
+                if (m := re.fullmatch(r"(#{1,6})\s+(.+?)\s*", line))]
+    warnings = ["국내 플랫폼의 등록 양식·태그·글자 수·표지 규격은 미검증입니다. 문서 형식 통과는 제출 가능 판정이 아닙니다."]
+    expected = [(1, "게시 자료"), *[(2, s) for s in KOREAN_SECTIONS]]
+    if [(level, name) for _, level, name in headings] != expected:
+        return ["한국어 초안 제목과 절 순서를 확인하세요: 게시 자료 → " + " → ".join(KOREAN_SECTIONS)], warnings
+    header = [re.fullmatch(r"> ([^:]+): (.+)", line) for index, line in visible
+              if index < headings[0][0] and line.strip()]
+    if not all(header) or [m[1] for m in header] != ["형식", "플랫폼", "목적", "상태"]:
+        return ["메타정보는 형식·플랫폼·목적·상태 순서로 한 줄씩 작성하세요."], warnings
+    meta = {m[1]: m[2].strip() for m in header}
+    errors = []
+    if meta["형식"] != "ko-draft-v1":
+        errors.append("지원하는 국내 형식은 ko-draft-v1입니다.")
+    if meta["플랫폼"] not in KOREAN_PLATFORMS:
+        errors.append("국내 자료 초안 대상 플랫폼이 아닙니다.")
+    if meta["목적"] not in {"직접 연재", "투고 준비", "개인 발행"}:
+        errors.append("목적은 직접 연재·투고 준비·개인 발행 중 하나입니다.")
+    if meta["상태"] != "자료 초안":
+        errors.append("국내 형식 검사는 자료 초안만 지원하며 게시 완료를 판정하지 않습니다.")
+    for section in ["플랫폼 확인 필요", "출처"]:
+        position = KOREAN_SECTIONS.index(section) + 1
+        contents = "\n".join(block(lines, headings, position)).strip()
+        if not contents or re.fullmatch(r"[-\s]*(없음|무|无|완료|미정|TBD)[.\s]*", contents, re.I):
+            errors.append(f"{section}에 실제 확인 범위·남은 항목 또는 출처를 기록하세요.")
+    return errors, warnings
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", type=Path)
     args = parser.parse_args()
     try:
-        errors, warnings = check(args.file.read_text(encoding="utf-8-sig"))
+        text = args.file.read_text(encoding="utf-8-sig")
+        errors, warnings = check(text)
     except (OSError, UnicodeError, ValueError) as error:
         errors, warnings = [str(error)], []
     for warning in warnings:
@@ -212,7 +251,10 @@ def main():
     for error in errors:
         print(f"FAIL: {error}", file=sys.stderr)
     if not errors:
-        print("PASS: 发布资料符合格式契约与平台候选")
+        if text.lstrip().startswith("> 형식:"):
+            print("PASS: 한국어 자료 초안 형식 확인 완료(플랫폼 적합성 미검증)")
+        else:
+            print("PASS: 发布资料符合格式契约与平台候选")
     return 1 if errors else 0
 
 

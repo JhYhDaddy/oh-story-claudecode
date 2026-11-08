@@ -7,6 +7,8 @@ metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudec
 
 사용자의 집필 요구를 파악해 해당 스킬로 연결합니다.
 
+**한국 시장 기본값**: 새 작품은 목적부터 확인한다. 직접 연재는 문피아·네이버 웹소설·노벨피아, 시장 조사는 네이버 시리즈·카카오페이지·리디도 후보, 단편·개인 발행은 포스타입을 먼저 제시한다. 특정 플랫폼은 자동 확정하지 않는다. 기존 목표와 작가의 명시적 선택을 우선하고 중국 플랫폼은 선택 기능으로 유지한다. 한국 작품에 중국 플랫폼의 분량·태그·유료 전환·평가 기준을 대신 적용하지 않는다.
+
 ## 라우팅 표
 
 호스트별 호출 방식: Claude Code와 OpenCode는 `/story-*`(Claude 플러그인 설치 시 `/oh-story:story-*`) 또는 `Skill("story-*")`를 사용합니다. Codex와 ZCode는 `$story-*`(Codex는 `/skills`도 가능), OpenClaw는 `/skill story-*`를 사용합니다. Antigravity와 Reasonix는 스킬 진입점에서 선택하거나 자연어로 이름을 지정합니다. 아래 표는 `/story-*` 형식이며 다른 호스트에서는 이에 맞게 바꿉니다. 이 문서의 나머지 부분도 같습니다.
@@ -15,11 +17,11 @@ metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudec
 |---|---|---|
 | 장편 기획 / 집필 | 장편 구조 논의, 줄거리 기획, 새 책 시작, 대강 작성, 세부 개요 보완, 장편, 연재 | `/story-long-write` |
 | 게시 준비 | 게시 자료, 작품 등록 양식, 플랫폼 제목·소개·태그, 작품 등록 자료 | `/story-publish` |
-| 단편 집필 | 단편, 옌옌, 1만 자 | `/story-short-write` |
+| 단편 집필 | 단편, 포스타입, 단편 투고 | `/story-short-write` |
 | 장편 분석 | 작품 분석, 이 책 분석, 도입 3장, 영감 라이브러리, 여러 책의 영감 통합 | `/story-long-analyze` |
 | 단편 분석 | 단편 분석, 이 이야기 분석 | `/story-short-analyze` |
-| 장편 순위 조사 | 장편 순위, 인기 소재, 떠오르는 신작, 치뎬/판체/진장/치마오 장편 | `/story-long-scan` |
-| 단편 순위 조사 | 단편 순위, 즈후 옌옌 순위 | `/story-short-scan` |
+| 장편 순위 조사 | 장편 순위, 인기 소재, 떠오르는 신작, 문피아/네이버 웹소설/노벨피아/시리즈/카카오페이지/리디 | `/story-long-scan` |
+| 단편 순위 조사 | 단편 시장 조사, 포스타입 작품 조사 | `/story-short-scan` |
 | 소재 결정 | 인기 있을 소재, 소재 골라 줘, 소재 방향 | 장편은 `/story-long-scan`, 단편은 `/story-short-scan`. 분량이 없으면 먼저 한 번 질문 |
 | AI 문체 제거 | AI 티 제거, 너무 AI 같음, 문체 다듬기 | `/story-deslop` |
 | 원고 검토 | 검토, 원고 심사, 검토해 줘, 일관성 점검, 문제 확인 | `/story-review` |

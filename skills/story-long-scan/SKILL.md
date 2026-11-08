@@ -1,7 +1,7 @@
 ---
 name: story-long-scan
 version: 1.0.0
-description: "장편 웹소설 순위를 조사합니다. 치뎬, 판치에, 진장, 치마오 등의 순위와 신작 데이터를 분석하여 시장 추세와 인기 소재를 추출합니다. 호출: /story-long-scan, /长篇扫榜, 어떤 장편이 인기야, 치뎬 순위, 치마오 신작 조사."
+description: "장편 웹소설 순위를 조사합니다. 문피아·네이버 웹소설·노벨피아 등 한국 시장의 공개·제공 자료를 우선 분석하여 시장 추세와 인기 소재를 추출합니다. 호출: /story-long-scan, /长篇扫榜, 어떤 장편이 인기야, 문피아 순위, 국내 신작 조사. 중국 플랫폼은 명시적으로 선택할 때 지원합니다."
 metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudecode"}}
 ---
 # story-long-scan: 장편 웹소설 순위 조사
@@ -27,6 +27,8 @@ metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudec
 각 방향의 보유 자료, 소재 경계, 계획 분량, 목표 플랫폼 표본을 함께 고려해 실현 가능성을 판단하고 소재를 제안합니다.
 
 ---
+
+**기본 경로는 한국 시장 조사입니다.** 한국 플랫폼 또는 미정이면 먼저 [한국 플랫폼 조사](references/korean-platforms.md)를 읽고 그 절차로 수행합니다. 아래 중국 플랫폼 질문·수집·집계 절차는 중국 플랫폼을 명시한 경우에만 적용합니다.
 
 ## 순위 조사 절차
 

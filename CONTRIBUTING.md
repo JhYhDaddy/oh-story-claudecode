@@ -462,3 +462,5 @@ bash scripts/test-codex-hooks.sh
 - **PreToolUse 불완전한 차단 기능**: Codex 공식 설명에 따르면, 현재의 셸/편집 기능을 통한 차단 메커니즘은 완벽한 보안 장치가 아닙니다. 스토리 훅은 단지 글쓰기 과정에서의 안전 장치 역할을 할 뿐이며, 버전 관리나 수동 검토를 대체할 수는 없습니다.
 - **에이전트 파일 형식**: Codex 커스텀 에이전트의 경우 `.codex/agents/{name}.toml`을 사용해야 하며, `name`, `description`, `developer_instructions`도 반드시 필요합니다. 읽기 전용 에이전트는 `sandbox_mode = "read-only"`를 사용합니다.
 - **사용자 정의 에이전트의 런타임 등록**: `$story-setup`이 `.codex/agents/*.toml`을 작성한 뒤 프로젝트 `.codex/` 설정 계층을 신뢰하고 새 Codex 세션을 시작해야 합니다. 현재 런타임이 여전히 `unknown agent_type`을 반환한다면(로컬 `codex exec 0.141.0` 임시 프로젝트 스모크 테스트에서 재현됨), 스킬은 단독·직접 실행으로 전환하고 그 사실을 보고해야 합니다. 자동 검사의 필수 통과 조건은 TOML 스키마와 파일 배포 검사입니다.
+
+한국 플랫폼 기본 분기·게시 자료 초안 검사는 `python scripts/test-korean-platforms.py`로 실행합니다. 국내 형식 검사의 통과는 플랫폼 공식 요건 검증이 아니며 기존 판체 검사는 `python scripts/test-publish-format.py`로 함께 확인합니다.

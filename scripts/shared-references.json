@@ -1,6 +1,7 @@
 {
   "version": 1,
   "groups": [
+    {"name": "korean-market-research", "source": "skills/story-long-scan/references/korean-platforms.md", "targets": ["skills/story-short-scan/references/korean-platforms.md"]},
     {
       "name": "deslop-expression",
       "source": "skills/story-deslop/references/expression.md",

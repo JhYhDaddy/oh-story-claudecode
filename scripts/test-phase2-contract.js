@@ -327,6 +327,16 @@ try {
   assert.deepStrictEqual(failureIds(mismatchedPaywall), ['phase2.paywall-in-both'])
   assert.match(mismatchedPaywall.report.failures[0].evidence, /声明第 3 节末；大纲标在第 4 节/)
 
+  for (const platform of ['문피아', '네이버 웹소설', '노벨피아', '네이버 시리즈', '카카오페이지', '리디', '포스타입', '기타', '未定']) {
+    const settings = validSettings({ platform, paywall: '付费点：없음 (무료 발행)' })
+    const free = run(writeCase(`korean-free-${platform}`, settings, validOutline({ includePaywall: false })))
+    assert.strictEqual(free.status, 0, free.stdout)
+    const conflict = run(writeCase(`korean-conflict-${platform}`, settings, validOutline()))
+    assert(failureIds(conflict).includes('phase2.paywall-in-both'))
+    const paid = run(writeCase(`korean-paid-${platform}`, validSettings({ platform }), validOutline()))
+    assert.strictEqual(paid.status, 0, paid.stdout)
+  }
+
   const invalidInvocation = spawnSync(process.execPath, [verifier, '--unknown'], {
     cwd: repoRoot,
     encoding: 'utf8',

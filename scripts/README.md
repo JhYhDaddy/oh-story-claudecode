@@ -135,3 +135,5 @@ bash scripts/test-skill-numbering.sh              # 격리된 테스트 자료�
 한국어 프로젝트 경로: `test-project-path-localization.py`는 실제 경로 생성, 원고 보존 복사, 참조 변환, 충돌·중첩·잠금 거부와 실패 정리를 검사합니다. 변환 도구는 `skills/story-setup/scripts/migrate-project-paths.py`, 대응표는 같은 폴더의 `project-paths-ko.json`입니다.
 
 Windows에서 확인한 줄바꿈·권한·심볼릭 링크·폴더 교체·Chrome 소유권 검사와 수정 범위는 [Windows 검증 기록](../docs/WINDOWS_VALIDATION.md)을 참고합니다. POSIX 실행 비트 변경 사례는 Windows에서만 명시적으로 제외하며 내용 드리프트·원본 보존·오류 거부 검사는 계속 실행합니다.
+
+한국 플랫폼 기본 분기·게시 자료 초안 검사는 `python scripts/test-korean-platforms.py`로 실행합니다. 국내 형식 검사의 통과는 플랫폼 공식 요건 검증이 아니며 기존 판체 검사는 `python scripts/test-publish-format.py`로 함께 확인합니다.

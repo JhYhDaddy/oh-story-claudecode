@@ -145,7 +145,11 @@ metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudec
      | 장편 | 치뎬 | `story-review/references/rubrics/qidian.md` |
      | 장편 | 판치에 | `story-review/references/rubrics/fanqie.md` |
      | 장편 | 진장, 기타, 미정, 미기재 | 추가 안 함 |
-     | 단편 | 즈후 옌옌(옌쉬안으로도 표기), 판치에, 치마오, 헤이옌, 훙궈, 미니프로그램, 미정, 미기재 | `story-review/references/rubrics/zhihu.md` |
+     | 장편 | 문피아, 네이버 웹소설, 노벨피아, 네이버 시리즈, 카카오페이지, 리디, 포스타입 | 추가 안 함 |
+     | 단편 | 문피아, 네이버 웹소설, 노벨피아, 네이버 시리즈, 카카오페이지, 리디, 포스타입, 기타, 미정, 미기재 | 추가 안 함 |
+     | 단편 | 즈후 옌옌(옌쉬안으로도 표기), 판치에, 치마오, 헤이옌, 훙궈, 미니프로그램 | `story-review/references/rubrics/zhihu.md` |
+
+   - 한국 플랫폼·기타·미정·미기재는 장단편 모두 `generic`이다. 장르 약속, 도입의 이해도, 인물 동기, 사건 인과, 회차 연결과 작가 문체를 검토한다. 플랫폼 공식 심사 기준으로 표현하지 않으며 분량·태그·등록 요건은 확인된 공식 자료가 있을 때만 별도로 대조한다.
 
    - 단편은 `설정.md`의 `平台基调`(플랫폼 기조)에 따라 형식, 따옴표, 도입문도 확인합니다.
    - 기술 비고 줄의 Rubric에는 추가한 플랫폼 표(`fanqie | qidian | zhihu`)를 쓰고 추가하지 않았으면 `generic`을 씁니다. 괄호 안에는 파일을 읽을 수 있으면 `file`, 내장 요약을 사용했으면 `embedded`를 씁니다.

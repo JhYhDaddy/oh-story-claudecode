@@ -97,13 +97,13 @@ function verify(projectDir) {
   const settings = settingsRead.text
   const outline = outlineRead.text
 
-  const platformMatch = settings.match(/目标平台\s*[：:]\s*(知乎(?:盐言|盐选)?|盐[言选]|七猫(?:短篇)?|黑岩|红果|小程序|点众|番茄(?:短篇)?|未定)/)
+  const platformMatch = settings.match(/目标平台\s*[：:]\s*(문피아|네이버 웹소설|노벨피아|네이버 시리즈|카카오페이지|리디|포스타입|기타|知乎(?:盐言|盐选)?|盐[言选]|七猫(?:短篇)?|黑岩|红果|小程序|点众|番茄(?:短篇)?|未定)/)
   checks.push(makeCheck(
     'phase2.platform-declared',
     Boolean(platformMatch),
     '설정.md',
     platformMatch ? `目标平台：${platformMatch[1]}` : '未找到可识别的目标平台字段',
-    '写明“目标平台：知乎盐言 / 番茄 / 七猫 / 黑岩 / 红果 / 小程序”之一；作者没定平台写“未定”',
+    '目标平台에 한국 플랫폼 또는 기존 중국 플랫폼을 기록하세요. 미정은 未定, 목록 외 플랫폼은 기타로 쓰고 실제 이름을 별도로 기록하세요.',
     ['references/submission-craft.md'],
     '只在 설정.md 的基本信息或 Phase 2 设计校验区补目标平台。'
   ))
@@ -309,20 +309,24 @@ function verify(projectDir) {
   const paywallRows = rows
     .map((row, index) => ({ section: index + 1, hook: row.cells[7] || '' }))
     .filter((row) => /付费点/.test(row.hook))
-  const paywallOk = paywallSection !== null && paywallRows.length === 1 &&
-    paywallRows[0].section === paywallSection
+  const domesticOrUnspecified = platformMatch && /^(문피아|네이버 웹소설|노벨피아|네이버 시리즈|카카오페이지|리디|포스타입|기타|未定)$/.test(platformMatch[1])
+  const noPaywall = domesticOrUnspecified && /^\s*-?\s*付费点\s*[：:]\s*(?:없음|无|不适用)(?:\s*[（(][^\r\n]*[）)])?\s*$/m.test(settings)
+  const paywallOk = noPaywall
+    ? paywallRows.length === 0 && paywallSection === null
+    : paywallSection !== null && paywallRows.length === 1 && paywallRows[0].section === paywallSection
   let paywallEvidence = '설정.md 未按“付费点：第 X 节末”声明'
   if (paywallSection !== null && paywallRows.length === 0) {
     paywallEvidence = `설정.md 声明第 ${paywallSection} 节末；大纲“结尾承接/钩子”列未标出付费点`
   } else if (paywallSection !== null && paywallRows.length > 0) {
     paywallEvidence = `설정.md 声明第 ${paywallSection} 节末；大纲标在第 ${paywallRows.map((row) => row.section).join('、')} 节`
   }
+  if (noPaywall) paywallEvidence = `유료 전환 없음 선언; 개요의 유료 전환 표시 ${paywallRows.length}개`
   checks.push(makeCheck(
     'phase2.paywall-in-both',
     paywallOk,
     '설정.md、구간개요.md',
     paywallEvidence,
-    '설정.md 写“付费点：第 X 节末”，且小节大纲.md 第 X 行数据的“结尾承接/钩子”单元格只标一次“付费点”',
+    '유료 전환을 선택하면 설정과 해당 절의 훅에 같은 지점을 기록합니다. 한국·기타·미정의 무료/미정 작품은 付费点：없음으로 명시하고 개요에 유료 전환 표시를 넣지 않습니다.',
     ['references/submission-craft.md', 'references/workflow-design.md'],
     '只在缺失的文件补同一个付费断点，并确保它位于对应节末的钩子单元格。'
   ))

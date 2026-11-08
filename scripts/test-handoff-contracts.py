@@ -554,7 +554,7 @@ def check_short_platforms(repo: Repo) -> list[str]:
             elif not accepted.match(target):
                 failures.append(f"{TOPIC_MATCH}: 对照表目标平台「{target}」过不了 check-phase2-contract.js")
 
-    described = re.search(r"조사합니다\. (.+?) 등의 인기 단편 데이터를 분석", repo.text(SHORT_SCAN_SKILL))
+    described = re.search(r"조사합니다\. (.+?)(?: 등의 인기 단편 데이터를 분석| 등 한국 단편 시장의 공개·제공 자료를 우선 분석)", repo.text(SHORT_SCAN_SKILL))
     if not described:
         failures.append(f"{SHORT_SCAN_SKILL}: 没从 description 解析出扫榜平台，确认写法后更新本测试")
     else:
@@ -939,6 +939,7 @@ def check_review_platforms(repo: Repo) -> list[str]:
 
     for where, length, values in producers:
         for value in values:
+            value = canonical_enum(value)
             if value not in covered[length]:
                 failures.append(f"{where}: {length}目标平台可写「{value}」，{REVIEW_SKILL} 的平台映射表没有这一项")
     return failures

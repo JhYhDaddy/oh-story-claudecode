@@ -1,7 +1,7 @@
 ---
 name: story-short-scan
 version: 1.0.0
-description: "단편 웹소설 순위를 조사합니다. 즈후 옌옌, 치마오, 헤이옌, 뎬중 등의 인기 단편 데이터를 분석하여 유행하는 소재를 포착합니다. 호출: /story-short-scan, /短篇扫榜, 어떤 단편이 인기야, 즈후 이야기 순위."
+description: "단편 웹소설 순위를 조사합니다. 포스타입 등 한국 단편 시장의 공개·제공 자료를 우선 분석하여 유행하는 소재를 포착합니다. 호출: /story-short-scan, /短篇扫榜, 어떤 단편이 인기야, 포스타입 단편 조사. 중국 플랫폼은 명시적으로 선택할 때 지원합니다."
 metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudecode"}}
 ---
 # story-short-scan: 단편 웹소설 순위 조사
@@ -25,6 +25,8 @@ metadata: {"openclaw":{"source":"https://github.com/zenstory-ai/oh-story-claudec
 보고에 표본 날짜, 조사 범위, 결론의 신뢰도, 재조사 날짜를 씁니다. 소재 신호는 몇 주 안에 효력을 잃을 수 있으며 기한이 지난 뒤에는 후보 참고 자료로만 씁니다.
 
 ---
+
+**기본 경로는 한국 시장 조사입니다.** 한국 플랫폼 또는 미정이면 먼저 [한국 플랫폼 조사](references/korean-platforms.md)를 읽고 그 절차로 수행합니다. 아래 중국 플랫폼 질문·수집·집계 절차는 중국 플랫폼을 명시한 경우에만 적용합니다.
 
 ## 순위 조사 절차
 
